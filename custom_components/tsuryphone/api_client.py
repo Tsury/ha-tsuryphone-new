@@ -1,4 +1,5 @@
 """API client for TsuryPhone device communication."""
+
 from __future__ import annotations
 
 import asyncio
@@ -76,16 +77,13 @@ class TsuryPhoneAPIClient:
         return f"ws://{self._host}:{self._port}/ws"
 
     async def _request(
-        self, 
-        method: str, 
-        endpoint: str, 
-        data: dict[str, Any] | None = None
+        self, method: str, endpoint: str, data: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Make HTTP request to device."""
         url = f"{self._base_url}{endpoint}"
-        
+
         _LOGGER.debug("Making %s request to %s", method, url)
-        
+
         try:
             async with asyncio.timeout(self._request_timeout):
                 if method.upper() == "GET":
@@ -94,9 +92,7 @@ class TsuryPhoneAPIClient:
                 elif method.upper() == "POST":
                     headers = {"Content-Type": "application/json"}
                     async with self._session.post(
-                        url, 
-                        json=data or {}, 
-                        headers=headers
+                        url, json=data or {}, headers=headers
                     ) as response:
                         return await self._handle_response(response, endpoint)
                 else:
@@ -109,7 +105,9 @@ class TsuryPhoneAPIClient:
             _LOGGER.error("Client error connecting to device: %s", err)
             raise TsuryPhoneAPIError(f"Connection error: {err}") from err
 
-    async def _handle_response(self, response: aiohttp.ClientResponse, endpoint: str) -> dict[str, Any]:
+    async def _handle_response(
+        self, response: aiohttp.ClientResponse, endpoint: str
+    ) -> dict[str, Any]:
         """Handle HTTP response from device."""
         try:
             response_data = await response.json()
@@ -130,17 +128,22 @@ class TsuryPhoneAPIClient:
             # Firmware sends "message" field, not "errorMessage"
             error_msg = response_data.get("message", "Unknown device error")
             error_code = response_data.get("errorCode")
-            _LOGGER.error("Device API error on %s: %s (code: %s)", endpoint, error_msg, error_code)
+            _LOGGER.error(
+                "Device API error on %s: %s (code: %s)", endpoint, error_msg, error_code
+            )
             raise TsuryPhoneAPIError(error_msg, error_code)
 
         # Validate schema version if present
         schema_version = response_data.get("schemaVersion")
-        if schema_version is not None and schema_version != INTEGRATION_EVENT_SCHEMA_VERSION:
+        if (
+            schema_version is not None
+            and schema_version != INTEGRATION_EVENT_SCHEMA_VERSION
+        ):
             _LOGGER.warning(
                 "Schema version mismatch on %s: expected %d, got %d",
-                endpoint, 
+                endpoint,
                 INTEGRATION_EVENT_SCHEMA_VERSION,
-                schema_version
+                schema_version,
             )
 
         _LOGGER.debug("Successful API call to %s", endpoint)
@@ -163,7 +166,9 @@ class TsuryPhoneAPIClient:
     async def dial_number(self, number: str) -> dict[str, Any]:
         """Dial a phone number."""
         if not number:
-            raise TsuryPhoneAPIError("Number cannot be empty", ERROR_CODE_INVALID_NUMBER)
+            raise TsuryPhoneAPIError(
+                "Number cannot be empty", ERROR_CODE_INVALID_NUMBER
+            )
         return await self._request("POST", API_CALL_DIAL, {"number": number})
 
     async def answer_call(self) -> dict[str, Any]:
@@ -205,10 +210,14 @@ class TsuryPhoneAPIClient:
 
     async def set_ring_pattern(self, pattern: str) -> dict[str, Any]:
         """Set ring pattern."""
-        return await self._request("POST", API_CONFIG_RING_PATTERN, {"pattern": pattern})
+        return await self._request(
+            "POST", API_CONFIG_RING_PATTERN, {"pattern": pattern}
+        )
 
     # Quick dial management
-    async def add_quick_dial(self, code: str, number: str, name: str = "") -> dict[str, Any]:
+    async def add_quick_dial(
+        self, code: str, number: str, name: str = ""
+    ) -> dict[str, Any]:
         """Add quick dial entry."""
         data = {"code": code, "number": number}
         if name:
@@ -229,27 +238,37 @@ class TsuryPhoneAPIClient:
         data = {"number": number}
         if reason:
             data["reason"] = reason
+
     return await self._request("POST", API_CONFIG_BLOCKED_ADD, data)
 
     async def remove_blocked_number(self, number: str) -> dict[str, Any]:
         """Remove blocked number."""
+
     return await self._request("POST", API_CONFIG_BLOCKED_REMOVE, {"number": number})
 
     # Priority caller management
     async def add_priority_caller(self, number: str) -> dict[str, Any]:
         """Add a priority caller number."""
         if not number:
-            raise TsuryPhoneAPIError("Number cannot be empty", ERROR_CODE_INVALID_NUMBER)
+            raise TsuryPhoneAPIError(
+                "Number cannot be empty", ERROR_CODE_INVALID_NUMBER
+            )
         return await self._request("POST", API_CONFIG_PRIORITY_ADD, {"number": number})
 
     async def remove_priority_caller(self, number: str) -> dict[str, Any]:
         """Remove a priority caller number."""
         if not number:
-            raise TsuryPhoneAPIError("Number cannot be empty", ERROR_CODE_INVALID_NUMBER)
-        return await self._request("POST", API_CONFIG_PRIORITY_REMOVE, {"number": number})
+            raise TsuryPhoneAPIError(
+                "Number cannot be empty", ERROR_CODE_INVALID_NUMBER
+            )
+        return await self._request(
+            "POST", API_CONFIG_PRIORITY_REMOVE, {"number": number}
+        )
 
     # Webhook management
-    async def add_webhook_action(self, code: str, webhook_id: str, action_name: str = "") -> dict[str, Any]:
+    async def add_webhook_action(
+        self, code: str, webhook_id: str, action_name: str = ""
+    ) -> dict[str, Any]:
         """Add webhook action."""
         data = {"code": code, "id": webhook_id}
         if action_name:
@@ -268,8 +287,7 @@ class TsuryPhoneAPIClient:
     def is_api_error_code(self, error: Exception, expected_code: str) -> bool:
         """Check if exception is API error with specific code."""
         return (
-            isinstance(error, TsuryPhoneAPIError) 
-            and error.error_code == expected_code
+            isinstance(error, TsuryPhoneAPIError) and error.error_code == expected_code
         )
 
     async def test_connection(self) -> bool:

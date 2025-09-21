@@ -1,4 +1,5 @@
 """Binary sensor platform for TsuryPhone integration."""
+
 from __future__ import annotations
 
 from homeassistant.components.binary_sensor import (
@@ -71,7 +72,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class TsuryPhoneBinarySensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], BinarySensorEntity):
+class TsuryPhoneBinarySensor(
+    CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], BinarySensorEntity
+):
     """Representation of a TsuryPhone binary sensor."""
 
     def __init__(
@@ -87,7 +90,7 @@ class TsuryPhoneBinarySensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator],
 
         # Generate unique ID
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
-        
+
         # Set device info
         self._attr_device_info = get_device_info(device_info)
 
@@ -95,7 +98,7 @@ class TsuryPhoneBinarySensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator],
     def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if self.entity_description.key == "ringing":
             return state.ringing
         elif self.entity_description.key == "dnd":
@@ -108,7 +111,7 @@ class TsuryPhoneBinarySensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator],
             return state.call_waiting_available
         elif self.entity_description.key == "current_call_priority":
             return state.current_call_is_priority
-        
+
         return None
 
     @property
@@ -124,8 +127,10 @@ class TsuryPhoneBinarySensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator],
         # Add specific attributes per sensor type
         if self.entity_description.key == "call_waiting_available":
             # Add heuristic mode indicator (R61 detail)
-            attributes["mode"] = "heuristic"  # Will be "firmware" when device exposes field
-            
+            attributes["mode"] = (
+                "heuristic"  # Will be "firmware" when device exposes field
+            )
+
             # Add toggle statistics if available
             if hasattr(state, "call_waiting_toggles"):
                 attributes["toggles_this_boot"] = state.call_waiting_toggles
@@ -136,7 +141,7 @@ class TsuryPhoneBinarySensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator],
                 attributes["call_number"] = state.current_call.number
                 attributes["is_incoming"] = state.current_call.is_incoming
                 attributes["call_start_ts"] = state.current_call.start_time
-                
+
                 # Add current duration
                 if hasattr(self.coordinator, "current_call_duration_seconds"):
                     duration = self.coordinator.current_call_duration_seconds
