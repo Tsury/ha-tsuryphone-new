@@ -1,0 +1,84 @@
+# Pre-commit configuration for TsuryPhone integration
+# See https://pre-commit.com for more information
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-json
+      - id: pretty-format-json
+        args: ['--autofix', '--indent=2']
+        files: \.json$
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.8
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix]
+        types_or: [python, pyi, jupyter]
+      # Run the formatter
+      - id: ruff-format
+        types_or: [python, pyi, jupyter]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-aiofiles, types-requests]
+        args: [--ignore-missing-imports]
+        files: ^custom_components/tsuryphone/
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        additional_dependencies: [bandit[toml]]
+        files: ^custom_components/tsuryphone/
+
+  - repo: local
+    hooks:
+      - id: manifest-validation
+        name: Validate manifest.json
+        entry: python
+        language: system
+        args: [-c, "
+          import json, sys;
+          manifest = json.load(open('custom_components/tsuryphone/manifest.json'));
+          required = ['domain', 'name', 'version', 'documentation', 'issue_tracker'];
+          missing = [f for f in required if f not in manifest];
+          sys.exit(1) if missing else print(f'✅ Manifest valid: {manifest[\"name\"]} v{manifest[\"version\"]}')
+        "]
+        files: ^custom_components/tsuryphone/manifest\.json$
+        pass_filenames: false
+
+      - id: integration-structure
+        name: Check integration file structure
+        entry: python
+        language: system
+        args: [-c, "
+          from pathlib import Path;
+          base = Path('custom_components/tsuryphone');
+          required = ['__init__.py', 'manifest.json', 'const.py', 'coordinator.py'];
+          missing = [f for f in required if not (base / f).exists()];
+          print('✅ Integration structure valid') if not missing else exit(1)
+        "]
+        files: ^custom_components/tsuryphone/
+        pass_filenames: false
+
+# Configuration for specific hooks
+default_language_version:
+  python: python3.12
+
+# Global settings
+default_stages: [commit, push]
+fail_fast: false

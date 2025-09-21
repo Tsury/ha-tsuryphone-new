@@ -1,0 +1,329 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "TsuryPhone Device",
+        "description": "Enter the connection details for your TsuryPhone device.",
+        "data": {
+          "host": "Host or IP Address",
+          "port": "Port"
+        }
+      },
+      "discovery_confirm": {
+        "title": "TsuryPhone Device Discovered",
+        "description": "A TsuryPhone device was discovered at {host}:{port}.\n\nDevice: {name}\n\nDo you want to add this device?",
+        "data": {}
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Please check the host and port.",
+      "invalid_auth": "Authentication failed or device returned invalid data.",
+      "invalid_host": "Invalid host format or address.",
+      "schema_version_mismatch": "Device firmware version is incompatible. Please update the device firmware.",
+      "not_tsuryphone_device": "Discovered device is not a TsuryPhone.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "Device is already configured.",
+      "cannot_connect": "Cannot connect to the device.",
+      "not_tsuryphone_device": "The discovered device is not a TsuryPhone."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "TsuryPhone Options",
+        "description": "Configure advanced options for your TsuryPhone device.",
+        "data": {
+          "host_override": "Host Override (leave empty to use discovered host)",
+          "polling_fallback_seconds": "Polling Interval (seconds, when WebSocket unavailable)",
+          "refetch_interval_minutes": "Device Refresh Interval (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "ringing": {
+        "name": "Ringing"
+      },
+      "dnd": {
+        "name": "Do Not Disturb"
+      },
+      "maintenance_mode": {
+        "name": "Maintenance Mode"
+      },
+      "in_call": {
+        "name": "In Call"
+      },
+      "call_waiting_available": {
+        "name": "Call Waiting Available"
+      }
+    },
+    "sensor": {
+      "app_state": {
+        "name": "Phone State"
+      },
+      "current_call_number": {
+        "name": "Current Call Number"
+      },
+      "current_dialing_number": {
+        "name": "Current Dialing Number"
+      },
+      "call_duration": {
+        "name": "Call Duration"
+      },
+      "last_call_number": {
+        "name": "Last Call Number"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "rssi": {
+        "name": "WiFi Signal Strength"
+      },
+      "free_heap": {
+        "name": "Free Memory"
+      },
+      "calls_total": {
+        "name": "Total Calls"
+      },
+      "calls_incoming": {
+        "name": "Incoming Calls"
+      },
+      "calls_outgoing": {
+        "name": "Outgoing Calls"
+      },
+      "calls_blocked": {
+        "name": "Blocked Calls"
+      },
+      "talk_time_total": {
+        "name": "Total Talk Time"
+      },
+      "quick_dial_count": {
+        "name": "Quick Dial Count"
+      },
+      "blocked_count": {
+        "name": "Blocked Numbers Count"
+      },
+      "last_blocked_number": {
+        "name": "Last Blocked Number"
+      },
+      "call_history_size": {
+        "name": "Call History Size"
+      }
+    },
+    "switch": {
+      "force_dnd": {
+        "name": "Force Do Not Disturb"
+      },
+      "maintenance_mode": {
+        "name": "Maintenance Mode"
+      }
+    },
+    "number": {
+      "earpiece_volume": {
+        "name": "Earpiece Volume"
+      },
+      "earpiece_gain": {
+        "name": "Earpiece Gain"
+      },
+      "speaker_volume": {
+        "name": "Speaker Volume"
+      },
+      "speaker_gain": {
+        "name": "Speaker Gain"
+      }
+    },
+    "select": {
+      "ring_pattern": {
+        "name": "Ring Pattern"
+      },
+      "quick_dial": {
+        "name": "Quick Dial"
+      }
+    },
+    "button": {
+      "answer": {
+        "name": "Answer Call"
+      },
+      "hangup": {
+        "name": "Hang Up"
+      },
+      "ring": {
+        "name": "Ring Device"
+      },
+      "reset": {
+        "name": "Reset Device"
+      },
+      "refetch": {
+        "name": "Refresh Device Data"
+      },
+      "refresh_snapshot": {
+        "name": "Refresh Snapshot"
+      },
+      "dial_selected": {
+        "name": "Dial Selected Quick Dial"
+      },
+      "toggle_call_waiting": {
+        "name": "Toggle Call Waiting"
+      }
+    }
+  },
+  "services": {
+    "dial": {
+      "name": "Dial Number",
+      "description": "Dial a phone number.",
+      "fields": {
+        "number": {
+          "name": "Phone Number",
+          "description": "The phone number to dial."
+        }
+      }
+    },
+    "answer": {
+      "name": "Answer Call",
+      "description": "Answer the incoming call."
+    },
+    "hangup": {
+      "name": "Hang Up",
+      "description": "Hang up the active call."
+    },
+    "ring": {
+      "name": "Ring Device",
+      "description": "Ring the device with optional pattern.",
+      "fields": {
+        "pattern": {
+          "name": "Ring Pattern",
+          "description": "Optional ring pattern (leave empty for default)."
+        }
+      }
+    },
+    "set_dnd": {
+      "name": "Set Do Not Disturb",
+      "description": "Configure Do Not Disturb settings.",
+      "fields": {
+        "force": {
+          "name": "Force DND",
+          "description": "Enable forced Do Not Disturb."
+        },
+        "scheduled": {
+          "name": "Scheduled DND",
+          "description": "Enable scheduled Do Not Disturb."
+        },
+        "start_hour": {
+          "name": "Start Hour",
+          "description": "DND schedule start hour (0-23)."
+        },
+        "start_minute": {
+          "name": "Start Minute", 
+          "description": "DND schedule start minute (0-59)."
+        },
+        "end_hour": {
+          "name": "End Hour",
+          "description": "DND schedule end hour (0-23)."
+        },
+        "end_minute": {
+          "name": "End Minute",
+          "description": "DND schedule end minute (0-59)."
+        }
+      }
+    },
+    "set_audio": {
+      "name": "Set Audio Configuration",
+      "description": "Configure audio settings (partial updates supported).",
+      "fields": {
+        "earpiece_volume": {
+          "name": "Earpiece Volume",
+          "description": "Earpiece volume level (1-7)."
+        },
+        "earpiece_gain": {
+          "name": "Earpiece Gain",
+          "description": "Earpiece gain level (1-7)."
+        },
+        "speaker_volume": {
+          "name": "Speaker Volume",
+          "description": "Speaker volume level (1-7)."
+        },
+        "speaker_gain": {
+          "name": "Speaker Gain",
+          "description": "Speaker gain level (1-7)."
+        }
+      }
+    },
+    "set_ring_pattern": {
+      "name": "Set Ring Pattern",
+      "description": "Set the device ring pattern.",
+      "fields": {
+        "pattern": {
+          "name": "Pattern",
+          "description": "Ring pattern (e.g., '500,500,500' or '300,300x2')."
+        }
+      }
+    },
+    "quick_dial_add": {
+      "name": "Add Quick Dial",
+      "description": "Add a quick dial entry.",
+      "fields": {
+        "code": {
+          "name": "Code",
+          "description": "Quick dial code (1-16 characters, alphanumeric and underscore)."
+        },
+        "number": {
+          "name": "Phone Number",
+          "description": "Phone number to dial."
+        },
+        "name": {
+          "name": "Display Name",
+          "description": "Optional display name for the entry."
+        }
+      }
+    },
+    "quick_dial_remove": {
+      "name": "Remove Quick Dial",
+      "description": "Remove a quick dial entry.",
+      "fields": {
+        "code": {
+          "name": "Code",
+          "description": "Quick dial code to remove."
+        }
+      }
+    },
+    "blocked_add": {
+      "name": "Add Blocked Number",
+      "description": "Add a number to the blocked list.",
+      "fields": {
+        "number": {
+          "name": "Phone Number",
+          "description": "Phone number to block."
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Optional reason for blocking."
+        }
+      }
+    },
+    "blocked_remove": {
+      "name": "Remove Blocked Number",
+      "description": "Remove a number from the blocked list.",
+      "fields": {
+        "number": {
+          "name": "Phone Number",
+          "description": "Phone number to unblock."
+        }
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "call_start": "Call started",
+      "call_end": "Call ended",
+      "call_blocked": "Call blocked", 
+      "call_missed": "Call missed",
+      "ring": "Phone ringing",
+      "dnd_toggled": "Do Not Disturb toggled",
+      "maintenance": "Maintenance mode changed",
+      "reboot": "Device rebooted"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "TsuryPhone",
+  "homeassistant": "2025.9.1",
+  "render_readme": true,
+  "content_in_root": false
+}

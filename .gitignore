@@ -1,0 +1,12 @@
+# Python cache directories
+__pycache__/
+**/__pycache__/
+
+# Compiled Python files
+*.pyc
+*.pyo
+*.pyd
+
+# Test / tooling caches (harmless extras)
+.pytest_cache/
+.mypy_cache/

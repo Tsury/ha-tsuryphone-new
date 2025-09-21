@@ -1,0 +1,28 @@
+# Development requirements for TsuryPhone Home Assistant integration
+
+# Code quality and linting
+ruff>=0.1.0
+mypy>=1.7.0
+bandit[toml]>=1.7.5
+
+# Testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-homeassistant-custom-component>=0.13.0
+
+# Type stubs for better type checking
+types-aiofiles
+types-requests
+
+# Home Assistant for testing
+homeassistant>=2025.9.1
+
+# Additional development tools
+pre-commit>=3.5.0
+black>=23.10.0  # Keep for compatibility, but prefer ruff format
+isort>=5.12.0   # Keep for compatibility, but prefer ruff
+
+# Documentation
+mkdocs>=1.5.0
+mkdocs-material>=9.4.0

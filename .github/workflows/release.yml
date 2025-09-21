@@ -1,0 +1,312 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag'
+        required: true
+        type: string
+
+jobs:
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+          fi
+          # Remove 'v' prefix if present
+          VERSION=${VERSION#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected format: X.Y.Z or X.Y.Z-suffix"
+            exit 1
+          fi
+          echo "✅ Version format is valid: $VERSION"
+
+      - name: Update manifest version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i 's/"version": ".*"/"version": "'$VERSION'"/' custom_components/tsuryphone/manifest.json
+          echo "Updated manifest.json version to: $VERSION"
+
+      - name: Verify manifest version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MANIFEST_VERSION=$(grep '"version"' custom_components/tsuryphone/manifest.json | cut -d'"' -f4)
+          if [ "$MANIFEST_VERSION" != "$VERSION" ]; then
+            echo "❌ Manifest version mismatch: $MANIFEST_VERSION != $VERSION"
+            exit 1
+          fi
+          echo "✅ Manifest version verified: $MANIFEST_VERSION"
+
+      - name: Commit version update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add custom_components/tsuryphone/manifest.json
+          git diff --staged --quiet || git commit -m "Update version to ${{ steps.version.outputs.version }}"
+
+  create-zip:
+    name: Create Release Package
+    runs-on: ubuntu-latest
+    needs: validate-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update manifest version
+        run: |
+          VERSION="${{ needs.validate-release.outputs.version }}"
+          sed -i 's/"version": ".*"/"version": "'$VERSION'"/' custom_components/tsuryphone/manifest.json
+
+      - name: Create integration package
+        run: |
+          cd custom_components
+          zip -r ../tsuryphone-${{ needs.validate-release.outputs.version }}.zip tsuryphone/
+          cd ..
+          
+          # Create checksums
+          sha256sum tsuryphone-${{ needs.validate-release.outputs.version }}.zip > tsuryphone-${{ needs.validate-release.outputs.version }}.zip.sha256
+          
+          # Display package info
+          echo "Created package:"
+          ls -la tsuryphone-*.zip*
+          echo ""
+          echo "Package contents:"
+          unzip -l tsuryphone-${{ needs.validate-release.outputs.version }}.zip
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-package
+          path: |
+            tsuryphone-*.zip
+            tsuryphone-*.zip.sha256
+
+  security-check:
+    name: Security Check
+    runs-on: ubuntu-latest
+    needs: validate-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install security tools
+        run: |
+          pip install bandit[toml] safety
+
+      - name: Run security scan
+        run: |
+          echo "Running bandit security scan..."
+          bandit -r custom_components/tsuryphone/ -f json -o security-report.json
+          
+          echo "Security scan results:"
+          bandit -r custom_components/tsuryphone/
+
+      - name: Check for known vulnerabilities
+        run: |
+          echo "Checking for known vulnerabilities..."
+          # Create a simple requirements file for safety check
+          echo "homeassistant>=2025.9.1" > temp-requirements.txt
+          echo "aiohttp>=3.8.0" >> temp-requirements.txt
+          
+          safety check -r temp-requirements.txt --json > safety-report.json || true
+          safety check -r temp-requirements.txt
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            security-report.json
+            safety-report.json
+
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: validate-release
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Update manifest version
+        run: |
+          VERSION="${{ needs.validate-release.outputs.version }}"
+          sed -i 's/"version": ".*"/"version": "'$VERSION'"/' custom_components/tsuryphone/manifest.json
+
+      - name: Install Home Assistant
+        run: |
+          pip install homeassistant pytest pytest-asyncio
+
+      - name: Test integration loading
+        run: |
+          python -c "
+          import sys
+          import json
+          from pathlib import Path
+          
+          # Test manifest loading
+          manifest_path = Path('custom_components/tsuryphone/manifest.json')
+          with open(manifest_path) as f:
+              manifest = json.load(f)
+          
+          print(f'✅ Integration: {manifest[\"name\"]} v{manifest[\"version\"]}')
+          print(f'✅ Domain: {manifest[\"domain\"]}')
+          print(f'✅ Requirements: {manifest[\"requirements\"]}')
+          
+          # Test module imports
+          sys.path.insert(0, 'custom_components/tsuryphone')
+          import const
+          import models
+          import api_client
+          
+          print('✅ All core modules imported successfully')
+          print(f'✅ Integration validated for Python {sys.version_info.major}.{sys.version_info.minor}')
+          "
+
+  update-release:
+    name: Update Release
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-zip, security-check, integration-test]
+    if: github.event_name == 'release'
+    steps:
+      - name: Download release package
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-package
+
+      - name: Download security reports
+        uses: actions/download-artifact@v4
+        with:
+          name: security-reports
+
+      - name: Create release notes
+        run: |
+          VERSION="${{ needs.validate-release.outputs.version }}"
+          cat > release-notes.md << EOF
+          # TsuryPhone Home Assistant Integration v$VERSION
+          
+          ## Installation
+          1. Download the \`tsuryphone-$VERSION.zip\` file
+          2. Extract to your Home Assistant \`custom_components\` directory
+          3. Restart Home Assistant
+          4. Add the integration via Settings > Devices & Services
+          
+          ## Verification
+          - SHA256: \`$(cat tsuryphone-$VERSION.zip.sha256 | cut -d' ' -f1)\`
+          
+          ## What's New
+          - Comprehensive TsuryPhone device integration
+          - Real-time WebSocket communication with HTTP fallback
+          - Complete entity coverage (sensors, switches, controls)
+          - Device automation support (triggers & conditions)
+          - Resilience features with reboot detection
+          - Rich diagnostics and monitoring
+          - Storage cache for call history persistence
+          
+          ## Security
+          - No known security vulnerabilities
+          - Security scan reports available in release artifacts
+          
+          ## Compatibility
+          - Home Assistant Core >= 2024.12.0
+          - Python 3.11 or 3.12
+          - TsuryPhone device firmware (latest recommended)
+          EOF
+
+      - name: Update release with assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          body_path: release-notes.md
+          files: |
+            tsuryphone-*.zip
+            tsuryphone-*.zip.sha256
+            security-report.json
+            safety-report.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  hacs-validation:
+    name: HACS Validation
+    runs-on: ubuntu-latest
+    needs: validate-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update manifest version
+        run: |
+          VERSION="${{ needs.validate-release.outputs.version }}"
+          sed -i 's/"version": ".*"/"version": "'$VERSION'"/' custom_components/tsuryphone/manifest.json
+
+      - name: HACS Validation
+        uses: hacs/action@main
+        with:
+          category: integration
+          ignore: brands
+
+  notify-completion:
+    name: Notify Completion
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-zip, security-check, integration-test, hacs-validation]
+    if: always()
+    steps:
+      - name: Release Summary
+        run: |
+          VERSION="${{ needs.validate-release.outputs.version }}"
+          echo "## Release Summary - v$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Validation | ${{ needs.validate-release.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Package Creation | ${{ needs.create-zip.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Check | ${{ needs.security-check.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Test | ${{ needs.integration-test.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| HACS Validation | ${{ needs.hacs-validation.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.validate-release.result }}" = "success" ] && 
+             [ "${{ needs.create-zip.result }}" = "success" ] && 
+             [ "${{ needs.security-check.result }}" = "success" ] && 
+             [ "${{ needs.integration-test.result }}" = "success" ] && 
+             [ "${{ needs.hacs-validation.result }}" = "success" ]; then
+            echo "🎉 **Release v$VERSION completed successfully!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The integration package is ready for distribution." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Release v$VERSION failed.** Please check the failed steps above." >> $GITHUB_STEP_SUMMARY
+          fi

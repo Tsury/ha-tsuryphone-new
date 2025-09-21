@@ -1,0 +1,45 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "TsuryPhone Device",
+        "description": "Enter the connection details for your TsuryPhone device.",
+        "data": {
+          "host": "Host or IP Address",
+          "port": "Port"
+        }
+      },
+      "discovery_confirm": {
+        "title": "TsuryPhone Device Discovered",
+        "description": "A TsuryPhone device was discovered at {host}:{port}.\n\nDevice: {name}\n\nDo you want to add this device?",
+        "data": {}
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Please check the host and port.",
+      "invalid_auth": "Authentication failed or device returned invalid data.",
+      "invalid_host": "Invalid host format or address.",
+      "schema_version_mismatch": "Device firmware version is incompatible. Please update the device firmware.",
+      "not_tsuryphone_device": "Discovered device is not a TsuryPhone.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "Device is already configured.",
+      "cannot_connect": "Cannot connect to the device.",
+      "not_tsuryphone_device": "The discovered device is not a TsuryPhone."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "TsuryPhone Options",
+        "description": "Configure advanced options for your TsuryPhone device.",
+        "data": {
+          "host_override": "Host Override (leave empty to use discovered host)",
+          "polling_fallback_seconds": "Polling Interval (seconds, when WebSocket unavailable)",
+          "refetch_interval_minutes": "Device Refresh Interval (minutes)"
+        }
+      }
+    }
+  }
+}

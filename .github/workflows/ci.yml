@@ -1,0 +1,348 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  lint-and-type-check:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install homeassistant
+          pip install -r requirements-dev.txt
+
+      - name: Run ruff linting
+        run: |
+          ruff check custom_components/tsuryphone/
+          
+      - name: Run ruff formatting check
+        run: |
+          ruff format --check custom_components/tsuryphone/
+
+      - name: Run mypy type checking
+        run: |
+          mypy custom_components/tsuryphone/
+
+  validate-integration:
+    name: Validate Home Assistant Integration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Home Assistant
+        run: |
+          python -m pip install --upgrade pip
+          pip install homeassistant
+
+      - name: Validate manifest
+        run: |
+          python -c "
+          import json
+          import sys
+          from pathlib import Path
+          
+          manifest_path = Path('custom_components/tsuryphone/manifest.json')
+          if not manifest_path.exists():
+              print('❌ manifest.json not found')
+              sys.exit(1)
+          
+          try:
+              with open(manifest_path) as f:
+                  manifest = json.load(f)
+              
+              required_keys = ['domain', 'name', 'version', 'documentation', 'issue_tracker', 'codeowners']
+              missing_keys = [key for key in required_keys if key not in manifest]
+              
+              if missing_keys:
+                  print(f'❌ Missing required keys in manifest: {missing_keys}')
+                  sys.exit(1)
+              
+              print('✅ Manifest validation passed')
+          except json.JSONDecodeError as e:
+              print(f'❌ Invalid JSON in manifest: {e}')
+              sys.exit(1)
+          "
+
+      - name: Check integration structure
+        run: |
+          python -c "
+          import sys
+          from pathlib import Path
+          
+          base_path = Path('custom_components/tsuryphone')
+          required_files = [
+              '__init__.py',
+              'manifest.json', 
+              'const.py',
+              'coordinator.py',
+              'api_client.py',
+              'websocket.py',
+              'config_flow.py'
+          ]
+          
+          missing_files = []
+          for file in required_files:
+              if not (base_path / file).exists():
+                  missing_files.append(file)
+          
+          if missing_files:
+              print(f'❌ Missing required files: {missing_files}')
+              sys.exit(1)
+          
+          print('✅ Integration structure validation passed')
+          "
+
+      - name: Test import of integration modules
+        run: |
+          cd custom_components/tsuryphone
+          python -c "
+          import sys
+          
+          modules_to_test = [
+              'const',
+              'models', 
+              'api_client',
+              'coordinator',
+              'resilience',
+              'storage_cache',
+              'services',
+              'config_flow',
+          ]
+          
+          failed_imports = []
+          for module in modules_to_test:
+              try:
+                  __import__(module)
+                  print(f'✅ {module} imported successfully')
+              except Exception as e:
+                  print(f'❌ Failed to import {module}: {e}')
+                  failed_imports.append(module)
+          
+          if failed_imports:
+              print(f'❌ Failed imports: {failed_imports}')
+              sys.exit(1)
+          
+          print('✅ All core modules imported successfully')
+          "
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml]
+
+      - name: Run bandit security scan
+        run: |
+          bandit -r custom_components/tsuryphone/ -f json -o bandit-report.json || true
+          bandit -r custom_components/tsuryphone/
+
+      - name: Upload security scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: bandit-report.json
+
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+        ha-version: ["2025.9.1"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Home Assistant ${{ matrix.ha-version }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install homeassistant==${{ matrix.ha-version }}
+          pip install pytest pytest-asyncio pytest-homeassistant-custom-component
+
+      - name: Create basic integration test
+        run: |
+          mkdir -p tests
+          cat > tests/test_integration.py << 'EOF'
+          """Basic integration tests."""
+          import pytest
+          from unittest.mock import Mock, AsyncMock
+          
+          
+          def test_import_integration():
+              """Test that the integration can be imported."""
+              try:
+                  from custom_components.tsuryphone import const
+                  from custom_components.tsuryphone import models
+                  from custom_components.tsuryphone import api_client
+                  assert const.DOMAIN == "tsuryphone"
+                  assert hasattr(models, 'TsuryPhoneState')
+                  assert hasattr(api_client, 'TsuryPhoneAPIClient')
+              except ImportError as e:
+                  pytest.fail(f"Failed to import integration modules: {e}")
+          
+          
+          def test_manifest_content():
+              """Test manifest.json content."""
+              import json
+              from pathlib import Path
+              
+              manifest_path = Path("custom_components/tsuryphone/manifest.json")
+              assert manifest_path.exists(), "manifest.json not found"
+              
+              with open(manifest_path) as f:
+                  manifest = json.load(f)
+              
+              assert manifest["domain"] == "tsuryphone"
+              assert "name" in manifest
+              assert "version" in manifest
+              assert "requirements" in manifest
+              assert isinstance(manifest["requirements"], list)
+          
+          
+          @pytest.mark.asyncio
+          async def test_api_client_creation():
+              """Test API client can be created."""
+              from custom_components.tsuryphone.api_client import TsuryPhoneAPIClient
+              from homeassistant.core import HomeAssistant
+              
+              # Mock HomeAssistant
+              hass = Mock(spec=HomeAssistant)
+              hass.helpers = Mock()
+              hass.helpers.aiohttp_client = Mock()
+              hass.helpers.aiohttp_client.async_get_clientsession = Mock(return_value=Mock())
+              
+              client = TsuryPhoneAPIClient(hass, "192.168.1.100", 8080)
+              assert client.host == "192.168.1.100"
+              assert client.port == 8080
+          EOF
+
+      - name: Run integration tests
+        run: |
+          cd custom_components/tsuryphone
+          python -m pytest ../../tests/ -v
+
+  documentation-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check README exists
+        run: |
+          if [ ! -f README.md ]; then
+            echo "❌ README.md not found"
+            exit 1
+          fi
+          echo "✅ README.md exists"
+
+      - name: Check documentation structure
+        run: |
+          python -c "
+          import sys
+          from pathlib import Path
+          
+          # Check for documentation files
+          docs_to_check = [
+              'README.md',
+              'INTEGRATION_DESIGN_PROGRESS.md'
+          ]
+          
+          missing_docs = []
+          for doc in docs_to_check:
+              if not Path(doc).exists():
+                  missing_docs.append(doc)
+          
+          if missing_docs:
+              print(f'❌ Missing documentation: {missing_docs}')
+              sys.exit(1)
+          
+          # Check README has basic sections
+          with open('README.md', 'r') as f:
+              readme_content = f.read().lower()
+          
+          required_sections = ['installation', 'configuration']
+          missing_sections = [s for s in required_sections if s not in readme_content]
+          
+          if missing_sections:
+              print(f'⚠️ README missing recommended sections: {missing_sections}')
+          
+          print('✅ Documentation structure check passed')
+          "
+
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check, validate-integration, security-scan, integration-test, documentation-check]
+    if: always()
+    steps:
+      - name: Build Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY  
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint and Type Check | ${{ needs.lint-and-type-check.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Validate Integration | ${{ needs.validate-integration.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Test | ${{ needs.integration-test.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Documentation Check | ${{ needs.documentation-check.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          
+          # Set overall status
+          if [ "${{ needs.lint-and-type-check.result }}" = "success" ] && 
+             [ "${{ needs.validate-integration.result }}" = "success" ] && 
+             [ "${{ needs.security-scan.result }}" = "success" ] && 
+             [ "${{ needs.integration-test.result }}" = "success" ] && 
+             [ "${{ needs.documentation-check.result }}" = "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 **All checks passed!** Integration is ready for deployment." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Some checks failed.** Please review the failed jobs above." >> $GITHUB_STEP_SUMMARY
+          fi

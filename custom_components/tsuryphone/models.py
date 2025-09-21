@@ -1,0 +1,389 @@
+"""Data models for the TsuryPhone integration."""
+
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+from typing import Any
+from datetime import datetime
+
+from .const import AppState, EventCategory
+
+
+@dataclass
+class DeviceInfo:
+    """Basic device information."""
+
+    device_id: str
+    host: str
+    port: int = 8080
+    name: str = "TsuryPhone"
+    sw_version: str | None = None
+    hw_version: str | None = None
+
+
+@dataclass
+class CallInfo:
+    """Information about an active or recent call."""
+
+    number: str = ""
+    is_incoming: bool = False
+    start_time: int = 0  # milliseconds since device boot
+    call_start_ts: int = 0  # Device timestamp from firmware (callStartTs)
+    duration_ms: int | None = None
+    call_id: int = -1
+    call_waiting_id: int = -1
+
+
+@dataclass
+class QuickDialEntry:
+    """Quick dial configuration entry."""
+
+    code: str
+    number: str
+    name: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate entry after initialization."""
+        if not self.code or not self.number:
+            raise ValueError("Code and number are required for quick dial entry")
+
+
+@dataclass
+class BlockedNumberEntry:
+    """Blocked number configuration entry."""
+
+    number: str
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate entry after initialization."""
+        if not self.number:
+            raise ValueError("Number is required for blocked number entry")
+
+
+@dataclass
+class WebhookEntry:
+    """Webhook action configuration entry."""
+
+    code: str
+    webhook_id: str
+    action_name: str = ""
+    active: bool = True  # Whether webhook is active/reachable
+
+    def __post_init__(self) -> None:
+        """Validate entry after initialization."""
+        if not self.code or not self.webhook_id:
+            raise ValueError("Code and webhook_id are required for webhook entry")
+
+
+@dataclass
+class PriorityCallerEntry:
+    """Priority caller entry (currently only number)."""
+
+    number: str
+
+    def __post_init__(self) -> None:
+        if not self.number:
+            raise ValueError("Number is required for priority caller entry")
+
+
+@dataclass
+class AudioConfig:
+    """Audio configuration settings."""
+
+    earpiece_volume: int = 4
+    earpiece_gain: int = 4
+    speaker_volume: int = 4
+    speaker_gain: int = 4
+
+    def __post_init__(self) -> None:
+        """Validate audio levels are in valid range (1-7)."""
+        for field_name, value in [
+            ("earpiece_volume", self.earpiece_volume),
+            ("earpiece_gain", self.earpiece_gain),
+            ("speaker_volume", self.speaker_volume),
+            ("speaker_gain", self.speaker_gain),
+        ]:
+            if not 1 <= value <= 7:
+                raise ValueError(f"{field_name} must be between 1 and 7, got {value}")
+
+
+@dataclass
+class DNDConfig:
+    """Do Not Disturb configuration."""
+
+    force: bool = False
+    scheduled: bool = False
+    start_hour: int = 22
+    start_minute: int = 0
+    end_hour: int = 7
+    end_minute: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate time fields."""
+        if not 0 <= self.start_hour <= 23:
+            raise ValueError(f"start_hour must be 0-23, got {self.start_hour}")
+        if not 0 <= self.end_hour <= 23:
+            raise ValueError(f"end_hour must be 0-23, got {self.end_hour}")
+        if not 0 <= self.start_minute <= 59:
+            raise ValueError(f"start_minute must be 0-59, got {self.start_minute}")
+        if not 0 <= self.end_minute <= 59:
+            raise ValueError(f"end_minute must be 0-59, got {self.end_minute}")
+
+
+@dataclass
+class DeviceStats:
+    """Device statistics from firmware."""
+
+    calls_total: int = 0
+    calls_incoming: int = 0
+    calls_outgoing: int = 0
+    calls_blocked: int = 0
+    talk_time_seconds: int = 0
+    uptime_seconds: int = 0
+    free_heap_bytes: int = 0
+    rssi_dbm: int = 0
+
+
+@dataclass
+class CallHistoryEntry:
+    """Single call history entry."""
+
+    call_type: str  # "incoming", "outgoing", "blocked", "missed"
+    number: str
+    is_incoming: bool
+    duration_s: int | None
+    ts_device: int  # Device timestamp
+    received_ts: float  # HA timestamp when received
+    seq: int
+    call_start_ts: int = 0  # Firmware callStartTs field
+    duration_ms: int | None = None  # Firmware durationMs field
+    reason: str | None = None
+    synthetic: bool = False  # True if start was synthesized from end-only
+
+    def __post_init__(self) -> None:
+        """Set received timestamp if not provided."""
+        if self.received_ts == 0:
+            self.received_ts = time.time()
+
+    @property
+    def timestamp(self) -> datetime | None:
+        """Get timestamp as datetime object."""
+        if self.ts_device:
+            return datetime.fromtimestamp(self.ts_device)
+        return None
+
+    @property
+    def missed(self) -> bool:
+        """Check if this call was missed."""
+        return self.call_type == "missed"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for storage."""
+        return {
+            "call_type": self.call_type,
+            "number": self.number,
+            "is_incoming": self.is_incoming,
+            "duration_s": self.duration_s,
+            "ts_device": self.ts_device,
+            "received_ts": self.received_ts,
+            "seq": self.seq,
+            "call_start_ts": self.call_start_ts,
+            "duration_ms": self.duration_ms,
+            "reason": self.reason,
+            "synthetic": self.synthetic,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CallHistoryEntry:
+        """Create from dictionary."""
+        return cls(
+            call_type=data["call_type"],
+            number=data["number"],
+            is_incoming=data["is_incoming"],
+            duration_s=data.get("duration_s"),
+            ts_device=data["ts_device"],
+            received_ts=data["received_ts"],
+            seq=data["seq"],
+            call_start_ts=data.get("call_start_ts", 0),
+            duration_ms=data.get("duration_ms"),
+            reason=data.get("reason"),
+            synthetic=data.get("synthetic", False),
+        )
+
+
+@dataclass
+class TsuryPhoneState:
+    """Complete state model for the TsuryPhone device."""
+
+    # Device identification
+    device_info: DeviceInfo
+
+    # Connection state
+    connected: bool = False
+    last_seen: float = field(default_factory=time.time)
+
+    # App state
+    app_state: AppState = AppState.STARTUP
+    previous_app_state: AppState = AppState.STARTUP
+
+    # Call information
+    current_call: CallInfo = field(default_factory=CallInfo)
+    last_call: CallInfo = field(default_factory=CallInfo)
+    current_dialing_number: str = ""
+
+    # Phone state flags
+    ringing: bool = False
+    dnd_active: bool = False
+    maintenance_mode: bool = False
+    call_waiting_available: bool = False
+
+    # Device stats
+    stats: DeviceStats = field(default_factory=DeviceStats)
+
+    # Configuration
+    audio_config: AudioConfig = field(default_factory=AudioConfig)
+    dnd_config: DNDConfig = field(default_factory=DNDConfig)
+    ring_pattern: str = ""
+
+    # Lists (managed via services and options)
+    quick_dials: list[QuickDialEntry] = field(default_factory=list)
+    blocked_numbers: list[BlockedNumberEntry] = field(default_factory=list)
+    webhooks: list[WebhookEntry] = field(default_factory=list)
+    priority_callers: list[PriorityCallerEntry] = field(default_factory=list)
+    current_call_is_priority: bool = False
+
+    # Event processing
+    last_seq: int = 0
+    reboot_detected: bool = False
+
+    # Call history (rolling buffer)
+    call_history: list[CallHistoryEntry] = field(default_factory=list)
+    call_history_capacity: int = 500
+
+    # State derived properties
+    @property
+    def is_call_active(self) -> bool:
+        """True if device is in an active call."""
+        return self.app_state == AppState.IN_CALL
+
+    @property
+    def is_incoming_call(self) -> bool:
+        """True if device has an incoming call."""
+        return self.app_state in (AppState.INCOMING_CALL, AppState.INCOMING_CALL_RING)
+
+    @property
+    def is_dialing(self) -> bool:
+        """True if device is dialing."""
+        return self.app_state == AppState.DIALING
+
+    @property
+    def quick_dial_count(self) -> int:
+        """Number of configured quick dial entries."""
+        return len(self.quick_dials)
+
+    @property
+    def blocked_count(self) -> int:
+        """Number of blocked numbers."""
+        return len(self.blocked_numbers)
+
+    @property
+    def priority_count(self) -> int:
+        """Number of priority caller numbers."""
+        return len(self.priority_callers)
+
+    @property
+    def last_blocked_number(self) -> str:
+        """Most recently blocked number from history."""
+        for entry in reversed(self.call_history):
+            if entry.call_type == "blocked":
+                return entry.number
+        return ""
+
+    @property
+    def call_history_size(self) -> int:
+        """Current call history size."""
+        return len(self.call_history)
+
+    def add_call_history_entry(self, entry: CallHistoryEntry) -> None:
+        """Add entry to call history with capacity management."""
+        self.call_history.append(entry)
+
+        # Enforce capacity limit (newest entries kept)
+        if len(self.call_history) > self.call_history_capacity:
+            self.call_history = self.call_history[-self.call_history_capacity :]
+
+    def get_quick_dial_by_code(self, code: str) -> QuickDialEntry | None:
+        """Find quick dial entry by code."""
+        for entry in self.quick_dials:
+            if entry.code == code:
+                return entry
+        return None
+
+    def get_blocked_number(self, number: str) -> BlockedNumberEntry | None:
+        """Find blocked number entry."""
+        for entry in self.blocked_numbers:
+            if entry.number == number:
+                return entry
+        return None
+
+    def get_webhook_by_code(self, code: str) -> WebhookEntry | None:
+        """Find webhook entry by code."""
+        for entry in self.webhooks:
+            if entry.code == code:
+                return entry
+        return None
+
+
+@dataclass
+class TsuryPhoneEvent:
+    """Represents a device event from WebSocket or generated internally."""
+
+    schema_version: int
+    seq: int
+    ts: int  # Device timestamp
+    integration: str
+    device_id: str
+    category: str  # String category from firmware (not enum)
+    event: str
+    data: dict[str, Any] = field(default_factory=dict)
+    received_at: float = field(default_factory=time.time)
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> TsuryPhoneEvent:
+        """Create event from JSON data."""
+        return cls(
+            schema_version=data.get("schemaVersion", 2),
+            seq=data.get("seq", 0),
+            ts=data.get("ts", 0),
+            integration=data.get("integration", "ha"),
+            device_id=data.get("deviceId", ""),
+            category=data.get("category", ""),  # Keep as string per firmware
+            event=data.get("event", ""),
+            data={
+                k: v
+                for k, v in data.items()
+                if k
+                not in {
+                    "schemaVersion",
+                    "seq",
+                    "ts",
+                    "integration",
+                    "deviceId",
+                    "category",
+                    "event",
+                }
+            },
+        )
+
+    def to_ha_event_data(self) -> dict[str, Any]:
+        """Convert to Home Assistant event data format."""
+        return {
+            "seq": self.seq,
+            "ts": self.ts,
+            "device_id": self.device_id,
+            "category": self.category,
+            "event": self.event,
+            **self.data,
+        }
