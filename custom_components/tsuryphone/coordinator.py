@@ -6,12 +6,13 @@ import asyncio
 import logging
 import re
 import time
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.event import async_track_time_interval
-from datetime import timedelta
+from homeassistant.util import dt as dt_util
 
 from .api_client import TsuryPhoneAPIClient, TsuryPhoneAPIError
 from .websocket import TsuryPhoneWebSocketClient
@@ -980,13 +981,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 "number": number,
                 "name": event.data.get("name", ""),
                 "call_id": event.data.get("callId", ""),
-                "timestamp": event.received_at.isoformat(),
+                "timestamp": self._event_timestamp_iso(event),
             },
         )
 
     def _fire_ha_event(self, event: TsuryPhoneEvent) -> None:
         """Fire Home Assistant event for device event."""
         base_data = event.to_ha_event_data()
+        event_timestamp = self._event_timestamp_iso(event)
 
         # Determine event name and fire
         if event.category == EventCategory.CALL:
@@ -1000,7 +1002,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         "number": event.data.get("number", ""),
                         "name": event.data.get("name", ""),
                         "call_id": event.data.get("callId", ""),
-                        "timestamp": event.received_at.isoformat(),
+                        "timestamp": event_timestamp,
                     },
                 )
             elif event.event == CallEvent.END:
@@ -1018,7 +1020,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                             if event.data.get("isIncoming", False)
                             else "outgoing"
                         ),
-                        "timestamp": event.received_at.isoformat(),
+                        "timestamp": event_timestamp,
                         "call_id": event.data.get("callId", ""),
                     },
                 )
@@ -1039,7 +1041,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         "number": event.data.get("number", ""),
                         "name": event.data.get("name", ""),
                         "call_id": event.data.get("callId", ""),
-                        "timestamp": event.received_at.isoformat(),
+                        "timestamp": event_timestamp,
                     },
                 )
             elif event.event == PhoneStateEvent.IDLE:
@@ -1057,7 +1059,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                                 old_state.value if old_state else "unknown"
                             ),
                             "new_state": "disconnected",
-                            "timestamp": event.received_at.isoformat(),
+                            "timestamp": event_timestamp,
                         },
                     )
                 else:
@@ -1069,7 +1071,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                                 old_state.value if old_state else "unknown"
                             ),
                             "new_state": "idle",
-                            "timestamp": event.received_at.isoformat(),
+                            "timestamp": event_timestamp,
                         },
                     )
 
@@ -1087,7 +1089,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                             "tsuryphone_dnd_enabled",
                             {
                                 "device_id": self.device_info.device_id,
-                                "timestamp": event.received_at.isoformat(),
+                                "timestamp": event_timestamp,
                             },
                         )
                     else:
@@ -1095,7 +1097,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                             "tsuryphone_dnd_disabled",
                             {
                                 "device_id": self.device_info.device_id,
-                                "timestamp": event.received_at.isoformat(),
+                                "timestamp": event_timestamp,
                             },
                         )
 
@@ -1107,7 +1109,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         "tsuryphone_maintenance_enabled",
                         {
                             "device_id": self.device_info.device_id,
-                            "timestamp": event.received_at.isoformat(),
+                            "timestamp": event_timestamp,
                         },
                     )
                 else:
@@ -1115,7 +1117,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         "tsuryphone_maintenance_disabled",
                         {
                             "device_id": self.device_info.device_id,
-                            "timestamp": event.received_at.isoformat(),
+                            "timestamp": event_timestamp,
                         },
                     )
 
@@ -1129,7 +1131,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     "tsuryphone_device_rebooted",
                     {
                         "device_id": self.device_info.device_id,
-                        "timestamp": event.received_at.isoformat(),
+                        "timestamp": event_timestamp,
                     },
                 )
 
@@ -1143,7 +1145,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     "device_id": self.device_info.device_id,
                     "config_section": event.data.get("section", "unknown"),
                     "changes": event.data.get("changes", {}),
-                    "timestamp": event.received_at.isoformat(),
+                    "timestamp": event_timestamp,
                 },
             )
 
@@ -1295,6 +1297,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         self._invalid_app_state_values.add(key)
         _LOGGER.warning("Unknown app state value %s from %s", value, source)
+
+    def _event_timestamp_iso(self, event: TsuryPhoneEvent) -> str:
+        """Return ISO 8601 timestamp for an event's reception time."""
+        received = getattr(event, "received_at", None)
+
+        if isinstance(received, datetime):
+            dt_value = received
+        else:
+            try:
+                dt_value = dt_util.utc_from_timestamp(float(received))
+            except (TypeError, ValueError):
+                dt_value = dt_util.utcnow()
+
+        return dt_value.isoformat()
 
     async def _refetch_after_reboot(self) -> None:
         """Refetch device state after reboot detection."""
