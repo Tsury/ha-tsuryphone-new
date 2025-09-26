@@ -235,16 +235,23 @@ class TsuryPhoneAPIClient:
     # Blocked number management
     async def add_blocked_number(self, number: str, reason: str = "") -> dict[str, Any]:
         """Add blocked number."""
+        if not number:
+            raise TsuryPhoneAPIError(
+                "Number cannot be empty", ERROR_CODE_INVALID_NUMBER
+            )
         data = {"number": number}
         if reason:
             data["reason"] = reason
 
-    return await self._request("POST", API_CONFIG_BLOCKED_ADD, data)
+        return await self._request("POST", API_CONFIG_BLOCKED_ADD, data)
 
     async def remove_blocked_number(self, number: str) -> dict[str, Any]:
         """Remove blocked number."""
-
-    return await self._request("POST", API_CONFIG_BLOCKED_REMOVE, {"number": number})
+        if not number:
+            raise TsuryPhoneAPIError(
+                "Number cannot be empty", ERROR_CODE_INVALID_NUMBER
+            )
+        return await self._request("POST", API_CONFIG_BLOCKED_REMOVE, {"number": number})
 
     # Priority caller management
     async def add_priority_caller(self, number: str) -> dict[str, Any]:
