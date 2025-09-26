@@ -439,8 +439,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             new_state = self.data.app_state
 
         # Extract additional firmware fields per schema
-        self.data.dnd_active = event.data.get("dndActive", False)
-        self.data.maintenance_mode = event.data.get("isMaintenanceMode", False)
+        if "dndActive" in event.data:
+            self.data.dnd_active = bool(event.data["dndActive"])
+
+        if "isMaintenanceMode" in event.data:
+            self.data.maintenance_mode = bool(event.data["isMaintenanceMode"])
 
         # Update current call number if provided
         current_call_number = event.data.get("currentCallNumber", "")
@@ -484,7 +487,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _handle_dnd_state(self, event: TsuryPhoneEvent) -> None:
         """Handle DND state change."""
-        self.data.dnd_active = event.data.get("dndActive", False)
+        if "dndActive" in event.data:
+            self.data.dnd_active = bool(event.data["dndActive"])
 
     def _handle_call_info_update(self, event: TsuryPhoneEvent) -> None:
         """Handle supplementary call info."""
