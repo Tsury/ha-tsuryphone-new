@@ -229,25 +229,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def _process_event_directly(self, event: TsuryPhoneEvent) -> None:
         """Process event directly without resilience checks."""
         self._ensure_state()
-        # Check for reboot detection (flag injected by WebSocket layer)
-        if event.data.get("_reboot_detected"):
-            if _LOGGER.isEnabledFor(logging.DEBUG):
-                _LOGGER.debug(
-                    "Reboot flag detected on event seq=%d (%s/%s)",
-                    event.seq,
-                    event.category,
-                    event.event,
-                )
-            event.data.pop("_reboot_detected", None)
+        # Check for reboot detection
+        if hasattr(event, "_reboot_detected") and event._reboot_detected:
             self._handle_reboot_detection(event)
-
-        if _LOGGER.isEnabledFor(logging.DEBUG):
-            _LOGGER.debug(
-                "[tsuryphone.event.dispatch] category=%s event=%s data_keys=%s",
-                event.category,
-                event.event,
-                sorted(event.data.keys()),
-            )
 
         # Update last sequence
         if event.seq > self.data.last_seq:
@@ -275,13 +259,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Update coordinator data and notify listeners
         self.async_set_updated_data(self.data)
-
-        if _LOGGER.isEnabledFor(logging.DEBUG):
-            _LOGGER.debug(
-                "[tsuryphone.event.dispatch] updated app_state=%s prev=%s",
-                getattr(self.data, "app_state", None),
-                getattr(self.data, "previous_app_state", None),
-            )
 
         # Phase P5: Check and update notifications after event processing
         if self._notification_manager:
@@ -439,25 +416,26 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         previous_state = self._parse_app_state_value(
             previous_state_value, "event.previousState"
         )
+        if previous_state is None and "previousStateName" in event.data:
+            previous_state = self._parse_app_state_value(
+                event.data.get("previousStateName"), "event.previousStateName"
+            )
+
         if previous_state is not None:
             self.data.previous_app_state = previous_state
         else:
             previous_state = self.data.previous_app_state
 
         new_state = self._parse_app_state_value(new_state_value, "event.state")
+        if new_state is None and "stateName" in event.data:
+            new_state = self._parse_app_state_value(
+                event.data.get("stateName"), "event.stateName"
+            )
+
         if new_state is not None:
             self.data.app_state = new_state
         else:
             new_state = self.data.app_state
-
-        if _LOGGER.isEnabledFor(logging.DEBUG):
-            _LOGGER.debug(
-                "Phone state event parsed: raw current=%r raw previous=%r -> %s (previous %s)",
-                new_state_value,
-                previous_state_value,
-                self.data.app_state,
-                previous_state,
-            )
 
         # Extract additional firmware fields per schema
         self.data.dnd_active = event.data.get("dndActive", False)
@@ -900,19 +878,33 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.current_dialing_number = event.data["currentDialingNumber"]
 
         # Extract state information if present
+        parsed_state = None
         if "state" in event.data:
             parsed_state = self._parse_app_state_value(
                 event.data["state"], "event.context.state"
             )
-            if parsed_state is not None:
-                self.data.app_state = parsed_state
 
+        if parsed_state is None and "stateName" in event.data:
+            parsed_state = self._parse_app_state_value(
+                event.data["stateName"], "event.context.stateName"
+            )
+
+        if parsed_state is not None:
+            self.data.app_state = parsed_state
+
+        parsed_prev_state = None
         if "previousState" in event.data:
             parsed_prev_state = self._parse_app_state_value(
                 event.data["previousState"], "event.context.previousState"
             )
-            if parsed_prev_state is not None:
-                self.data.previous_app_state = parsed_prev_state
+
+        if parsed_prev_state is None and "previousStateName" in event.data:
+            parsed_prev_state = self._parse_app_state_value(
+                event.data["previousStateName"], "event.context.previousStateName"
+            )
+
+        if parsed_prev_state is not None:
+            self.data.previous_app_state = parsed_prev_state
 
         # Extract DND status if present
         if "dndActive" in event.data:
@@ -1204,39 +1196,36 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Update phone state and related lists
         if "phone" in device_data:
             phone_data = device_data["phone"]
-            if _LOGGER.isEnabledFor(logging.DEBUG):
-                _LOGGER.debug(
-                    "[tsuryphone.poll] phone section keys=%s",
-                    sorted(phone_data.keys()),
-                )
+            parsed_state = None
             if "state" in phone_data:
                 parsed_state = self._parse_app_state_value(
                     phone_data["state"], "device.phone.state"
                 )
-                if parsed_state is not None:
-                    previous_state = getattr(self.data, "app_state", None)
-                    if (
-                        _LOGGER.isEnabledFor(logging.DEBUG)
-                        and previous_state is not None
-                        and parsed_state != previous_state
-                    ):
-                        _LOGGER.debug(
-                            "[tsuryphone.poll] app_state %s -> %s (raw=%r)",
-                            previous_state,
-                            parsed_state,
-                            phone_data["state"],
-                        )
-                    self.data.app_state = parsed_state
-                else:
-                    _LOGGER.error("Invalid app state: %s", phone_data["state"])
+
+            if parsed_state is None and "stateName" in phone_data:
+                parsed_state = self._parse_app_state_value(
+                    phone_data["stateName"], "device.phone.stateName"
+                )
+
+            if parsed_state is not None:
+                self.data.app_state = parsed_state
+            elif "state" in phone_data:
+                _LOGGER.error("Invalid app state: %s", phone_data["state"])
 
             # Previous state if provided
+            parsed_prev = None
             if "previousState" in phone_data:
                 parsed_prev = self._parse_app_state_value(
                     phone_data["previousState"], "device.phone.previousState"
                 )
-                if parsed_prev is not None:
-                    self.data.previous_app_state = parsed_prev
+
+            if parsed_prev is None and "previousStateName" in phone_data:
+                parsed_prev = self._parse_app_state_value(
+                    phone_data["previousStateName"], "device.phone.previousStateName"
+                )
+
+            if parsed_prev is not None:
+                self.data.previous_app_state = parsed_prev
 
             # Priority callers list
             if isinstance(phone_data.get("priorityCallers"), list):
@@ -1268,10 +1257,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if isinstance(value, int):
             try:
-                result = AppState(value)
-                if _LOGGER.isEnabledFor(logging.DEBUG):
-                    _LOGGER.debug("Parsed AppState int %r -> %s (%s)", value, result, source)
-                return result
+                return AppState(value)
             except ValueError:
                 self._log_invalid_app_state(value, source)
                 return None
@@ -1285,15 +1271,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 candidate.startswith("-") and candidate[1:].isdigit()
             ):
                 try:
-                    result = AppState(int(candidate))
-                    if _LOGGER.isEnabledFor(logging.DEBUG):
-                        _LOGGER.debug(
-                            "Parsed AppState numeric string %r -> %s (%s)",
-                            value,
-                            result,
-                            source,
-                        )
-                    return result
+                    return AppState(int(candidate))
                 except ValueError:
                     self._log_invalid_app_state(value, source)
                     return None
@@ -1302,13 +1280,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             for state in AppState:
                 state_normalized = re.sub(r"[^A-Z0-9]+", "", state.name.upper())
                 if normalized == state_normalized:
-                    if _LOGGER.isEnabledFor(logging.DEBUG):
-                        _LOGGER.debug(
-                            "Parsed AppState string %r -> %s (%s)",
-                            value,
-                            state,
-                            source,
-                        )
                     return state
 
         if value is not None:
@@ -1324,7 +1295,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         self._invalid_app_state_values.add(key)
         _LOGGER.warning("Unknown app state value %s from %s", value, source)
-
 
     async def _refetch_after_reboot(self) -> None:
         """Refetch device state after reboot detection."""
