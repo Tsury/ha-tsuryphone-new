@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any
 
@@ -101,6 +102,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # State tracking for reboot detection
         self._reboot_detected = False
         self._last_refetch_time: float = 0
+    self._invalid_app_state_values: set[str] = set()
 
     def _ensure_state(self) -> TsuryPhoneState:
         """Ensure coordinator state object exists."""
@@ -408,18 +410,22 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _handle_phone_state_change(self, event: TsuryPhoneEvent) -> None:
         """Handle phone state change."""
-        new_state_int = event.data.get("state", 0)
-        previous_state_int = event.data.get("previousState", 0)
+        previous_state_value = event.data.get("previousState")
+        new_state_value = event.data.get("state")
 
-        try:
-            new_state = AppState(new_state_int)
-            previous_state = AppState(previous_state_int)
-        except ValueError as err:
-            _LOGGER.error("Invalid app state values: %s", err)
-            return
+        previous_state = self._parse_app_state_value(
+            previous_state_value, "event.previousState"
+        )
+        if previous_state is not None:
+            self.data.previous_app_state = previous_state
+        else:
+            previous_state = self.data.previous_app_state
 
-        self.data.previous_app_state = previous_state
-        self.data.app_state = new_state
+        new_state = self._parse_app_state_value(new_state_value, "event.state")
+        if new_state is not None:
+            self.data.app_state = new_state
+        else:
+            new_state = self.data.app_state
 
         # Extract additional firmware fields per schema
         self.data.dnd_active = event.data.get("dndActive", False)
@@ -446,7 +452,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Detect missed calls (R52)
         if (
-            previous_state in (AppState.INCOMING_CALL, AppState.INCOMING_CALL_RING)
+            previous_state
+            and new_state
+            and previous_state
+            in (
+                AppState.INCOMING_CALL,
+                AppState.INCOMING_CALL_RING,
+            )
             and new_state == AppState.IDLE
         ):
             self._detect_missed_call(event)
@@ -857,17 +869,18 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract state information if present
         if "state" in event.data:
-            state_value = event.data["state"]
-            try:
-                self.data.app_state = AppState(state_value)
-            except ValueError:
-                _LOGGER.warning("Unknown app state value: %s", state_value)
+            parsed_state = self._parse_app_state_value(
+                event.data["state"], "event.context.state"
+            )
+            if parsed_state is not None:
+                self.data.app_state = parsed_state
 
         if "previousState" in event.data:
-            try:
-                self.data.previous_app_state = AppState(event.data["previousState"])
-            except ValueError:
-                pass
+            parsed_prev_state = self._parse_app_state_value(
+                event.data["previousState"], "event.context.previousState"
+            )
+            if parsed_prev_state is not None:
+                self.data.previous_app_state = parsed_prev_state
 
         # Extract DND status if present
         if "dndActive" in event.data:
@@ -1160,10 +1173,21 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if "phone" in device_data:
             phone_data = device_data["phone"]
             if "state" in phone_data:
-                try:
-                    self.data.app_state = AppState(phone_data["state"])
-                except ValueError:
+                parsed_state = self._parse_app_state_value(
+                    phone_data["state"], "device.phone.state"
+                )
+                if parsed_state is not None:
+                    self.data.app_state = parsed_state
+                else:
                     _LOGGER.error("Invalid app state: %s", phone_data["state"])
+
+            # Previous state if provided
+            if "previousState" in phone_data:
+                parsed_prev = self._parse_app_state_value(
+                    phone_data["previousState"], "device.phone.previousState"
+                )
+                if parsed_prev is not None:
+                    self.data.previous_app_state = parsed_prev
 
             # Priority callers list
             if isinstance(phone_data.get("priorityCallers"), list):
@@ -1187,6 +1211,53 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.current_call_is_priority = bool(
                 device_data.get("currentCallIsPriority")
             )
+
+    def _parse_app_state_value(self, value: Any, source: str) -> AppState | None:
+        """Normalize various state encodings to AppState."""
+        if isinstance(value, AppState):
+            return value
+
+        if isinstance(value, int):
+            try:
+                return AppState(value)
+            except ValueError:
+                self._log_invalid_app_state(value, source)
+                return None
+
+        if isinstance(value, str):
+            candidate = value.strip()
+            if not candidate:
+                return None
+
+            if candidate.isdigit() or (
+                candidate.startswith("-") and candidate[1:].isdigit()
+            ):
+                try:
+                    return AppState(int(candidate))
+                except ValueError:
+                    self._log_invalid_app_state(value, source)
+                    return None
+
+            normalized = re.sub(r"[^A-Z0-9]+", "", candidate.upper())
+            for state in AppState:
+                state_normalized = re.sub(r"[^A-Z0-9]+", "", state.name.upper())
+                if normalized == state_normalized:
+                    return state
+
+        if value is not None:
+            self._log_invalid_app_state(value, source)
+
+        return None
+
+    def _log_invalid_app_state(self, value: Any, source: str) -> None:
+        """Log invalid app state values once per unique representation."""
+        key = f"{source}:{value!r}"
+        if key in self._invalid_app_state_values:
+            return
+
+    self._invalid_app_state_values.add(key)
+    _LOGGER.warning("Unknown app state value %s from %s", value, source)
+
 
     async def _refetch_after_reboot(self) -> None:
         """Refetch device state after reboot detection."""
