@@ -60,15 +60,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self.api_client = api_client
         self.device_info = device_info
 
-        # Initialize state
-        self.data = TsuryPhoneState(device_info=device_info)
-
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=POLLING_FALLBACK_INTERVAL),
         )
+
+        # Initialize state after base class sets default data
+        self.data = TsuryPhoneState(device_info=device_info)
 
         # WebSocket client
         self._websocket_client: TsuryPhoneWebSocketClient | None = None
@@ -102,6 +102,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._reboot_detected = False
         self._last_refetch_time: float = 0
 
+    def _ensure_state(self) -> TsuryPhoneState:
+        """Ensure coordinator state object exists."""
+        if self.data is None:
+            self.data = TsuryPhoneState(device_info=self.device_info)
+        return self.data
+
     async def _async_setup(self) -> None:
         """Set up the coordinator."""
         # Phase P8: Initialize resilience manager
@@ -123,6 +129,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         _LOGGER.debug("Polling device for state update")
 
         try:
+            state = self._ensure_state()
             # Get current configuration and state
             config_response = await self.api_client.get_tsuryphone_config()
 
@@ -135,13 +142,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             await self._update_state_from_device_data(device_data)
 
             # Mark as connected
-            self.data.connected = True
-            self.data.last_seen = time.time()
+            state.connected = True
+            state.last_seen = time.time()
 
-            return self.data
+            return state
 
         except TsuryPhoneAPIError as err:
-            self.data.connected = False
+            state = self._ensure_state()
+            state.connected = False
             # Phase P8: Handle API error through resilience manager
             if self._resilience:
                 error_type = (
@@ -218,6 +226,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _process_event_directly(self, event: TsuryPhoneEvent) -> None:
         """Process event directly without resilience checks."""
+        self._ensure_state()
         # Check for reboot detection
         if hasattr(event, "_reboot_detected") and event._reboot_detected:
             self._handle_reboot_detection(event)
