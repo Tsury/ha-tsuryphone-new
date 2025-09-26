@@ -46,6 +46,9 @@ RING_CYCLE_DURATION: Final = 30  # milliseconds (from firmware)
 AUDIO_MIN_LEVEL: Final = 1
 AUDIO_MAX_LEVEL: Final = 7
 
+# Service attribute keys
+ATTR_DEVICE_ID: Final = "device_id"
+
 
 # Device state enum (matches firmware state.h)
 class AppState(IntEnum):

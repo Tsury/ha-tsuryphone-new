@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.helpers import config_validation as cv
 from homeassistant.exceptions import ServiceValidationError, HomeAssistantError
 from homeassistant.helpers.entity_component import EntityComponent
@@ -51,6 +57,7 @@ from .const import (
     AUDIO_MIN_LEVEL,
     AUDIO_MAX_LEVEL,
     RING_PATTERN_PRESETS,
+    ATTR_DEVICE_ID,
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .api_client import TsuryPhoneAPIError
