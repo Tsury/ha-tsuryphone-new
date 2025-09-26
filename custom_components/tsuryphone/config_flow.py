@@ -92,7 +92,14 @@ class TsuryPhoneConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Extract device type from TXT records
         properties = discovery_info.properties
-        device_type = properties.get("device", "").decode() if properties.get("device") else ""
+        raw_device = properties.get("device")
+
+        if isinstance(raw_device, bytes):
+            device_type = raw_device.decode("utf-8", "ignore")
+        elif isinstance(raw_device, str):
+            device_type = raw_device
+        else:
+            device_type = ""
         
         if device_type != MDNS_DEVICE_TYPE:
             _LOGGER.debug("Ignoring discovery - not a TsuryPhone device")
