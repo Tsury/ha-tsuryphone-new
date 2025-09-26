@@ -1,0 +1,560 @@
+# Service descriptions for TsuryPhone integration
+# Each service requires a device_id corresponding to the TsuryPhone config entry.
+dial:
+  name: Dial number
+  description: Dial a phone number on the TsuryPhone device.
+  fields:
+    device_id:
+      name: Device ID
+      description: Identifier of the TsuryPhone device.
+      required: true
+      example: tsuryphone_1234
+    number:
+      name: Phone number
+      description: Number to dial (quote to preserve leading zeros).
+      required: true
+      example: "0541234567"
+      selector:
+        text:
+
+answer:
+  name: Answer call
+  description: Answer an incoming call on the TsuryPhone device.
+  fields:
+    device_id:
+      name: Device ID
+      description: Identifier of the TsuryPhone device.
+      required: true
+      example: tsuryphone_1234
+
+hangup:
+  name: Hang up call
+  description: Hang up an active call on the TsuryPhone device.
+  fields:
+    device_id:
+      name: Device ID
+      description: Identifier of the TsuryPhone device.
+      required: true
+      example: tsuryphone_1234
+
+ring_device:
+  name: Ring device
+  description: Trigger the TsuryPhone device to ring.
+  fields:
+    device_id:
+      name: Device ID
+      description: Identifier of the TsuryPhone device.
+      required: true
+      example: tsuryphone_1234
+    pattern:
+      name: Ring pattern
+      description: Optional ring pattern string.
+      required: false
+      selector:
+        text:
+
+set_ring_pattern:
+  name: Set ring pattern
+  description: Update the ring pattern on the TsuryPhone device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+      example: tsuryphone_1234
+    pattern:
+      name: Ring pattern
+      description: Ring pattern string to apply.
+      required: true
+      example: "300,300,300"
+      selector:
+        text:
+
+reset_device:
+  name: Reset device
+  description: Reboot the TsuryPhone device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+      example: tsuryphone_1234
+
+set_dnd:
+  name: Set Do Not Disturb
+  description: Configure Do Not Disturb settings on the TsuryPhone device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+      example: tsuryphone_1234
+    force:
+      name: Force DND
+      description: Force DND mode on or off.
+      required: false
+      selector:
+        boolean:
+    scheduled:
+      name: Scheduled DND
+      description: Enable scheduled DND handling.
+      required: false
+      selector:
+        boolean:
+    start_hour:
+      name: Start hour
+      description: Start hour (0-23).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 23
+    start_minute:
+      name: Start minute
+      description: Start minute (0-59).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 59
+    end_hour:
+      name: End hour
+      description: End hour (0-23).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 23
+    end_minute:
+      name: End minute
+      description: End minute (0-59).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 59
+
+set_audio:
+  name: Set audio configuration
+  description: Update audio gain/volume settings.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+      example: tsuryphone_1234
+    earpiece_volume:
+      name: Earpiece volume
+      description: Value between 1 and 7.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 7
+    earpiece_gain:
+      name: Earpiece gain
+      description: Value between 1 and 7.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 7
+    speaker_volume:
+      name: Speaker volume
+      description: Value between 1 and 7.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 7
+    speaker_gain:
+      name: Speaker gain
+      description: Value between 1 and 7.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 7
+
+get_call_history:
+  name: Get call history
+  description: Retrieve call history entries from the integration cache.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+      example: tsuryphone_1234
+    limit:
+      name: Limit
+      description: Maximum number of entries to return.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 1000
+
+clear_call_history:
+  name: Clear call history
+  description: Clear stored call history entries.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    older_than_days:
+      name: Older than (days)
+      description: Remove entries older than the specified number of days.
+      required: false
+      selector:
+        number:
+          min: 1
+    keep_last:
+      name: Keep last
+      description: Keep the specified number of most recent entries.
+      required: false
+      selector:
+        number:
+          min: 1
+
+quick_dial_add:
+  name: Add quick dial entry
+  description: Add a quick dial shortcut.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    code:
+      name: Quick dial code
+      description: Quick dial code (quote to preserve leading zeros).
+      required: true
+      example: "012"
+      selector:
+        text:
+    number:
+      name: Phone number
+      required: true
+      example: "0541234567"
+      selector:
+        text:
+    name:
+      name: Display name
+      description: Optional label for the quick dial entry.
+      required: false
+      selector:
+        text:
+
+quick_dial_remove:
+  name: Remove quick dial entry
+  description: Remove a quick dial shortcut by code.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    code:
+      name: Quick dial code
+      required: true
+      example: "012"
+      selector:
+        text:
+
+quick_dial_clear:
+  name: Clear quick dial entries
+  description: Remove all quick dial shortcuts from the device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+blocked_add:
+  name: Add blocked number
+  description: Add a phone number to the blocked list.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    number:
+      name: Phone number
+      required: true
+      example: "0541234567"
+      selector:
+        text:
+    reason:
+      name: Reason
+      description: Optional reason to display.
+      required: false
+      selector:
+        text:
+
+blocked_remove:
+  name: Remove blocked number
+  description: Remove a phone number from the blocked list.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    number:
+      name: Phone number
+      required: true
+      example: "0541234567"
+      selector:
+        text:
+
+blocked_clear:
+  name: Clear blocked numbers
+  description: Remove all blocked numbers from the device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+priority_add:
+  name: Add priority caller
+  description: Mark a phone number as a priority caller.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    number:
+      name: Phone number
+      required: true
+      example: "0541234567"
+      selector:
+        text:
+
+priority_remove:
+  name: Remove priority caller
+  description: Remove a phone number from the priority list.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    number:
+      name: Phone number
+      required: true
+      selector:
+        text:
+
+refetch_all:
+  name: Refetch device data
+  description: Ask the device to refresh and resend configuration data.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+get_diagnostics:
+  name: Get diagnostics
+  description: Retrieve diagnostics information from the device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+webhook_add:
+  name: Add webhook action
+  description: Register a webhook action on the device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    url:
+      name: Webhook URL
+      required: true
+      selector:
+        text:
+    events:
+      name: Events
+      description: Event names that should trigger this webhook.
+      required: true
+      selector:
+        object:
+    name:
+      name: Display name
+      description: Optional label for the webhook action.
+      required: false
+      selector:
+        text:
+
+webhook_remove:
+  name: Remove webhook action
+  description: Remove a webhook action from the device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    url:
+      name: Webhook URL
+      required: true
+      selector:
+        text:
+
+webhook_clear:
+  name: Clear webhook actions
+  description: Remove all webhook actions from the device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+webhook_test:
+  name: Test webhook
+  description: Trigger a webhook action as a test.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    url:
+      name: Webhook URL
+      required: true
+      selector:
+        text:
+
+switch_call_waiting:
+  name: Switch call waiting
+  description: Toggle the active call when call waiting is available.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+set_maintenance_mode:
+  name: Set maintenance mode
+  description: Enable or disable maintenance mode on the device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    enabled:
+      name: Enabled
+      description: Whether maintenance mode should be enabled.
+      required: true
+      selector:
+        boolean:
+
+get_missed_calls:
+  name: Get missed calls
+  description: Retrieve missed call entries from the integration cache.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+dial_quick_dial:
+  name: Dial quick dial code
+  description: Dial using a quick dial code stored on the device.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    code:
+      name: Quick dial code
+      required: true
+      selector:
+        text:
+
+set_ha_url:
+  name: Set Home Assistant URL
+  description: Configure the Home Assistant base URL used by the device for webhooks.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    url:
+      name: URL
+      description: Base URL that the device should call back to.
+      required: true
+      selector:
+        text:
+
+quick_dial_import:
+  name: Import quick dial entries
+  description: Import multiple quick dial entries at once.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    entries:
+      name: Entries
+      description: List of quick dial entries to import.
+      required: true
+      selector:
+        object:
+    clear_existing:
+      name: Clear existing entries
+      description: Remove existing quick dial entries before importing.
+      required: false
+      selector:
+        boolean:
+
+quick_dial_export:
+  name: Export quick dial entries
+  description: Retrieve quick dial entries from the integration cache.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+blocked_import:
+  name: Import blocked numbers
+  description: Import multiple blocked numbers.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    entries:
+      name: Entries
+      description: List of blocked number entries to import.
+      required: true
+      selector:
+        object:
+    clear_existing:
+      name: Clear existing entries
+      description: Remove existing blocked numbers before importing.
+      required: false
+      selector:
+        boolean:
+
+blocked_export:
+  name: Export blocked numbers
+  description: Retrieve blocked numbers from the integration cache.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+resilience_status:
+  name: Get resilience status
+  description: Retrieve diagnostic information from the resilience manager.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+resilience_test:
+  name: Run resilience test
+  description: Execute a resilience diagnostic test (connection, sequence, or stress).
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+    test_type:
+      name: Test type
+      description: Type of resilience test to run.
+      required: false
+      selector:
+        select:
+          options:
+            - connection
+            - sequence
+            - stress
+
+websocket_reconnect:
+  name: Force websocket reconnect
+  description: Force the integration to reconnect the websocket client.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
+
+run_health_check:
+  name: Run health check
+  description: Perform a comprehensive health check through the resilience manager.
+  fields:
+    device_id:
+      name: Device ID
+      required: true
