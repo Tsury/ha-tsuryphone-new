@@ -157,57 +157,6 @@ class TsuryPhoneConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return TsuryPhoneOptionsFlow(config_entry)
 
 
-# Legacy options flow handler - keeping for backward compatibility
-class TsuryPhoneOptionsFlowHandler(config_entries.OptionsFlow):
-    """TsuryPhone config flow options handler (legacy)."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Manage the options."""
-        # Redirect to new comprehensive options flow
-        return self.async_show_menu(
-            step_id="init",
-            menu_options=["legacy_settings", "advanced_options"],
-        )
-
-    async def async_step_legacy_settings(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Handle legacy settings."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        return self.async_show_form(
-            step_id="legacy_settings",
-            data_schema=vol.Schema({
-                vol.Optional(
-                    CONF_HOST_OVERRIDE,
-                    default=self.config_entry.options.get(CONF_HOST_OVERRIDE, "")
-                ): str,
-                vol.Optional(
-                    CONF_POLLING_FALLBACK_SECONDS,
-                    default=self.config_entry.options.get(CONF_POLLING_FALLBACK_SECONDS, 30)
-                ): vol.All(vol.Coerce(int), vol.Range(min=15, max=120)),
-                vol.Optional(
-                    CONF_REFETCH_INTERVAL_MINUTES,
-                    default=self.config_entry.options.get(CONF_REFETCH_INTERVAL_MINUTES, 5)
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=120)),
-            })
-        )
-
-    async def async_step_advanced_options(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Redirect to advanced options flow."""
-        # This would redirect to the TsuryPhoneOptionsFlow
-        return self.async_abort(reason="use_advanced_options")
-
-
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect.
 
