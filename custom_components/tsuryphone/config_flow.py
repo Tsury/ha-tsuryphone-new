@@ -65,6 +65,8 @@ class TsuryPhoneConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 info = await validate_input(self.hass, user_input)
+                await self.async_set_unique_id(info["device_id"])
+                self._abort_if_unique_id_configured()
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -220,8 +222,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                 if not device_id:
                     raise InvalidAuth("No device ID found in response")
                 
+                device_name = device_data.get("deviceName") or device_id or f"TsuryPhone ({host})"
+
                 return {
-                    "title": f"TsuryPhone ({host})",
+                    "title": device_name,
                     "device_id": device_id,
                     "host": host,
                     "port": port,
