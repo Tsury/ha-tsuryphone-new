@@ -102,7 +102,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # State tracking for reboot detection
         self._reboot_detected = False
         self._last_refetch_time: float = 0
-    self._invalid_app_state_values: set[str] = set()
+        self._invalid_app_state_values: set[str] = set()
 
     def _ensure_state(self) -> TsuryPhoneState:
         """Ensure coordinator state object exists."""
