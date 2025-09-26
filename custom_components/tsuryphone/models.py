@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 from datetime import datetime
 
 from .const import AppState, EventCategory
+
+
+class CallDirection(str, Enum):
+    """Call direction values used across the integration."""
+
+    INCOMING = "incoming"
+    OUTGOING = "outgoing"
+    BLOCKED = "blocked"
+    MISSED = "missed"
 
 
 @dataclass
