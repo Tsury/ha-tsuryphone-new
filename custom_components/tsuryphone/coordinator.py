@@ -233,6 +233,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if hasattr(event, "_reboot_detected") and event._reboot_detected:
             self._handle_reboot_detection(event)
 
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "[tsuryphone.event.dispatch] category=%s event=%s data_keys=%s",
+                event.category,
+                event.event,
+                sorted(event.data.keys()),
+            )
+
         # Update last sequence
         if event.seq > self.data.last_seq:
             self.data.last_seq = event.seq
@@ -259,6 +267,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Update coordinator data and notify listeners
         self.async_set_updated_data(self.data)
+
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "[tsuryphone.event.dispatch] updated app_state=%s prev=%s",
+                getattr(self.data, "app_state", None),
+                getattr(self.data, "previous_app_state", None),
+            )
 
         # Phase P5: Check and update notifications after event processing
         if self._notification_manager:
@@ -1181,6 +1196,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Update phone state and related lists
         if "phone" in device_data:
             phone_data = device_data["phone"]
+            if _LOGGER.isEnabledFor(logging.DEBUG):
+                _LOGGER.debug(
+                    "[tsuryphone.poll] phone section keys=%s",
+                    sorted(phone_data.keys()),
+                )
             if "state" in phone_data:
                 parsed_state = self._parse_app_state_value(
                     phone_data["state"], "device.phone.state"
