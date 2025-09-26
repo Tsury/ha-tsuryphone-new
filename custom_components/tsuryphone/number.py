@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.exceptions import HomeAssistantError
@@ -27,7 +28,7 @@ NUMBER_DESCRIPTIONS = (
         native_min_value=AUDIO_MIN_LEVEL,
         native_max_value=AUDIO_MAX_LEVEL,
         native_step=1,
-        entity_category="config",
+    entity_category=EntityCategory.CONFIG,
     ),
     NumberEntityDescription(
         key="earpiece_gain",
@@ -36,7 +37,7 @@ NUMBER_DESCRIPTIONS = (
         native_min_value=AUDIO_MIN_LEVEL,
         native_max_value=AUDIO_MAX_LEVEL,
         native_step=1,
-        entity_category="config",
+    entity_category=EntityCategory.CONFIG,
     ),
     NumberEntityDescription(
         key="speaker_volume",
@@ -45,7 +46,7 @@ NUMBER_DESCRIPTIONS = (
         native_min_value=AUDIO_MIN_LEVEL,
         native_max_value=AUDIO_MAX_LEVEL,
         native_step=1,
-        entity_category="config",
+    entity_category=EntityCategory.CONFIG,
     ),
     NumberEntityDescription(
         key="speaker_gain",
@@ -54,7 +55,7 @@ NUMBER_DESCRIPTIONS = (
         native_min_value=AUDIO_MIN_LEVEL,
         native_max_value=AUDIO_MAX_LEVEL,
         native_step=1,
-        entity_category="config",
+    entity_category=EntityCategory.CONFIG,
     ),
 )
 

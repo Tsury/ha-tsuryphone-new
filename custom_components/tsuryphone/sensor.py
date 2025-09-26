@@ -14,6 +14,7 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.typing import StateType
@@ -63,7 +64,7 @@ SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="rssi",
@@ -72,7 +73,7 @@ SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         native_unit_of_measurement="dBm",
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="free_heap",
@@ -81,35 +82,35 @@ SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="calls_total",
         name="Total Calls",
         icon="mdi:phone",
         state_class=SensorStateClass.TOTAL_INCREASING,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="calls_incoming",
         name="Incoming Calls",
         icon="mdi:phone-incoming",
         state_class=SensorStateClass.TOTAL_INCREASING,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="calls_outgoing",
         name="Outgoing Calls",
         icon="mdi:phone-outgoing",
         state_class=SensorStateClass.TOTAL_INCREASING,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="calls_blocked",
         name="Blocked Calls",
         icon="mdi:phone-off",
         state_class=SensorStateClass.TOTAL_INCREASING,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="talk_time_total",
@@ -118,27 +119,27 @@ SENSOR_DESCRIPTIONS = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="quick_dial_count",
         name="Quick Dial Count",
         icon="mdi:speed-dial",
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="blocked_count",
         name="Blocked Numbers Count",
         icon="mdi:phone-off",
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="last_blocked_number",
         name="Last Blocked Number",
         icon="mdi:phone-remove",
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
@@ -146,14 +147,14 @@ SENSOR_DESCRIPTIONS = (
         name="Call History Size",
         icon="mdi:history",
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     # Phase P4: Webhook management sensor
     SensorEntityDescription(
         key="webhook_status",
         name="Webhook Status",
         icon="mdi:webhook",
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
 )

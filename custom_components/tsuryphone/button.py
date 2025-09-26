@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.exceptions import HomeAssistantError
@@ -34,25 +35,25 @@ BUTTON_DESCRIPTIONS = (
         key="ring",
         name="Ring Device",
         icon="mdi:phone-ring",
-        entity_category="config",
+    entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
         key="reset",
         name="Reset Device",
         icon="mdi:restart",
-        entity_category="config",
+    entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
         key="refetch",
         name="Refresh Device Data",
         icon="mdi:refresh",
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ButtonEntityDescription(
         key="refresh_snapshot",
         name="Refresh Snapshot",
         icon="mdi:camera-flip",
-        entity_category="diagnostic",
+    entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ButtonEntityDescription(
         key="dial_selected",

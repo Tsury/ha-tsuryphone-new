@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.exceptions import HomeAssistantError
@@ -24,7 +25,7 @@ SELECT_DESCRIPTIONS = (
         key="ring_pattern",
         name="Ring Pattern",
         icon="mdi:phone-ring",
-        entity_category="config",
+    entity_category=EntityCategory.CONFIG,
     ),
     SelectEntityDescription(
         key="quick_dial",
