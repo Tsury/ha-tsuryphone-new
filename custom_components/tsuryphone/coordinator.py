@@ -427,6 +427,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         else:
             new_state = self.data.app_state
 
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "Phone state event parsed: raw current=%r raw previous=%r -> %s (previous %s)",
+                new_state_value,
+                previous_state_value,
+                self.data.app_state,
+                previous_state,
+            )
+
         # Extract additional firmware fields per schema
         self.data.dnd_active = event.data.get("dndActive", False)
         self.data.maintenance_mode = event.data.get("isMaintenanceMode", False)
@@ -1219,7 +1228,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if isinstance(value, int):
             try:
-                return AppState(value)
+                result = AppState(value)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    _LOGGER.debug("Parsed AppState int %r -> %s (%s)", value, result, source)
+                return result
             except ValueError:
                 self._log_invalid_app_state(value, source)
                 return None
@@ -1233,7 +1245,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 candidate.startswith("-") and candidate[1:].isdigit()
             ):
                 try:
-                    return AppState(int(candidate))
+                    result = AppState(int(candidate))
+                    if _LOGGER.isEnabledFor(logging.DEBUG):
+                        _LOGGER.debug(
+                            "Parsed AppState numeric string %r -> %s (%s)",
+                            value,
+                            result,
+                            source,
+                        )
+                    return result
                 except ValueError:
                     self._log_invalid_app_state(value, source)
                     return None
@@ -1242,6 +1262,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             for state in AppState:
                 state_normalized = re.sub(r"[^A-Z0-9]+", "", state.name.upper())
                 if normalized == state_normalized:
+                    if _LOGGER.isEnabledFor(logging.DEBUG):
+                        _LOGGER.debug(
+                            "Parsed AppState string %r -> %s (%s)",
+                            value,
+                            state,
+                            source,
+                        )
                     return state
 
         if value is not None:
