@@ -60,6 +60,10 @@ from .const import (
     RING_PATTERN_PRESETS,
     ATTR_DEVICE_ID,
 )
+
+# Backward compatibility: ensure optional constants exist even if older const module lacks them
+if "SERVICE_DIAL_QUICK_DIAL" not in globals():
+    SERVICE_DIAL_QUICK_DIAL = "dial_quick_dial"
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .api_client import TsuryPhoneAPIError
 
