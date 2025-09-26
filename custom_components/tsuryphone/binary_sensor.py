@@ -44,7 +44,6 @@ BINARY_SENSOR_DESCRIPTIONS = (
         key="call_waiting_available",
         name="Call Waiting Available",
         icon="mdi:phone-plus",
-        entity_registry_enabled_default=False,  # Advanced feature
     ),
     BinarySensorEntityDescription(
         key="current_call_priority",

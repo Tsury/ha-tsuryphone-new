@@ -25,13 +25,12 @@ SELECT_DESCRIPTIONS = (
         key="ring_pattern",
         name="Ring Pattern",
         icon="mdi:phone-ring",
-    entity_category=EntityCategory.CONFIG,
+        entity_category=EntityCategory.CONFIG,
     ),
     SelectEntityDescription(
         key="quick_dial",
         name="Quick Dial",
         icon="mdi:speed-dial",
-        entity_registry_enabled_default=False,  # Will be enabled in Phase P4
     ),
 )
 

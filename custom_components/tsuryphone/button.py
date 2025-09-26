@@ -59,13 +59,11 @@ BUTTON_DESCRIPTIONS = (
         key="dial_selected",
         name="Dial Selected Quick Dial",
         icon="mdi:speed-dial",
-        entity_registry_enabled_default=False,  # Phase P4 feature
     ),
     ButtonEntityDescription(
         key="toggle_call_waiting",
         name="Toggle Call Waiting",
         icon="mdi:phone-plus",
-        entity_registry_enabled_default=False,  # Advanced feature
     ),
 )
 
