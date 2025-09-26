@@ -229,8 +229,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def _process_event_directly(self, event: TsuryPhoneEvent) -> None:
         """Process event directly without resilience checks."""
         self._ensure_state()
-        # Check for reboot detection
-        if hasattr(event, "_reboot_detected") and event._reboot_detected:
+        # Check for reboot detection (flag injected by WebSocket layer)
+        if event.data.get("_reboot_detected"):
+            if _LOGGER.isEnabledFor(logging.DEBUG):
+                _LOGGER.debug(
+                    "Reboot flag detected on event seq=%d (%s/%s)",
+                    event.seq,
+                    event.category,
+                    event.event,
+                )
+            event.data.pop("_reboot_detected", None)
             self._handle_reboot_detection(event)
 
         if _LOGGER.isEnabledFor(logging.DEBUG):
@@ -1206,6 +1214,18 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     phone_data["state"], "device.phone.state"
                 )
                 if parsed_state is not None:
+                    previous_state = getattr(self.data, "app_state", None)
+                    if (
+                        _LOGGER.isEnabledFor(logging.DEBUG)
+                        and previous_state is not None
+                        and parsed_state != previous_state
+                    ):
+                        _LOGGER.debug(
+                            "[tsuryphone.poll] app_state %s -> %s (raw=%r)",
+                            previous_state,
+                            parsed_state,
+                            phone_data["state"],
+                        )
                     self.data.app_state = parsed_state
                 else:
                     _LOGGER.error("Invalid app state: %s", phone_data["state"])
