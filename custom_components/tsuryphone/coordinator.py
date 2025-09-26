@@ -1255,8 +1255,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if key in self._invalid_app_state_values:
             return
 
-    self._invalid_app_state_values.add(key)
-    _LOGGER.warning("Unknown app state value %s from %s", value, source)
+        self._invalid_app_state_values.add(key)
+        _LOGGER.warning("Unknown app state value %s from %s", value, source)
 
 
     async def _refetch_after_reboot(self) -> None:
