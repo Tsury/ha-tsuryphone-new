@@ -1,4 +1,5 @@
 """Select platform for TsuryPhone integration."""
+
 from __future__ import annotations
 
 import logging
@@ -52,7 +53,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], SelectEntity):
+class TsuryPhoneSelect(
+    CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], SelectEntity
+):
     """Representation of a TsuryPhone select entity."""
 
     def __init__(
@@ -68,7 +71,7 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
 
         # Generate unique ID
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
-        
+
         # Set device info
         self._attr_device_info = get_device_info(device_info)
 
@@ -85,12 +88,12 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
     def current_option(self) -> str | None:
         """Return the selected option."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if self.entity_description.key == "ring_pattern":
             return self._get_current_ring_pattern_option(state)
         elif self.entity_description.key == "quick_dial":
             return self._get_current_quick_dial_option(state)
-        
+
         return None
 
     async def async_select_option(self, option: str) -> None:
@@ -101,12 +104,14 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
             elif self.entity_description.key == "quick_dial":
                 await self._select_quick_dial(option)
         except TsuryPhoneAPIError as err:
-            raise HomeAssistantError(f"Failed to select option {option}: {err}") from err
+            raise HomeAssistantError(
+                f"Failed to select option {option}: {err}"
+            ) from err
 
     def _get_ring_pattern_options(self) -> list[str]:
         """Get ring pattern options."""
         options = list(RING_PATTERN_PRESETS.keys())
-        
+
         # Add custom option if current pattern doesn't match any preset
         current_pattern = self.coordinator.data.ring_pattern
         if current_pattern and not any(
@@ -119,22 +124,22 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
             # No current pattern set, but custom might be available
             if "custom" not in options:
                 options.append("custom")
-        
+
         return options
 
     def _get_current_ring_pattern_option(self, state: TsuryPhoneState) -> str | None:
         """Get current ring pattern option."""
         current_pattern = state.ring_pattern
-        
+
         # Match against presets
         for preset_name, preset_pattern in RING_PATTERN_PRESETS.items():
             if preset_pattern == current_pattern:
                 return preset_name
-        
+
         # If no match and we have a pattern, it's custom
         if current_pattern:
             return "custom"
-        
+
         # Default to default preset
         return "default"
 
@@ -145,28 +150,28 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
             # User will need to set pattern via service or options
             _LOGGER.debug("Selected custom ring pattern mode")
             return
-        
+
         # Get pattern for preset
         if option not in RING_PATTERN_PRESETS:
             raise HomeAssistantError(f"Unknown ring pattern preset: {option}")
-        
+
         pattern = RING_PATTERN_PRESETS[option]
-        
+
         await self.coordinator.api_client.set_ring_pattern(pattern)
-        
+
         # Update local state optimistically
         self.coordinator.data.ring_pattern = pattern
-        
+
         # Trigger coordinator update
         await self.coordinator.async_request_refresh()
 
     def _get_quick_dial_options(self) -> list[str]:
         """Get quick dial options."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if not state.quick_dials:
             return ["None"]
-        
+
         # Format: "Name (CODE)" if name exists, otherwise just "CODE"
         options = []
         for entry in state.quick_dials:
@@ -174,16 +179,19 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
                 options.append(f"{entry.name} ({entry.code})")
             else:
                 options.append(entry.code)
-        
+
         # Add "None" option to deselect
         options.insert(0, "None")
-        
+
         return options
 
     def _get_current_quick_dial_option(self, state: TsuryPhoneState) -> str | None:
         """Get current quick dial selection."""
         # Phase P4: Check if we have a selected quick dial stored in coordinator
-        if hasattr(self.coordinator, 'selected_quick_dial_code') and self.coordinator.selected_quick_dial_code:
+        if (
+            hasattr(self.coordinator, "selected_quick_dial_code")
+            and self.coordinator.selected_quick_dial_code
+        ):
             selected_code = self.coordinator.selected_quick_dial_code
             # Find the entry with this code
             if state.quick_dials:
@@ -193,7 +201,7 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
                             return f"{entry.name} ({entry.code})"
                         else:
                             return entry.code
-        
+
         # Default to "None" if nothing selected or selection not found
         return "None"
 
@@ -205,7 +213,7 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
             self.coordinator.selected_quick_dial_code = None
             _LOGGER.debug("Quick dial selection cleared")
             return
-        
+
         # Parse the option to extract code
         # Format is either "Name (CODE)" or just "CODE"
         if "(" in option and option.endswith(")"):
@@ -214,14 +222,16 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
         else:
             # Option is just the code
             code = option
-        
+
         # Validate the code exists in current quick dials
         state: TsuryPhoneState = self.coordinator.data
         if state.quick_dials:
             valid_codes = [entry.code for entry in state.quick_dials]
             if code not in valid_codes:
-                raise HomeAssistantError(f"Quick dial code '{code}' not found in current list")
-        
+                raise HomeAssistantError(
+                    f"Quick dial code '{code}' not found in current list"
+                )
+
         # Store selection in coordinator
         self.coordinator.selected_quick_dial_code = code
         _LOGGER.debug("Selected quick dial: %s (code: %s)", option, code)
@@ -243,10 +253,10 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
                 attributes["pattern"] = state.ring_pattern
             else:
                 attributes["pattern"] = "default"
-            
+
             # Show all available presets
             attributes["available_presets"] = list(RING_PATTERN_PRESETS.keys())
-            
+
             # Validation info
             current_option = self.current_option
             if current_option == "custom":
@@ -256,13 +266,18 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
         elif self.entity_description.key == "quick_dial":
             # Show quick dial statistics
             attributes["total_quick_dials"] = state.quick_dial_count
-            
+
             if state.quick_dials:
                 # Show all codes for reference
-                attributes["available_codes"] = [entry.code for entry in state.quick_dials]
-            
+                attributes["available_codes"] = [
+                    entry.code for entry in state.quick_dials
+                ]
+
             # Phase P4: Show selected code for hybrid model
-            if hasattr(self.coordinator, 'selected_quick_dial_code') and self.coordinator.selected_quick_dial_code:
+            if (
+                hasattr(self.coordinator, "selected_quick_dial_code")
+                and self.coordinator.selected_quick_dial_code
+            ):
                 attributes["selected_code"] = self.coordinator.selected_quick_dial_code
                 # Show the number that would be dialed
                 if state.quick_dials:
@@ -283,11 +298,11 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
         """Validate ring pattern format (basic check)."""
         if not pattern:
             return True  # Empty is valid (default)
-        
+
         # Basic validation - firmware will do full validation
         if len(pattern) > 32:
             return False
-        
+
         # Check for valid characters (digits, commas, single 'x')
         valid_chars = set("0123456789,x")
         return all(c in valid_chars for c in pattern)
@@ -298,6 +313,8 @@ class TsuryPhoneSelect(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Selec
         # Ring pattern select needs device connection for changes
         # Quick dial select can show options even when offline
         if self.entity_description.key == "ring_pattern":
-            return self.coordinator.last_update_success and self.coordinator.data.connected
+            return (
+                self.coordinator.last_update_success and self.coordinator.data.connected
+            )
         else:
             return self.coordinator.last_update_success

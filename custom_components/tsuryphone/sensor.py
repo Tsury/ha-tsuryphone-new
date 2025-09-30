@@ -1,4 +1,5 @@
 """Sensor platform for TsuryPhone integration."""
+
 from __future__ import annotations
 
 from homeassistant.components.sensor import (
@@ -172,7 +173,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class TsuryPhoneSensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], SensorEntity):
+class TsuryPhoneSensor(
+    CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], SensorEntity
+):
     """Representation of a TsuryPhone sensor."""
 
     def __init__(
@@ -188,7 +191,7 @@ class TsuryPhoneSensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Senso
 
         # Generate unique ID
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
-        
+
         # Set device info
         self._attr_device_info = get_device_info(device_info)
 
@@ -196,13 +199,15 @@ class TsuryPhoneSensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Senso
     def native_value(self) -> StateType:
         """Return the state of the sensor."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if self.entity_description.key == "app_state":
             return self._format_app_state(state.app_state)
         elif self.entity_description.key == "current_call_number":
             return state.current_call.number if state.current_call.number else None
         elif self.entity_description.key == "current_dialing_number":
-            return state.current_dialing_number if state.current_dialing_number else None
+            return (
+                state.current_dialing_number if state.current_dialing_number else None
+            )
         elif self.entity_description.key == "call_duration":
             if state.is_call_active:
                 return self.coordinator.current_call_duration_seconds
@@ -244,7 +249,7 @@ class TsuryPhoneSensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Senso
                 return "all_active"
             else:
                 return "partially_active"
-        
+
         return None
 
     @property
@@ -260,20 +265,26 @@ class TsuryPhoneSensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Senso
         # Add specific attributes per sensor type
         if self.entity_description.key == "app_state":
             attributes["state_code"] = state.app_state.value
-            attributes["previous_state"] = self._format_app_state(state.previous_app_state)
+            attributes["previous_state"] = self._format_app_state(
+                state.previous_app_state
+            )
             attributes["previous_state_code"] = state.previous_app_state.value
 
         elif self.entity_description.key == "current_call_number":
             if state.current_call.number:
                 attributes["is_incoming"] = state.current_call.is_incoming
                 attributes["call_start_ts"] = state.current_call.start_time
-                attributes["call_type"] = "incoming" if state.current_call.is_incoming else "outgoing"
+                attributes["call_type"] = (
+                    "incoming" if state.current_call.is_incoming else "outgoing"
+                )
 
         elif self.entity_description.key == "last_call_number":
             if state.last_call.number:
                 attributes["is_incoming"] = state.last_call.is_incoming
                 attributes["call_start_ts"] = state.last_call.start_time
-                attributes["call_type"] = "incoming" if state.last_call.is_incoming else "outgoing"
+                attributes["call_type"] = (
+                    "incoming" if state.last_call.is_incoming else "outgoing"
+                )
                 if state.last_call.duration_ms is not None:
                     attributes["duration_seconds"] = state.last_call.duration_ms // 1000
 
@@ -285,17 +296,18 @@ class TsuryPhoneSensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Senso
 
         elif self.entity_description.key == "call_history_size":
             attributes["capacity"] = state.call_history_capacity
-            
+
             if state.call_history:
                 # Add info about newest and oldest entries
                 newest = state.call_history[-1]  # Newest is last
-                oldest = state.call_history[0]   # Oldest is first
-                
+                oldest = state.call_history[0]  # Oldest is first
+
                 attributes["newest_entry_number"] = newest.number
                 attributes["newest_entry_type"] = newest.call_type
-                
+
                 # Calculate age of oldest entry
                 import time
+
                 oldest_age = time.time() - oldest.received_ts
                 attributes["oldest_entry_age_s"] = int(oldest_age)
 
@@ -306,7 +318,7 @@ class TsuryPhoneSensor(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Senso
                 if rssi >= -50:
                     quality = "excellent"
                 elif rssi >= -60:
-                    quality = "good"  
+                    quality = "good"
                 elif rssi >= -70:
                     quality = "fair"
                 else:

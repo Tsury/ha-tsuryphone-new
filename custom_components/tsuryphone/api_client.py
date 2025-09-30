@@ -251,7 +251,9 @@ class TsuryPhoneAPIClient:
             raise TsuryPhoneAPIError(
                 "Number cannot be empty", ERROR_CODE_INVALID_NUMBER
             )
-        return await self._request("POST", API_CONFIG_BLOCKED_REMOVE, {"number": number})
+        return await self._request(
+            "POST", API_CONFIG_BLOCKED_REMOVE, {"number": number}
+        )
 
     # Priority caller management
     async def add_priority_caller(self, number: str) -> dict[str, Any]:

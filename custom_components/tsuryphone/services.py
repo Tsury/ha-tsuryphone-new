@@ -198,6 +198,17 @@ MAINTENANCE_MODE_SCHEMA = vol.Schema(
     }
 )
 
+TARGET_DEVICE_SELECTOR_SCHEMA = vol.All(
+    cv.has_at_least_one_key("device_id", "entity_id", "area_id"),
+    vol.Schema(
+        {
+            vol.Optional("device_id"): vol.All(cv.ensure_list, [cv.string]),
+            vol.Optional("entity_id"): vol.All(cv.ensure_list, [cv.entity_id]),
+            vol.Optional("area_id"): vol.All(cv.ensure_list, [cv.string]),
+        }
+    ),
+)
+
 DEVICE_ONLY_SCHEMA = vol.Schema({})
 
 DIAL_QUICK_DIAL_SCHEMA = vol.Schema(
@@ -1108,6 +1119,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             service_name,
             service_func,
             schema=schema,
+            target=TARGET_DEVICE_SELECTOR_SCHEMA,
             supports_response=supports_response,
         )
 

@@ -1,4 +1,5 @@
 """Number platform for TsuryPhone integration."""
+
 from __future__ import annotations
 
 import logging
@@ -28,7 +29,7 @@ NUMBER_DESCRIPTIONS = (
         native_min_value=AUDIO_MIN_LEVEL,
         native_max_value=AUDIO_MAX_LEVEL,
         native_step=1,
-    entity_category=EntityCategory.CONFIG,
+        entity_category=EntityCategory.CONFIG,
     ),
     NumberEntityDescription(
         key="earpiece_gain",
@@ -37,7 +38,7 @@ NUMBER_DESCRIPTIONS = (
         native_min_value=AUDIO_MIN_LEVEL,
         native_max_value=AUDIO_MAX_LEVEL,
         native_step=1,
-    entity_category=EntityCategory.CONFIG,
+        entity_category=EntityCategory.CONFIG,
     ),
     NumberEntityDescription(
         key="speaker_volume",
@@ -46,7 +47,7 @@ NUMBER_DESCRIPTIONS = (
         native_min_value=AUDIO_MIN_LEVEL,
         native_max_value=AUDIO_MAX_LEVEL,
         native_step=1,
-    entity_category=EntityCategory.CONFIG,
+        entity_category=EntityCategory.CONFIG,
     ),
     NumberEntityDescription(
         key="speaker_gain",
@@ -55,7 +56,7 @@ NUMBER_DESCRIPTIONS = (
         native_min_value=AUDIO_MIN_LEVEL,
         native_max_value=AUDIO_MAX_LEVEL,
         native_step=1,
-    entity_category=EntityCategory.CONFIG,
+        entity_category=EntityCategory.CONFIG,
     ),
 )
 
@@ -77,7 +78,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class TsuryPhoneNumber(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], NumberEntity):
+class TsuryPhoneNumber(
+    CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], NumberEntity
+):
     """Representation of a TsuryPhone number entity."""
 
     def __init__(
@@ -93,7 +96,7 @@ class TsuryPhoneNumber(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Numbe
 
         # Generate unique ID
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
-        
+
         # Set device info
         self._attr_device_info = get_device_info(device_info)
 
@@ -101,7 +104,7 @@ class TsuryPhoneNumber(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Numbe
     def native_value(self) -> float | None:
         """Return the current value."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if self.entity_description.key == "earpiece_volume":
             return float(state.audio_config.earpiece_volume)
         elif self.entity_description.key == "earpiece_gain":
@@ -110,31 +113,31 @@ class TsuryPhoneNumber(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Numbe
             return float(state.audio_config.speaker_volume)
         elif self.entity_description.key == "speaker_gain":
             return float(state.audio_config.speaker_gain)
-        
+
         return None
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value."""
         int_value = int(value)
-        
+
         # Validate range (extra safety)
         if not (AUDIO_MIN_LEVEL <= int_value <= AUDIO_MAX_LEVEL):
             raise HomeAssistantError(
                 f"Value {int_value} is out of range {AUDIO_MIN_LEVEL}-{AUDIO_MAX_LEVEL}"
             )
-        
+
         try:
             # Use partial update - only send the changed field
             audio_config = {self._get_api_field_name(): int_value}
-            
+
             await self.coordinator.api_client.set_audio_config(audio_config)
-            
+
             # Update local state optimistically
             self._update_local_state(int_value)
-            
+
             # Trigger coordinator update to get server confirmation
             await self.coordinator.async_request_refresh()
-            
+
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to set {self.name}: {err}") from err
 
@@ -143,11 +146,13 @@ class TsuryPhoneNumber(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Numbe
         # Map entity key to API field name (they match in this case)
         field_mapping = {
             "earpiece_volume": "earpieceVolume",
-            "earpiece_gain": "earpieceGain", 
+            "earpiece_gain": "earpieceGain",
             "speaker_volume": "speakerVolume",
             "speaker_gain": "speakerGain",
         }
-        return field_mapping.get(self.entity_description.key, self.entity_description.key)
+        return field_mapping.get(
+            self.entity_description.key, self.entity_description.key
+        )
 
     def _update_local_state(self, value: int) -> None:
         """Update local state optimistically."""

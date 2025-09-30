@@ -1,4 +1,5 @@
 """Switch platform for TsuryPhone integration."""
+
 from __future__ import annotations
 
 import logging
@@ -30,7 +31,7 @@ SWITCH_DESCRIPTIONS = (
         key="maintenance_mode",
         name="Maintenance Mode",
         icon="mdi:wrench",
-    entity_category=EntityCategory.CONFIG,
+        entity_category=EntityCategory.CONFIG,
     ),
 )
 
@@ -52,7 +53,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class TsuryPhoneSwitch(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], SwitchEntity):
+class TsuryPhoneSwitch(
+    CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], SwitchEntity
+):
     """Representation of a TsuryPhone switch."""
 
     def __init__(
@@ -68,7 +71,7 @@ class TsuryPhoneSwitch(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Switc
 
         # Generate unique ID
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
-        
+
         # Set device info
         self._attr_device_info = get_device_info(device_info)
 
@@ -76,12 +79,12 @@ class TsuryPhoneSwitch(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Switc
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if self.entity_description.key == "force_dnd":
             return state.dnd_config.force
         elif self.entity_description.key == "maintenance_mode":
             return state.maintenance_mode
-        
+
         return None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -108,22 +111,22 @@ class TsuryPhoneSwitch(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Switc
         """Set DND force mode."""
         # Use partial update - only send the force field
         dnd_config = {"force": enabled}
-        
+
         await self.coordinator.api_client.set_dnd(dnd_config)
-        
+
         # Update local state optimistically
         self.coordinator.data.dnd_config.force = enabled
-        
+
         # Trigger coordinator update
         await self.coordinator.async_request_refresh()
 
     async def _set_maintenance_mode(self, enabled: bool) -> None:
         """Set maintenance mode."""
         await self.coordinator.api_client.set_maintenance_mode(enabled)
-        
+
         # Update local state optimistically
         self.coordinator.data.maintenance_mode = enabled
-        
+
         # Trigger coordinator update
         await self.coordinator.async_request_refresh()
 
@@ -142,18 +145,24 @@ class TsuryPhoneSwitch(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Switc
             # Add DND schedule info for context
             if state.dnd_config.scheduled:
                 attributes["schedule_enabled"] = True
-                attributes["schedule_start"] = f"{state.dnd_config.start_hour:02d}:{state.dnd_config.start_minute:02d}"
-                attributes["schedule_end"] = f"{state.dnd_config.end_hour:02d}:{state.dnd_config.end_minute:02d}"
+                attributes["schedule_start"] = (
+                    f"{state.dnd_config.start_hour:02d}:{state.dnd_config.start_minute:02d}"
+                )
+                attributes["schedule_end"] = (
+                    f"{state.dnd_config.end_hour:02d}:{state.dnd_config.end_minute:02d}"
+                )
             else:
                 attributes["schedule_enabled"] = False
-            
+
             # Show current DND active state
             attributes["dnd_currently_active"] = state.dnd_active
 
         elif self.entity_description.key == "maintenance_mode":
             # Add maintenance mode context
             if state.maintenance_mode:
-                attributes["status"] = "Device in maintenance mode - may affect normal operation"
+                attributes["status"] = (
+                    "Device in maintenance mode - may affect normal operation"
+                )
 
         # Add connection status for troubleshooting
         if not state.connected:

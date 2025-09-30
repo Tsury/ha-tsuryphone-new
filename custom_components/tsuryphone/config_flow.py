@@ -1,4 +1,5 @@
 """Config flow for TsuryPhone integration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -41,10 +42,12 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-STEP_USER_DATA_SCHEMA = vol.Schema({
-    vol.Required(CONF_HOST): str,
-    vol.Optional(CONF_PORT, default=DEFAULT_PORT): vol.Coerce(int),
-})
+STEP_USER_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Optional(CONF_PORT, default=DEFAULT_PORT): vol.Coerce(int),
+    }
+)
 
 
 class TsuryPhoneConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -102,7 +105,7 @@ class TsuryPhoneConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             device_type = raw_device
         else:
             device_type = ""
-        
+
         if device_type != MDNS_DEVICE_TYPE:
             _LOGGER.debug("Ignoring discovery - not a TsuryPhone device")
             return self.async_abort(reason="not_tsuryphone_device")
@@ -135,7 +138,7 @@ class TsuryPhoneConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Update discovery info with device info
         self.discovery_info.update(info)
-        
+
         return await self.async_step_discovery_confirm()
 
     async def async_step_discovery_confirm(
@@ -144,8 +147,7 @@ class TsuryPhoneConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle user-confirmation of discovered node."""
         if user_input is not None:
             return self.async_create_entry(
-                title=self.discovery_info["title"], 
-                data=self.discovery_info
+                title=self.discovery_info["title"], data=self.discovery_info
             )
 
         return self.async_show_form(
@@ -192,23 +194,23 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # Test connection by fetching device config
     session = async_get_clientsession(hass)
     url = f"http://{host}:{port}{API_CONFIG_TSURYPHONE}"
-    
+
     try:
         async with asyncio.timeout(10):
             async with session.get(url) as response:
                 if response.status != 200:
                     raise CannotConnect(f"HTTP {response.status}")
-                
+
                 data_resp = await response.json()
-                
+
                 # Validate response structure
                 if not data_resp.get("success"):
                     # Firmware sends "message" field, not "errorMessage"
                     error_msg = data_resp.get("message", "Unknown error")
                     raise CannotConnect(f"Device error: {error_msg}")
-                
+
                 device_data = data_resp.get("data", {})
-                
+
                 # Check schema version
                 schema_version = data_resp.get("schemaVersion")
                 if schema_version != INTEGRATION_EVENT_SCHEMA_VERSION:
@@ -216,13 +218,15 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                         f"Expected schema version {INTEGRATION_EVENT_SCHEMA_VERSION}, "
                         f"got {schema_version}"
                     )
-                
+
                 # Extract device info
                 device_id = device_data.get("deviceId", "")
                 if not device_id:
                     raise InvalidAuth("No device ID found in response")
-                
-                device_name = device_data.get("deviceName") or device_id or f"TsuryPhone ({host})"
+
+                device_name = (
+                    device_data.get("deviceName") or device_id or f"TsuryPhone ({host})"
+                )
 
                 return {
                     "title": device_name,
@@ -275,11 +279,11 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         # Get coordinator
         if DOMAIN not in self.hass.data:
             return self.async_abort(reason="integration_not_loaded")
-        
+
         coordinator_data = self.hass.data[DOMAIN].get(self.config_entry.entry_id)
         if not coordinator_data:
             return self.async_abort(reason="coordinator_not_found")
-        
+
         self.coordinator = coordinator_data
 
         # Show main options menu
@@ -287,7 +291,7 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             menu_options=[
                 "audio_settings",
-                "dnd_settings", 
+                "dnd_settings",
                 "ring_pattern_settings",
                 "quick_dial_manager",
                 "blocked_numbers_manager",
@@ -310,12 +314,12 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
                     "speakerVolume": user_input["speaker_volume"],
                     "speakerGain": user_input["speaker_gain"],
                 }
-                
+
                 await self.coordinator.api_client.set_audio_config(audio_config)
                 await self.coordinator.async_request_refresh()
-                
+
                 return self.async_create_entry(title="", data={})
-                
+
             except Exception as err:
                 return self.async_show_form(
                     step_id="audio_settings",
@@ -340,20 +344,22 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
                     "force": user_input["force_dnd"],
                     "scheduled": user_input["scheduled_dnd"],
                 }
-                
+
                 if user_input["scheduled_dnd"]:
-                    dnd_config.update({
-                        "start_hour": user_input["start_hour"],
-                        "start_minute": user_input["start_minute"], 
-                        "end_hour": user_input["end_hour"],
-                        "end_minute": user_input["end_minute"],
-                    })
-                
+                    dnd_config.update(
+                        {
+                            "start_hour": user_input["start_hour"],
+                            "start_minute": user_input["start_minute"],
+                            "end_hour": user_input["end_hour"],
+                            "end_minute": user_input["end_minute"],
+                        }
+                    )
+
                 await self.coordinator.api_client.set_dnd(dnd_config)
                 await self.coordinator.async_request_refresh()
-                
+
                 return self.async_create_entry(title="", data={})
-                
+
             except Exception as err:
                 return self.async_show_form(
                     step_id="dnd_settings",
@@ -374,12 +380,12 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             try:
                 pattern_mode = user_input["pattern_mode"]
-                
+
                 if pattern_mode == "custom":
                     pattern = user_input["custom_pattern"]
                 else:
                     pattern = RING_PATTERN_PRESETS.get(pattern_mode, "")
-                
+
                 # Validate pattern
                 if pattern and not self._validate_ring_pattern(pattern):
                     return self.async_show_form(
@@ -387,15 +393,15 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
                         data_schema=self._get_ring_pattern_schema(),
                         errors={"custom_pattern": "invalid_pattern"},
                     )
-                
+
                 await self.coordinator.api_client.set_ring_pattern(pattern)
                 await self.coordinator.async_request_refresh()
-                
+
                 return self.async_create_entry(title="", data={})
-                
+
             except Exception as err:
                 return self.async_show_form(
-                    step_id="ring_pattern_settings", 
+                    step_id="ring_pattern_settings",
                     data_schema=self._get_ring_pattern_schema(),
                     errors={"base": "ring_pattern_failed"},
                     description_placeholders={"error": str(err)},
@@ -409,51 +415,61 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
     def _get_audio_settings_schema(self) -> vol.Schema:
         """Get audio settings schema with current values."""
         current_audio = self.coordinator.data.audio_config
-        
-        return vol.Schema({
-            vol.Required(
-                "earpiece_volume",
-                default=current_audio.earpiece_volume
-            ): vol.All(vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)),
-            vol.Required(
-                "earpiece_gain", 
-                default=current_audio.earpiece_gain
-            ): vol.All(vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)),
-            vol.Required(
-                "speaker_volume",
-                default=current_audio.speaker_volume
-            ): vol.All(vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)),
-            vol.Required(
-                "speaker_gain",
-                default=current_audio.speaker_gain
-            ): vol.All(vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)),
-        })
+
+        return vol.Schema(
+            {
+                vol.Required(
+                    "earpiece_volume", default=current_audio.earpiece_volume
+                ): vol.All(
+                    vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)
+                ),
+                vol.Required(
+                    "earpiece_gain", default=current_audio.earpiece_gain
+                ): vol.All(
+                    vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)
+                ),
+                vol.Required(
+                    "speaker_volume", default=current_audio.speaker_volume
+                ): vol.All(
+                    vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)
+                ),
+                vol.Required(
+                    "speaker_gain", default=current_audio.speaker_gain
+                ): vol.All(
+                    vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)
+                ),
+            }
+        )
 
     def _get_dnd_settings_schema(self) -> vol.Schema:
         """Get DND settings schema with current values."""
         current_dnd = self.coordinator.data.dnd_config
-        
-        return vol.Schema({
-            vol.Required("force_dnd", default=current_dnd.force): cv.boolean,
-            vol.Required("scheduled_dnd", default=current_dnd.scheduled): cv.boolean,
-            vol.Required("start_hour", default=current_dnd.start_hour): vol.All(
-                vol.Coerce(int), vol.Range(min=0, max=23)
-            ),
-            vol.Required("start_minute", default=current_dnd.start_minute): vol.All(
-                vol.Coerce(int), vol.Range(min=0, max=59)
-            ),
-            vol.Required("end_hour", default=current_dnd.end_hour): vol.All(
-                vol.Coerce(int), vol.Range(min=0, max=23)
-            ),
-            vol.Required("end_minute", default=current_dnd.end_minute): vol.All(
-                vol.Coerce(int), vol.Range(min=0, max=59)
-            ),
-        })
+
+        return vol.Schema(
+            {
+                vol.Required("force_dnd", default=current_dnd.force): cv.boolean,
+                vol.Required(
+                    "scheduled_dnd", default=current_dnd.scheduled
+                ): cv.boolean,
+                vol.Required("start_hour", default=current_dnd.start_hour): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=23)
+                ),
+                vol.Required("start_minute", default=current_dnd.start_minute): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=59)
+                ),
+                vol.Required("end_hour", default=current_dnd.end_hour): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=23)
+                ),
+                vol.Required("end_minute", default=current_dnd.end_minute): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=59)
+                ),
+            }
+        )
 
     def _get_ring_pattern_schema(self) -> vol.Schema:
         """Get ring pattern settings schema."""
         current_pattern = self.coordinator.data.ring_pattern
-        
+
         # Determine current mode
         current_mode = "default"
         for preset_name, preset_pattern in RING_PATTERN_PRESETS.items():
@@ -463,22 +479,26 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         else:
             if current_pattern:
                 current_mode = "custom"
-        
-        return vol.Schema({
-            vol.Required("pattern_mode", default=current_mode): vol.In([
-                "default", "short", "long", "urgent", "gentle", "custom"
-            ]),
-            vol.Optional("custom_pattern", default=current_pattern or ""): cv.string,
-        })
+
+        return vol.Schema(
+            {
+                vol.Required("pattern_mode", default=current_mode): vol.In(
+                    ["default", "short", "long", "urgent", "gentle", "custom"]
+                ),
+                vol.Optional(
+                    "custom_pattern", default=current_pattern or ""
+                ): cv.string,
+            }
+        )
 
     def _validate_ring_pattern(self, pattern: str) -> bool:
         """Validate ring pattern format."""
         if not pattern:
             return True
-        
+
         if len(pattern) > 32:
             return False
-        
+
         valid_chars = set("0123456789,x")
         return all(c in valid_chars for c in pattern)
 
@@ -488,7 +508,7 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         """Handle quick dial management."""
         if user_input is not None:
             action = user_input.get("action")
-            
+
             if action == "add":
                 return await self.async_step_quick_dial_add()
             elif action == "remove":
@@ -502,11 +522,13 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="quick_dial_manager",
-            data_schema=vol.Schema({
-                vol.Required("action"): vol.In([
-                    "add", "remove", "import", "export", "clear_all"
-                ])
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action"): vol.In(
+                        ["add", "remove", "import", "export", "clear_all"]
+                    )
+                }
+            ),
         )
 
     async def async_step_quick_dial_add(
@@ -518,12 +540,12 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
                 code = user_input["code"]
                 number = user_input["number"]
                 name = user_input.get("name")
-                
+
                 await self.coordinator.api_client.add_quick_dial(code, number, name)
                 await self.coordinator.async_request_refresh()
-                
+
                 return self.async_create_entry(title="", data={})
-                
+
             except Exception as err:
                 return self.async_show_form(
                     step_id="quick_dial_add",
@@ -542,18 +564,18 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Remove a quick dial entry."""
         current_entries = self.coordinator.data.quick_dials or []
-        
+
         if not current_entries:
             return self.async_abort(reason="no_quick_dial_entries")
-        
+
         if user_input is not None:
             try:
                 code = user_input["code"]
                 await self.coordinator.api_client.remove_quick_dial(code)
                 await self.coordinator.async_request_refresh()
-                
+
                 return self.async_create_entry(title="", data={})
-                
+
             except Exception as err:
                 return self.async_show_form(
                     step_id="quick_dial_remove",
@@ -573,7 +595,7 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         """Handle blocked numbers management."""
         if user_input is not None:
             action = user_input.get("action")
-            
+
             if action == "add":
                 return await self.async_step_blocked_add()
             elif action == "remove":
@@ -587,11 +609,13 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="blocked_numbers_manager",
-            data_schema=vol.Schema({
-                vol.Required("action"): vol.In([
-                    "add", "remove", "import", "export", "clear_all"
-                ])
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action"): vol.In(
+                        ["add", "remove", "import", "export", "clear_all"]
+                    )
+                }
+            ),
         )
 
     async def async_step_blocked_add(
@@ -602,12 +626,12 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
             try:
                 number = user_input["number"]
                 name = user_input.get("name")
-                
+
                 await self.coordinator.api_client.add_blocked_number(number, name)
                 await self.coordinator.async_request_refresh()
-                
+
                 return self.async_create_entry(title="", data={})
-                
+
             except Exception as err:
                 return self.async_show_form(
                     step_id="blocked_add",
@@ -623,45 +647,51 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
 
     def _get_quick_dial_add_schema(self) -> vol.Schema:
         """Get quick dial add schema."""
-        return vol.Schema({
-            vol.Required("code"): cv.string,
-            vol.Required("number"): cv.string,
-            vol.Optional("name"): cv.string,
-        })
+        return vol.Schema(
+            {
+                vol.Required("code"): cv.string,
+                vol.Required("number"): cv.string,
+                vol.Optional("name"): cv.string,
+            }
+        )
 
     def _get_quick_dial_remove_schema(self) -> vol.Schema:
         """Get quick dial remove schema."""
         current_entries = self.coordinator.data.quick_dials or []
         codes = [entry.code for entry in current_entries]
-        
-        return vol.Schema({
-            vol.Required("code"): vol.In(codes),
-        })
+
+        return vol.Schema(
+            {
+                vol.Required("code"): vol.In(codes),
+            }
+        )
 
     def _get_blocked_add_schema(self) -> vol.Schema:
         """Get blocked number add schema."""
-        return vol.Schema({
-            vol.Required("number"): cv.string,
-            vol.Optional("name"): cv.string,
-        })
+        return vol.Schema(
+            {
+                vol.Required("number"): cv.string,
+                vol.Optional("name"): cv.string,
+            }
+        )
 
     async def async_step_blocked_remove(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Remove a blocked number."""
         current_entries = self.coordinator.data.blocked_numbers or []
-        
+
         if not current_entries:
             return self.async_abort(reason="no_blocked_numbers")
-        
+
         if user_input is not None:
             try:
                 number = user_input["number"]
                 await self.coordinator.api_client.remove_blocked_number(number)
                 await self.coordinator.async_request_refresh()
-                
+
                 return self.async_create_entry(title="", data={})
-                
+
             except Exception as err:
                 return self.async_show_form(
                     step_id="blocked_remove",
@@ -678,12 +708,16 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
     def _get_blocked_remove_schema(self) -> vol.Schema:
         """Get blocked number remove schema."""
         current_entries = self.coordinator.data.blocked_numbers or []
-        numbers = [f"{entry.number} ({entry.name})" if entry.name else entry.number 
-                  for entry in current_entries]
-        
-        return vol.Schema({
-            vol.Required("number"): vol.In(numbers),
-        })
+        numbers = [
+            f"{entry.number} ({entry.name})" if entry.name else entry.number
+            for entry in current_entries
+        ]
+
+        return vol.Schema(
+            {
+                vol.Required("number"): vol.In(numbers),
+            }
+        )
 
     async def async_step_webhook_manager(
         self, user_input: dict[str, Any] | None = None
@@ -691,7 +725,7 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         """Handle webhook management."""
         if user_input is not None:
             action = user_input.get("action")
-            
+
             if action == "add":
                 return await self.async_step_webhook_add()
             elif action == "remove":
@@ -703,11 +737,9 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="webhook_manager",
-            data_schema=vol.Schema({
-                vol.Required("action"): vol.In([
-                    "add", "remove", "test", "clear_all"
-                ])
-            }),
+            data_schema=vol.Schema(
+                {vol.Required("action"): vol.In(["add", "remove", "test", "clear_all"])}
+            ),
         )
 
     async def async_step_webhook_add(
@@ -719,12 +751,12 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
                 url = user_input["url"]
                 events = user_input["events"]
                 name = user_input.get("name")
-                
+
                 await self.coordinator.api_client.add_webhook(url, events, name)
                 await self.coordinator.async_request_refresh()
-                
+
                 return self.async_create_entry(title="", data={})
-                
+
             except Exception as err:
                 return self.async_show_form(
                     step_id="webhook_add",
@@ -740,21 +772,25 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
 
     def _get_webhook_add_schema(self) -> vol.Schema:
         """Get webhook add schema."""
-        return vol.Schema({
-            vol.Required("url"): cv.url,
-            vol.Required("events"): cv.multi_select([
-                "incoming_call",
-                "call_answered",
-                "call_ended", 
-                "missed_call",
-                "device_state_change",
-                "config_change",
-                "diagnostic",
-                "error",
-                "system_event"
-            ]),
-            vol.Optional("name"): cv.string,
-        })
+        return vol.Schema(
+            {
+                vol.Required("url"): cv.url,
+                vol.Required("events"): cv.multi_select(
+                    [
+                        "incoming_call",
+                        "call_answered",
+                        "call_ended",
+                        "missed_call",
+                        "device_state_change",
+                        "config_change",
+                        "diagnostic",
+                        "error",
+                        "system_event",
+                    ]
+                ),
+                vol.Optional("name"): cv.string,
+            }
+        )
 
     async def async_step_notification_settings(
         self, user_input: dict[str, Any] | None = None
@@ -763,16 +799,20 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             # Store notification preferences in options
             return self.async_create_entry(
-                title="", 
+                title="",
                 data={
                     "notifications": {
                         "missed_calls_enabled": user_input["missed_calls_enabled"],
-                        "maintenance_mode_enabled": user_input["maintenance_mode_enabled"],
+                        "maintenance_mode_enabled": user_input[
+                            "maintenance_mode_enabled"
+                        ],
                         "device_offline_enabled": user_input["device_offline_enabled"],
                         "device_reboot_enabled": user_input["device_reboot_enabled"],
-                        "offline_threshold_minutes": user_input["offline_threshold_minutes"],
+                        "offline_threshold_minutes": user_input[
+                            "offline_threshold_minutes"
+                        ],
                     }
-                }
+                },
             )
 
         return self.async_show_form(
@@ -783,16 +823,31 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
     def _get_notification_settings_schema(self) -> vol.Schema:
         """Get notification settings schema."""
         current_options = self.config_entry.options.get("notifications", {})
-        
-        return vol.Schema({
-            vol.Required("missed_calls_enabled", default=current_options.get("missed_calls_enabled", True)): cv.boolean,
-            vol.Required("maintenance_mode_enabled", default=current_options.get("maintenance_mode_enabled", True)): cv.boolean,
-            vol.Required("device_offline_enabled", default=current_options.get("device_offline_enabled", True)): cv.boolean,
-            vol.Required("device_reboot_enabled", default=current_options.get("device_reboot_enabled", True)): cv.boolean,
-            vol.Required("offline_threshold_minutes", default=current_options.get("offline_threshold_minutes", 10)): vol.All(
-                vol.Coerce(int), vol.Range(min=1, max=120)
-            ),
-        })
+
+        return vol.Schema(
+            {
+                vol.Required(
+                    "missed_calls_enabled",
+                    default=current_options.get("missed_calls_enabled", True),
+                ): cv.boolean,
+                vol.Required(
+                    "maintenance_mode_enabled",
+                    default=current_options.get("maintenance_mode_enabled", True),
+                ): cv.boolean,
+                vol.Required(
+                    "device_offline_enabled",
+                    default=current_options.get("device_offline_enabled", True),
+                ): cv.boolean,
+                vol.Required(
+                    "device_reboot_enabled",
+                    default=current_options.get("device_reboot_enabled", True),
+                ): cv.boolean,
+                vol.Required(
+                    "offline_threshold_minutes",
+                    default=current_options.get("offline_threshold_minutes", 10),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=120)),
+            }
+        )
 
     async def async_step_advanced_settings(
         self, user_input: dict[str, Any] | None = None
@@ -804,13 +859,21 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
                 title="",
                 data={
                     "advanced": {
-                        "polling_fallback_seconds": user_input["polling_fallback_seconds"],
-                        "refetch_interval_minutes": user_input["refetch_interval_minutes"],
-                        "websocket_reconnect_delay": user_input["websocket_reconnect_delay"],
-                        "call_history_retention_days": user_input["call_history_retention_days"],
+                        "polling_fallback_seconds": user_input[
+                            "polling_fallback_seconds"
+                        ],
+                        "refetch_interval_minutes": user_input[
+                            "refetch_interval_minutes"
+                        ],
+                        "websocket_reconnect_delay": user_input[
+                            "websocket_reconnect_delay"
+                        ],
+                        "call_history_retention_days": user_input[
+                            "call_history_retention_days"
+                        ],
                         "debug_logging": user_input["debug_logging"],
                     }
-                }
+                },
             )
 
         return self.async_show_form(
@@ -821,19 +884,27 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
     def _get_advanced_settings_schema(self) -> vol.Schema:
         """Get advanced settings schema."""
         current_options = self.config_entry.options.get("advanced", {})
-        
-        return vol.Schema({
-            vol.Required("polling_fallback_seconds", default=current_options.get("polling_fallback_seconds", 60)): vol.All(
-                vol.Coerce(int), vol.Range(min=30, max=300)
-            ),
-            vol.Required("refetch_interval_minutes", default=current_options.get("refetch_interval_minutes", 30)): vol.All(
-                vol.Coerce(int), vol.Range(min=5, max=1440)
-            ),
-            vol.Required("websocket_reconnect_delay", default=current_options.get("websocket_reconnect_delay", 5)): vol.All(
-                vol.Coerce(int), vol.Range(min=1, max=60)
-            ),
-            vol.Required("call_history_retention_days", default=current_options.get("call_history_retention_days", 30)): vol.All(
-                vol.Coerce(int), vol.Range(min=1, max=365)
-            ),
-            vol.Required("debug_logging", default=current_options.get("debug_logging", False)): cv.boolean,
-        })
+
+        return vol.Schema(
+            {
+                vol.Required(
+                    "polling_fallback_seconds",
+                    default=current_options.get("polling_fallback_seconds", 60),
+                ): vol.All(vol.Coerce(int), vol.Range(min=30, max=300)),
+                vol.Required(
+                    "refetch_interval_minutes",
+                    default=current_options.get("refetch_interval_minutes", 30),
+                ): vol.All(vol.Coerce(int), vol.Range(min=5, max=1440)),
+                vol.Required(
+                    "websocket_reconnect_delay",
+                    default=current_options.get("websocket_reconnect_delay", 5),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
+                vol.Required(
+                    "call_history_retention_days",
+                    default=current_options.get("call_history_retention_days", 30),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=365)),
+                vol.Required(
+                    "debug_logging", default=current_options.get("debug_logging", False)
+                ): cv.boolean,
+            }
+        )

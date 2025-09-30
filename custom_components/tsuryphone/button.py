@@ -1,4 +1,5 @@
 """Button platform for TsuryPhone integration."""
+
 from __future__ import annotations
 
 import logging
@@ -35,25 +36,25 @@ BUTTON_DESCRIPTIONS = (
         key="ring",
         name="Ring Device",
         icon="mdi:phone-ring",
-    entity_category=EntityCategory.CONFIG,
+        entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
         key="reset",
         name="Reset Device",
         icon="mdi:restart",
-    entity_category=EntityCategory.CONFIG,
+        entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
         key="refetch",
         name="Refresh Device Data",
         icon="mdi:refresh",
-    entity_category=EntityCategory.DIAGNOSTIC,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ButtonEntityDescription(
         key="refresh_snapshot",
         name="Refresh Snapshot",
         icon="mdi:camera-flip",
-    entity_category=EntityCategory.DIAGNOSTIC,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ButtonEntityDescription(
         key="dial_selected",
@@ -85,7 +86,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class TsuryPhoneButton(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], ButtonEntity):
+class TsuryPhoneButton(
+    CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], ButtonEntity
+):
     """Representation of a TsuryPhone button."""
 
     def __init__(
@@ -101,7 +104,7 @@ class TsuryPhoneButton(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Butto
 
         # Generate unique ID
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
-        
+
         # Set device info
         self._attr_device_info = get_device_info(device_info)
 
@@ -127,24 +130,26 @@ class TsuryPhoneButton(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Butto
         except TsuryPhoneAPIError as err:
             # Provide user-friendly error messages
             error_msg = self._get_user_friendly_error(err)
-            raise HomeAssistantError(f"Failed to execute {self.name}: {error_msg}") from err
+            raise HomeAssistantError(
+                f"Failed to execute {self.name}: {error_msg}"
+            ) from err
 
     async def _answer_call(self) -> None:
         """Answer the incoming call."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if not state.is_incoming_call:
             raise HomeAssistantError("No incoming call to answer")
-        
+
         await self.coordinator.api_client.answer_call()
 
     async def _hangup_call(self) -> None:
         """Hang up the active call."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if not state.is_call_active:
             raise HomeAssistantError("No active call to hang up")
-        
+
         await self.coordinator.api_client.hangup_call()
 
     async def _ring_device(self) -> None:
@@ -159,7 +164,7 @@ class TsuryPhoneButton(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Butto
     async def _refetch_data(self) -> None:
         """Refetch all device data."""
         await self.coordinator.api_client.refetch_all()
-        
+
         # Trigger coordinator refresh to update entities
         await self.coordinator.async_request_refresh()
 
@@ -167,49 +172,58 @@ class TsuryPhoneButton(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Butto
         """Refresh diagnostic snapshot."""
         # Get diagnostics from device and update coordinator
         diag_data = await self.coordinator.api_client.get_diagnostics()
-        
+
         # Trigger coordinator refresh
         await self.coordinator.async_request_refresh()
 
     async def _dial_selected_quick_dial(self) -> None:
         """Dial the selected quick dial entry."""
         # Phase P4: Use the coordinator's selected quick dial
-        if not hasattr(self.coordinator, 'selected_quick_dial_code') or not self.coordinator.selected_quick_dial_code:
+        if (
+            not hasattr(self.coordinator, "selected_quick_dial_code")
+            or not self.coordinator.selected_quick_dial_code
+        ):
             raise HomeAssistantError("No quick dial entry selected")
-        
+
         selected_code = self.coordinator.selected_quick_dial_code
         state: TsuryPhoneState = self.coordinator.data
-        
+
         # Find the entry with the selected code
         if not state.quick_dials:
             raise HomeAssistantError("No quick dial entries available")
-        
+
         selected_entry = None
         for entry in state.quick_dials:
             if entry.code == selected_code:
                 selected_entry = entry
                 break
-        
+
         if not selected_entry:
-            raise HomeAssistantError(f"Selected quick dial code '{selected_code}' not found")
-        
+            raise HomeAssistantError(
+                f"Selected quick dial code '{selected_code}' not found"
+            )
+
         # Dial the number
         await self.coordinator.api_client.dial(selected_entry.number)
 
     async def _toggle_call_waiting(self) -> None:
         """Toggle call waiting state."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         if not state.call_waiting_available:
             raise HomeAssistantError("Call waiting not available on this device")
-        
+
         await self.coordinator.api_client.switch_call_waiting()
 
     def _get_user_friendly_error(self, error: TsuryPhoneAPIError) -> str:
         """Convert API error to user-friendly message."""
-        if self.coordinator.api_client.is_api_error_code(error, ERROR_CODE_NO_INCOMING_CALL):
+        if self.coordinator.api_client.is_api_error_code(
+            error, ERROR_CODE_NO_INCOMING_CALL
+        ):
             return "No incoming call"
-        elif self.coordinator.api_client.is_api_error_code(error, ERROR_CODE_NO_ACTIVE_CALL):
+        elif self.coordinator.api_client.is_api_error_code(
+            error, ERROR_CODE_NO_ACTIVE_CALL
+        ):
             return "No active call"
         else:
             return str(error)
@@ -248,10 +262,12 @@ class TsuryPhoneButton(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Butto
 
         elif self.entity_description.key == "dial_selected":
             # Phase P4: Show actual selection state
-            has_selection = (hasattr(self.coordinator, 'selected_quick_dial_code') and 
-                           self.coordinator.selected_quick_dial_code is not None)
+            has_selection = (
+                hasattr(self.coordinator, "selected_quick_dial_code")
+                and self.coordinator.selected_quick_dial_code is not None
+            )
             attributes["can_execute"] = has_selection and state.quick_dial_count > 0
-            
+
             if has_selection:
                 attributes["selected_code"] = self.coordinator.selected_quick_dial_code
                 # Find the selected entry details
@@ -283,20 +299,33 @@ class TsuryPhoneButton(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], Butto
     def available(self) -> bool:
         """Return if entity is available."""
         state: TsuryPhoneState = self.coordinator.data
-        
+
         # Most buttons require device connection
-        if self.entity_description.key in ["answer", "hangup", "ring", "reset", "toggle_call_waiting"]:
+        if self.entity_description.key in [
+            "answer",
+            "hangup",
+            "ring",
+            "reset",
+            "toggle_call_waiting",
+        ]:
             return self.coordinator.last_update_success and state.connected
-        
+
         # Data refresh buttons can work if we have coordinator data
         elif self.entity_description.key in ["refetch", "refresh_snapshot"]:
             return self.coordinator.last_update_success and state.connected
-        
+
         # Phase P4 features
         elif self.entity_description.key == "dial_selected":
             # Available if we have a selection and quick dial entries exist
-            has_selection = (hasattr(self.coordinator, 'selected_quick_dial_code') and 
-                           self.coordinator.selected_quick_dial_code is not None)
-            return self.coordinator.last_update_success and state.connected and has_selection and state.quick_dial_count > 0
-        
+            has_selection = (
+                hasattr(self.coordinator, "selected_quick_dial_code")
+                and self.coordinator.selected_quick_dial_code is not None
+            )
+            return (
+                self.coordinator.last_update_success
+                and state.connected
+                and has_selection
+                and state.quick_dial_count > 0
+            )
+
         return self.coordinator.last_update_success
