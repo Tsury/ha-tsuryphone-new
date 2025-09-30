@@ -29,6 +29,7 @@ from .const import (
     SERVICE_SET_AUDIO,
     SERVICE_GET_CALL_HISTORY,
     SERVICE_CLEAR_CALL_HISTORY,
+    SERVICE_GET_TSURYPHONE_CONFIG,
     SERVICE_QUICK_DIAL_ADD,
     SERVICE_QUICK_DIAL_REMOVE,
     SERVICE_QUICK_DIAL_CLEAR,
@@ -1047,6 +1048,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         (SERVICE_PRIORITY_ADD, async_priority_add, PRIORITY_ADD_SCHEMA),
         (SERVICE_PRIORITY_REMOVE, async_priority_remove, PRIORITY_REMOVE_SCHEMA),
         (SERVICE_REFETCH_ALL, async_refetch_all, DEVICE_ONLY_SCHEMA),
+        (
+            SERVICE_GET_TSURYPHONE_CONFIG,
+            async_get_tsuryphone_config,
+            DEVICE_ONLY_SCHEMA,
+        ),
         (SERVICE_GET_DIAGNOSTICS, async_get_diagnostics, DEVICE_ONLY_SCHEMA),
         (SERVICE_WEBHOOK_ADD, async_webhook_add, WEBHOOK_ADD_SCHEMA),
         (SERVICE_WEBHOOK_REMOVE, async_webhook_remove, WEBHOOK_REMOVE_SCHEMA),
@@ -1079,6 +1085,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             if service_name
             in [
                 SERVICE_GET_CALL_HISTORY,
+                SERVICE_GET_TSURYPHONE_CONFIG,
                 SERVICE_GET_DIAGNOSTICS,
                 SERVICE_GET_MISSED_CALLS,
                 SERVICE_QUICK_DIAL_IMPORT,
@@ -1118,6 +1125,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_SET_AUDIO,
         SERVICE_GET_CALL_HISTORY,
         SERVICE_CLEAR_CALL_HISTORY,
+    SERVICE_GET_TSURYPHONE_CONFIG,
         SERVICE_QUICK_DIAL_ADD,
         SERVICE_QUICK_DIAL_REMOVE,
         SERVICE_QUICK_DIAL_CLEAR,
