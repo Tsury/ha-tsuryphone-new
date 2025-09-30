@@ -198,17 +198,6 @@ MAINTENANCE_MODE_SCHEMA = vol.Schema(
     }
 )
 
-TARGET_DEVICE_SELECTOR_SCHEMA = vol.All(
-    cv.has_at_least_one_key("device_id", "entity_id", "area_id"),
-    vol.Schema(
-        {
-            vol.Optional("device_id"): vol.All(cv.ensure_list, [cv.string]),
-            vol.Optional("entity_id"): vol.All(cv.ensure_list, [cv.entity_id]),
-            vol.Optional("area_id"): vol.All(cv.ensure_list, [cv.string]),
-        }
-    ),
-)
-
 DEVICE_ONLY_SCHEMA = vol.Schema({})
 
 DIAL_QUICK_DIAL_SCHEMA = vol.Schema(
@@ -291,26 +280,36 @@ def _resolve_target_device_contexts(call: ServiceCall) -> list[ServiceDeviceCont
     """Resolve targeted devices for a service call."""
 
     hass = call.hass
-    raw_target = call.target or {}
+    raw_target = dict(call.target or {})
 
-    try:
-        target = TARGET_DEVICE_SELECTOR_SCHEMA(dict(raw_target))
-    except vol.Invalid as err:
-        raise ServiceValidationError(
-            f"Invalid target for service '{call.service}': {err}"
-        ) from err
+    normalized_target: dict[str, list[str]] = {}
+    for key, validator in (
+        ("device_id", cv.string),
+        ("entity_id", cv.entity_id),
+        ("area_id", cv.string),
+    ):
+        if key not in raw_target:
+            continue
+
+        try:
+            values = cv.ensure_list(raw_target[key])
+            normalized_target[key] = [validator(value) for value in values]
+        except vol.Invalid as err:
+            raise ServiceValidationError(
+                f"Invalid {key} target for service '{call.service}': {err}"
+            ) from err
 
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
 
-    device_ids = _extract_ids(target.get("device_id"))
+    device_ids = _extract_ids(normalized_target.get("device_id"))
 
-    for entity_id in _extract_ids(target.get("entity_id")):
+    for entity_id in _extract_ids(normalized_target.get("entity_id")):
         if entry := entity_registry.async_get(entity_id):
             if entry.device_id:
                 device_ids.add(entry.device_id)
 
-    area_ids = _extract_ids(target.get("area_id"))
+    area_ids = _extract_ids(normalized_target.get("area_id"))
     if area_ids:
         for device_entry in device_registry.devices.values():
             if device_entry.area_id in area_ids:
