@@ -291,7 +291,14 @@ def _resolve_target_device_contexts(call: ServiceCall) -> list[ServiceDeviceCont
     """Resolve targeted devices for a service call."""
 
     hass = call.hass
-    target = call.target or {}
+    raw_target = call.target or {}
+
+    try:
+        target = TARGET_DEVICE_SELECTOR_SCHEMA(dict(raw_target))
+    except vol.Invalid as err:
+        raise ServiceValidationError(
+            f"Invalid target for service '{call.service}': {err}"
+        ) from err
 
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
@@ -1119,7 +1126,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             service_name,
             service_func,
             schema=schema,
-            target=TARGET_DEVICE_SELECTOR_SCHEMA,
             supports_response=supports_response,
         )
 
