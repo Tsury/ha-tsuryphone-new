@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import voluptuous as vol
@@ -13,9 +14,12 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.exceptions import ServiceValidationError, HomeAssistantError
-from homeassistant.helpers.entity_component import EntityComponent
 
 from .const import (
     DOMAIN,
@@ -60,7 +64,6 @@ from .const import (
     AUDIO_MIN_LEVEL,
     AUDIO_MAX_LEVEL,
     RING_PATTERN_PRESETS,
-    ATTR_DEVICE_ID,
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .api_client import TsuryPhoneAPIError
@@ -70,28 +73,24 @@ _LOGGER = logging.getLogger(__name__)
 # Service schemas
 DIAL_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("number"): cv.string,
     }
 )
 
 RING_DEVICE_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Optional("pattern", default=""): cv.string,
     }
 )
 
 SET_RING_PATTERN_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("pattern"): cv.string,
     }
 )
 
 SET_DND_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Optional("force"): cv.boolean,
         vol.Optional("scheduled"): cv.boolean,
         vol.Optional("start_hour"): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
@@ -105,7 +104,6 @@ SET_DND_SCHEMA = vol.Schema(
 
 SET_AUDIO_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Optional("earpiece_volume"): vol.All(
             vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)
         ),
@@ -123,14 +121,12 @@ SET_AUDIO_SCHEMA = vol.Schema(
 
 CALL_HISTORY_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Optional("limit"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
     }
 )
 
 CALL_HISTORY_CLEAR_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Optional("older_than_days"): vol.All(vol.Coerce(int), vol.Range(min=1)),
         vol.Optional("keep_last"): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
@@ -138,7 +134,6 @@ CALL_HISTORY_CLEAR_SCHEMA = vol.Schema(
 
 QUICK_DIAL_ADD_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("code"): cv.string,
         vol.Required("number"): cv.string,
         vol.Optional("name"): cv.string,
@@ -147,24 +142,19 @@ QUICK_DIAL_ADD_SCHEMA = vol.Schema(
 
 QUICK_DIAL_REMOVE_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("code"): cv.string,
     }
 )
 
 BLOCKED_ADD_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("number"): cv.string,
-        vol.Optional(
-            "reason"
-        ): cv.string,  # Changed from 'name' to 'reason' to match API
+        vol.Optional("reason"): cv.string,
     }
 )
 
 BLOCKED_REMOVE_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("number"): cv.string,
     }
 )
@@ -172,21 +162,18 @@ BLOCKED_REMOVE_SCHEMA = vol.Schema(
 # Priority caller schemas
 PRIORITY_ADD_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("number"): cv.string,
     }
 )
 
 PRIORITY_REMOVE_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("number"): cv.string,
     }
 )
 
 WEBHOOK_ADD_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("url"): cv.string,
         vol.Required("events"): [cv.string],
         vol.Optional("name"): cv.string,
@@ -195,41 +182,32 @@ WEBHOOK_ADD_SCHEMA = vol.Schema(
 
 WEBHOOK_REMOVE_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("url"): cv.string,
     }
 )
 
 WEBHOOK_TEST_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("url"): cv.string,
     }
 )
 
 MAINTENANCE_MODE_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("enabled"): cv.boolean,
     }
 )
 
-DEVICE_ONLY_SCHEMA = vol.Schema(
-    {
-        vol.Required("device_id"): cv.string,
-    }
-)
+DEVICE_ONLY_SCHEMA = vol.Schema({})
 
 DIAL_QUICK_DIAL_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("code"): cv.string,
     }
 )
 
 SET_HA_URL_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("url"): cv.string,
     }
 )
@@ -237,7 +215,6 @@ SET_HA_URL_SCHEMA = vol.Schema(
 # Phase P4: Bulk import/export schemas
 QUICK_DIAL_IMPORT_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("entries"): [
             vol.Schema(
                 {
@@ -253,7 +230,6 @@ QUICK_DIAL_IMPORT_SCHEMA = vol.Schema(
 
 BLOCKED_IMPORT_SCHEMA = vol.Schema(
     {
-        vol.Required("device_id"): cv.string,
         vol.Required("entries"): [
             vol.Schema(
                 {
@@ -269,7 +245,6 @@ BLOCKED_IMPORT_SCHEMA = vol.Schema(
 # Phase P8: Resilience service schemas
 RESILIENCE_TEST_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Optional("test_type", default="connection"): vol.In(
             ["connection", "sequence", "stress"]
         ),
@@ -277,16 +252,107 @@ RESILIENCE_TEST_SCHEMA = vol.Schema(
 )
 
 
+# Target resolution helpers
+
+
+def _extract_ids(value: Any) -> set[str]:
+    """Normalize a target value into a set of string IDs."""
+    if not value:
+        return set()
+    if isinstance(value, str):
+        return {value}
+    return {item for item in value if isinstance(item, str)}
+
+
+@dataclass(slots=True)
+class ServiceDeviceContext:
+    """Resolved context for a TsuryPhone device targeted by a service."""
+
+    hass_device_id: str
+    coordinator: TsuryPhoneDataUpdateCoordinator
+
+    @property
+    def tsury_device_id(self) -> str:
+        return self.coordinator.device_info.device_id
+
+
+def _resolve_target_device_contexts(call: ServiceCall) -> list[ServiceDeviceContext]:
+    """Resolve targeted devices for a service call."""
+
+    hass = call.hass
+    target = call.target or {}
+
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+
+    device_ids = _extract_ids(target.get("device_id"))
+
+    for entity_id in _extract_ids(target.get("entity_id")):
+        if entry := entity_registry.async_get(entity_id):
+            if entry.device_id:
+                device_ids.add(entry.device_id)
+
+    area_ids = _extract_ids(target.get("area_id"))
+    if area_ids:
+        for device_entry in device_registry.devices.values():
+            if device_entry.area_id in area_ids:
+                device_ids.add(device_entry.id)
+
+    if not device_ids:
+        raise ServiceValidationError(
+            f"Service '{call.service}' requires targeting at least one TsuryPhone device."
+        )
+
+    contexts: list[ServiceDeviceContext] = []
+    for hass_device_id in device_ids:
+        device_entry = device_registry.async_get(hass_device_id)
+        if not device_entry:
+            raise ServiceValidationError(f"Device {hass_device_id} not found")
+
+        coordinator: TsuryPhoneDataUpdateCoordinator | None = None
+        for entry_id in device_entry.config_entries:
+            config_entry = hass.config_entries.async_get_entry(entry_id)
+            if config_entry and config_entry.domain == DOMAIN:
+                runtime = getattr(config_entry, "runtime_data", None)
+                if isinstance(runtime, TsuryPhoneDataUpdateCoordinator):
+                    coordinator = runtime
+                    break
+
+        if coordinator is None:
+            raise ServiceValidationError(
+                f"Device {hass_device_id} is not associated with an active TsuryPhone integration"
+            )
+
+        contexts.append(
+            ServiceDeviceContext(
+                hass_device_id=hass_device_id,
+                coordinator=coordinator,
+            )
+        )
+
+    contexts.sort(key=lambda ctx: ctx.tsury_device_id)
+    return contexts
+
+
+def _require_single_device_context(call: ServiceCall) -> ServiceDeviceContext:
+    """Return exactly one targeted device context or raise."""
+
+    contexts = _resolve_target_device_contexts(call)
+    if len(contexts) != 1:
+        raise ServiceValidationError(  # noqa: TRY003 - user-facing validation message
+            f"Service '{call.service}' supports exactly one TsuryPhone device at a time."
+        )
+    return contexts[0]
+
+
 # Phase P8: Resilience and monitoring services
 
 
 async def async_resilience_status(call: ServiceCall) -> ServiceResponse:
     """Get resilience status for the device."""
-    device_id = call.data.get(ATTR_DEVICE_ID)
-
-    coordinator = await _get_coordinator_by_device_id(call.hass, device_id)
-    if not coordinator:
-        raise ServiceValidationError(f"Device {device_id} not found")
+    context = _require_single_device_context(call)
+    coordinator = context.coordinator
+    device_id = context.tsury_device_id
 
     resilience_status = coordinator.get_resilience_status()
 
@@ -299,12 +365,11 @@ async def async_resilience_status(call: ServiceCall) -> ServiceResponse:
 
 async def async_resilience_test(call: ServiceCall) -> ServiceResponse:
     """Run resilience stress test."""
-    device_id = call.data.get(ATTR_DEVICE_ID)
+    context = _require_single_device_context(call)
     test_type = call.data.get("test_type", "connection")
 
-    coordinator = await _get_coordinator_by_device_id(call.hass, device_id)
-    if not coordinator:
-        raise ServiceValidationError(f"Device {device_id} not found")
+    coordinator = context.coordinator
+    device_id = context.tsury_device_id
 
     if not coordinator._resilience:
         raise ServiceValidationError("Resilience manager not available")
@@ -368,11 +433,9 @@ async def async_resilience_test(call: ServiceCall) -> ServiceResponse:
 
 async def async_websocket_reconnect(call: ServiceCall) -> ServiceResponse:
     """Force WebSocket reconnection."""
-    device_id = call.data.get(ATTR_DEVICE_ID)
-
-    coordinator = await _get_coordinator_by_device_id(call.hass, device_id)
-    if not coordinator:
-        raise ServiceValidationError(f"Device {device_id} not found")
+    context = _require_single_device_context(call)
+    coordinator = context.coordinator
+    device_id = context.tsury_device_id
 
     if not coordinator._websocket_client:
         raise ServiceValidationError("WebSocket client not available")
@@ -398,11 +461,9 @@ async def async_websocket_reconnect(call: ServiceCall) -> ServiceResponse:
 
 async def async_run_health_check(call: ServiceCall) -> ServiceResponse:
     """Run comprehensive health check."""
-    device_id = call.data.get(ATTR_DEVICE_ID)
-
-    coordinator = await _get_coordinator_by_device_id(call.hass, device_id)
-    if not coordinator:
-        raise ServiceValidationError(f"Device {device_id} not found")
+    context = _require_single_device_context(call)
+    coordinator = context.coordinator
+    device_id = context.tsury_device_id
 
     if not coordinator._resilience:
         raise ServiceValidationError("Resilience manager not available")
@@ -419,21 +480,9 @@ async def async_run_health_check(call: ServiceCall) -> ServiceResponse:
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up services for TsuryPhone integration."""
 
-    async def async_get_coordinator(device_id: str) -> TsuryPhoneDataUpdateCoordinator:
-        """Get coordinator for a device ID."""
-        # Find the config entry with matching device ID
-        for config_entry in hass.config_entries.async_entries(DOMAIN):
-            coordinator = config_entry.runtime_data
-            if coordinator.device_info.device_id == device_id:
-                return coordinator
-
-        raise ServiceValidationError(
-            f"TsuryPhone device with ID '{device_id}' not found"
-        )
-
     async def async_dial(call: ServiceCall) -> None:
-        """Service to dial a number."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         number = call.data["number"]
 
         try:
@@ -442,8 +491,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to dial {number}: {err}") from err
 
     async def async_answer(call: ServiceCall) -> None:
-        """Service to answer a call."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
         if not coordinator.data.is_incoming_call:
             raise ServiceValidationError("No incoming call to answer")
@@ -454,8 +503,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to answer call: {err}") from err
 
     async def async_hangup(call: ServiceCall) -> None:
-        """Service to hang up a call."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
         if not coordinator.data.is_call_active:
             raise ServiceValidationError("No active call to hang up")
@@ -466,8 +515,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to hang up call: {err}") from err
 
     async def async_ring_device(call: ServiceCall) -> None:
-        """Service to ring the device."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         pattern = call.data.get("pattern", "")
 
         try:
@@ -476,8 +525,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to ring device: {err}") from err
 
     async def async_set_ring_pattern(call: ServiceCall) -> None:
-        """Service to set ring pattern."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         pattern = call.data["pattern"]
 
         try:
@@ -487,8 +536,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to set ring pattern: {err}") from err
 
     async def async_reset_device(call: ServiceCall) -> None:
-        """Service to reset the device."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
         try:
             await coordinator.api_client.reset_device()
@@ -496,12 +545,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to reset device: {err}") from err
 
     async def async_set_dnd(call: ServiceCall) -> None:
-        """Service to set Do Not Disturb configuration."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
-        # Build DND config from service parameters
-        dnd_config = {}
-        # Map service parameter names to API field names (firmware expects camelCase)
+        dnd_config: dict[str, Any] = {}
         field_mapping = {
             "force": "force",
             "scheduled": "scheduled",
@@ -521,11 +568,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to set DND: {err}") from err
 
     async def async_set_audio(call: ServiceCall) -> None:
-        """Service to set audio configuration."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
-        # Build audio config from service parameters
-        audio_config = {}
+        audio_config: dict[str, Any] = {}
         for key in [
             "earpiece_volume",
             "earpiece_gain",
@@ -533,7 +579,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             "speaker_gain",
         ]:
             if key in call.data:
-                # Convert to camelCase for API
                 api_key = (
                     key.replace("_", "")
                     .replace("earpiece", "earpiece")
@@ -552,18 +597,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to set audio config: {err}") from err
 
     async def async_get_call_history(call: ServiceCall) -> dict[str, Any]:
-        """Service to get call history."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         limit = call.data.get("limit")
 
-        # Get history from local coordinator data (not API - history is managed locally)
         history = coordinator.data.call_history or []
-
-        # Apply limit if specified (newest first)
         if limit and len(history) > limit:
-            history = history[-limit:]  # Get most recent entries
+            history = history[-limit:]
 
-        # Convert to serializable format
         return {
             "call_history": [
                 {
@@ -585,16 +626,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         }
 
     async def async_clear_call_history(call: ServiceCall) -> None:
-        """Service to clear call history."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         older_than_days = call.data.get("older_than_days")
         keep_last = call.data.get("keep_last")
 
-        # Clear history from local coordinator data (history is managed locally, not on device)
         if older_than_days or keep_last:
-            # Selective clearing
-            import time
-
             now = time.time()
 
             if older_than_days:
@@ -610,21 +647,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     -keep_last:
                 ]
         else:
-            # Clear all
             coordinator.data.call_history = []
 
-        # Update storage cache
         if coordinator._storage_cache:
             await coordinator._storage_cache.async_save_call_history(
                 coordinator.data.call_history
             )
 
-        # Trigger coordinator update
         coordinator.async_set_updated_data(coordinator.data)
 
     async def async_quick_dial_add(call: ServiceCall) -> None:
-        """Service to add quick dial entry."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         code = call.data["code"]
         number = call.data["number"]
         name = call.data.get("name")
@@ -636,8 +670,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to add quick dial: {err}") from err
 
     async def async_quick_dial_remove(call: ServiceCall) -> None:
-        """Service to remove quick dial entry."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         code = call.data["code"]
 
         try:
@@ -647,12 +681,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to remove quick dial: {err}") from err
 
     async def async_quick_dial_clear(call: ServiceCall) -> None:
-        """Service to clear all quick dial entries."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
-        # Clear all quick dial entries by removing each one individually
-        # (API doesn't have bulk clear method)
-        errors = []
+        errors: list[str] = []
         for entry in list(coordinator.data.quick_dials):
             try:
                 await coordinator.api_client.remove_quick_dial(entry.code)
@@ -667,10 +699,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
     async def async_blocked_add(call: ServiceCall) -> None:
-        """Service to add blocked number."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         number = call.data["number"]
-        reason = call.data.get("reason", "")  # API expects 'reason' not 'name'
+        reason = call.data.get("reason", "")
 
         try:
             await coordinator.api_client.add_blocked_number(number, reason)
@@ -679,8 +711,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to add blocked number: {err}") from err
 
     async def async_blocked_remove(call: ServiceCall) -> None:
-        """Service to remove blocked number."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         number = call.data["number"]
 
         try:
@@ -690,12 +722,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to remove blocked number: {err}") from err
 
     async def async_blocked_clear(call: ServiceCall) -> None:
-        """Service to clear all blocked numbers."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
-        # Clear all blocked numbers by removing each one individually
-        # (API doesn't have bulk clear method)
-        errors = []
+        errors: list[str] = []
         for entry in list(coordinator.data.blocked_numbers):
             try:
                 await coordinator.api_client.remove_blocked_number(entry.number)
@@ -710,24 +740,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
     async def async_refetch_all(call: ServiceCall) -> None:
-        """Service to refetch all device data."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+
         try:
             await coordinator.api_client.refetch_all()
-            # After refetch_all, the API returns aggregated data; request refresh to sync entities
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to refetch all data: {err}") from err
 
     async def async_get_tsuryphone_config(call: ServiceCall) -> dict[str, Any]:
-        """Service to retrieve full TsuryPhone configuration snapshot."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+        device_id = context.tsury_device_id
+
         try:
             data = await coordinator.api_client.get_tsuryphone_config()
-            # Fire an event on the HA bus for consumers (developer tooling)
             coordinator.hass.bus.async_fire(
                 f"{DOMAIN}_tsuryphone_config",
-                {"device_id": call.data["device_id"], "config": data},
+                {"device_id": device_id, "config": data},
             )
             return data
         except TsuryPhoneAPIError as err:
@@ -736,8 +767,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             ) from err
 
     async def async_priority_add(call: ServiceCall) -> None:
-        """Service to add priority caller number."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         number = call.data["number"]
 
         try:
@@ -747,8 +778,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to add priority caller: {err}") from err
 
     async def async_priority_remove(call: ServiceCall) -> None:
-        """Service to remove priority caller number."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         number = call.data["number"]
 
         try:
@@ -766,8 +797,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to refetch data: {err}") from err
 
     async def async_get_diagnostics(call: ServiceCall) -> dict[str, Any]:
-        """Service to get device diagnostics."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
         try:
             diagnostics = await coordinator.api_client.get_diagnostics()
@@ -776,8 +807,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to get diagnostics: {err}") from err
 
     async def async_webhook_add(call: ServiceCall) -> None:
-        """Service to add webhook."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         url = call.data["url"]
         events = call.data["events"]
         name = call.data.get("name")
@@ -789,8 +820,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to add webhook: {err}") from err
 
     async def async_webhook_remove(call: ServiceCall) -> None:
-        """Service to remove webhook."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         url = call.data["url"]
 
         try:
@@ -800,8 +831,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to remove webhook: {err}") from err
 
     async def async_webhook_clear(call: ServiceCall) -> None:
-        """Service to clear all webhooks."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
         try:
             await coordinator.api_client.clear_webhooks()
@@ -810,8 +841,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to clear webhooks: {err}") from err
 
     async def async_webhook_test(call: ServiceCall) -> None:
-        """Service to test webhook."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         url = call.data["url"]
 
         try:
@@ -820,8 +851,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to test webhook: {err}") from err
 
     async def async_switch_call_waiting(call: ServiceCall) -> None:
-        """Service to switch call waiting."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
         if not coordinator.data.call_waiting_available:
             raise ServiceValidationError("Call waiting not available on this device")
@@ -833,8 +864,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to switch call waiting: {err}") from err
 
     async def async_set_maintenance_mode(call: ServiceCall) -> None:
-        """Service to set maintenance mode."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         enabled = call.data["enabled"]
 
         try:
@@ -844,10 +875,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to set maintenance mode: {err}") from err
 
     async def async_get_missed_calls(call: ServiceCall) -> dict[str, Any]:
-        """Service to get missed calls."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
-        # Get missed calls from local call history (not API - history is managed locally)
         history = coordinator.data.call_history or []
         missed_calls = [entry for entry in history if entry.call_type == "missed"]
 
@@ -867,45 +897,41 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         }
 
     async def async_dial_quick_dial(call: ServiceCall) -> None:
-        """Service to dial a quick dial code."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         code = call.data["code"]
 
         try:
             await coordinator.api_client.dial_quick_dial(code)
-            # No need to refresh - dial operations are reflected in events
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(
                 f"Failed to dial quick dial code {code}: {err}"
             ) from err
 
     async def async_set_ha_url(call: ServiceCall) -> None:
-        """Service to set Home Assistant URL for webhooks."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         url = call.data["url"]
 
         try:
             await coordinator.api_client.set_ha_url(url)
-            # URL setting doesn't require refresh
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to set HA URL: {err}") from err
 
     async def async_quick_dial_import(call: ServiceCall) -> dict[str, Any]:
-        """Service to import quick dial entries in bulk."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         entries = call.data["entries"]
         clear_existing = call.data.get("clear_existing", False)
 
         results = {"added": [], "failed": [], "cleared": False}
 
         try:
-            # Clear existing entries if requested
             if clear_existing:
                 await coordinator.api_client.clear_quick_dial()
                 results["cleared"] = True
                 _LOGGER.info("Cleared existing quick dial entries")
 
-            # Add new entries
             for entry in entries:
                 try:
                     await coordinator.api_client.add_quick_dial(
@@ -919,9 +945,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                         "Failed to add quick dial entry %s: %s", entry["code"], err
                     )
 
-            # Refresh coordinator to update entities
             await coordinator.async_request_refresh()
-
             return results
 
         except TsuryPhoneAPIError as err:
@@ -930,48 +954,37 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             ) from err
 
     async def async_quick_dial_export(call: ServiceCall) -> dict[str, Any]:
-        """Service to export quick dial entries."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
-        try:
-            # Get current quick dial entries from state
-            state = coordinator.data
-            if not state.quick_dials:
-                return {"entries": []}
+        state = coordinator.data
+        if not state.quick_dials:
+            return {"entries": []}
 
-            # Convert to exportable format
-            entries = [
-                {
-                    "code": entry.code,
-                    "number": entry.number,
-                    "name": entry.name,
-                }
-                for entry in state.quick_dials
-            ]
-
-            return {"entries": entries}
-
-        except Exception as err:
-            raise HomeAssistantError(
-                f"Failed to export quick dial entries: {err}"
-            ) from err
+        entries = [
+            {
+                "code": entry.code,
+                "number": entry.number,
+                "name": entry.name,
+            }
+            for entry in state.quick_dials
+        ]
+        return {"entries": entries}
 
     async def async_blocked_import(call: ServiceCall) -> dict[str, Any]:
-        """Service to import blocked numbers in bulk."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
         entries = call.data["entries"]
         clear_existing = call.data.get("clear_existing", False)
 
         results = {"added": [], "failed": [], "cleared": False}
 
         try:
-            # Clear existing entries if requested
             if clear_existing:
                 await coordinator.api_client.clear_blocked_numbers()
                 results["cleared"] = True
                 _LOGGER.info("Cleared existing blocked numbers")
 
-            # Add new entries
             for entry in entries:
                 try:
                     await coordinator.api_client.add_blocked_number(
@@ -987,9 +1000,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                         "Failed to add blocked number %s: %s", entry["number"], err
                     )
 
-            # Refresh coordinator to update entities
             await coordinator.async_request_refresh()
-
             return results
 
         except TsuryPhoneAPIError as err:
@@ -998,30 +1009,21 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             ) from err
 
     async def async_blocked_export(call: ServiceCall) -> dict[str, Any]:
-        """Service to export blocked numbers."""
-        coordinator = await async_get_coordinator(call.data["device_id"])
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
-        try:
-            # Get current blocked numbers from state
-            state = coordinator.data
-            if not state.blocked_numbers:
-                return {"entries": []}
+        state = coordinator.data
+        if not state.blocked_numbers:
+            return {"entries": []}
 
-            # Convert to exportable format
-            entries = [
-                {
-                    "number": entry.number,
-                    "name": entry.name,
-                }
-                for entry in state.blocked_numbers
-            ]
-
-            return {"entries": entries}
-
-        except Exception as err:
-            raise HomeAssistantError(
-                f"Failed to export blocked numbers: {err}"
-            ) from err
+        entries = [
+            {
+                "number": entry.number,
+                "name": entry.name,
+            }
+            for entry in state.blocked_numbers
+        ]
+        return {"entries": entries}
 
     # Register all services
     services_config = [
@@ -1125,7 +1127,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_SET_AUDIO,
         SERVICE_GET_CALL_HISTORY,
         SERVICE_CLEAR_CALL_HISTORY,
-    SERVICE_GET_TSURYPHONE_CONFIG,
+        SERVICE_GET_TSURYPHONE_CONFIG,
         SERVICE_QUICK_DIAL_ADD,
         SERVICE_QUICK_DIAL_REMOVE,
         SERVICE_QUICK_DIAL_CLEAR,

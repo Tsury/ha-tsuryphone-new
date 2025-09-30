@@ -171,154 +171,398 @@
     }
   },
   "services": {
-    "dial": {
-      "name": "Dial Number",
-      "description": "Dial a phone number.",
+    "answer": {
+      "name": "Answer call",
+      "description": "Answer an incoming call on the TsuryPhone device."
+    },
+    "blocked_add": {
+      "name": "Add blocked number",
+      "description": "Add a phone number to the blocked list.",
       "fields": {
         "number": {
-          "name": "Phone Number",
-          "description": "The phone number to dial."
+          "name": "Phone number",
+          "description": "Phone number that should be blocked.",
+          "example": "0541234567"
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Optional reason to display.",
+          "example": "Telemarketer"
         }
       }
     },
-    "answer": {
-      "name": "Answer Call",
-      "description": "Answer the incoming call."
+    "blocked_clear": {
+      "name": "Clear blocked numbers",
+      "description": "Remove all blocked numbers from the device."
+    },
+    "blocked_export": {
+      "name": "Export blocked numbers",
+      "description": "Retrieve blocked numbers from the integration cache."
+    },
+    "blocked_import": {
+      "name": "Import blocked numbers",
+      "description": "Import multiple blocked numbers.",
+      "fields": {
+        "clear_existing": {
+          "name": "Clear existing entries",
+          "description": "Remove existing blocked numbers before importing.",
+          "example": true
+        },
+        "entries": {
+          "name": "Entries",
+          "description": "List of blocked number entries to import.",
+          "example": "[{\"number\": \"0547654321\", \"reason\": \"Spam caller\"}]"
+        }
+      }
+    },
+    "blocked_remove": {
+      "name": "Remove blocked number",
+      "description": "Remove a phone number from the blocked list.",
+      "fields": {
+        "number": {
+          "name": "Phone number",
+          "description": "Phone number to remove from the blocked list.",
+          "example": "0541234567"
+        }
+      }
+    },
+    "clear_call_history": {
+      "name": "Clear call history",
+      "description": "Clear stored call history entries.",
+      "fields": {
+        "keep_last": {
+          "name": "Keep last",
+          "description": "Keep the specified number of most recent entries.",
+          "example": 100
+        },
+        "older_than_days": {
+          "name": "Older than (days)",
+          "description": "Remove entries older than the specified number of days.",
+          "example": 30
+        }
+      }
+    },
+    "dial": {
+      "name": "Dial number",
+      "description": "Dial a phone number on the TsuryPhone device.",
+      "fields": {
+        "number": {
+          "name": "Phone number",
+          "description": "Number to dial (quote to preserve leading zeros).",
+          "example": "0541234567"
+        }
+      }
+    },
+    "dial_quick_dial": {
+      "name": "Dial quick dial code",
+      "description": "Dial using a quick dial code stored on the device.",
+      "fields": {
+        "code": {
+          "name": "Quick dial code",
+          "description": "Stored quick dial code to dial.",
+          "example": "012"
+        }
+      }
+    },
+    "get_call_history": {
+      "name": "Get call history",
+      "description": "Retrieve call history entries from the integration cache.",
+      "fields": {
+        "limit": {
+          "name": "Limit",
+          "description": "Maximum number of entries to return.",
+          "example": 50
+        }
+      }
+    },
+    "get_diagnostics": {
+      "name": "Get diagnostics",
+      "description": "Retrieve diagnostics information from the device."
+    },
+    "get_missed_calls": {
+      "name": "Get missed calls",
+      "description": "Retrieve missed call entries from the integration cache."
+    },
+    "get_tsuryphone_config": {
+      "name": "Get TsuryPhone configuration",
+      "description": "Retrieve the full configuration snapshot from the device."
     },
     "hangup": {
-      "name": "Hang Up",
-      "description": "Hang up the active call."
+      "name": "Hang up call",
+      "description": "Hang up an active call on the TsuryPhone device."
     },
-    "ring": {
-      "name": "Ring Device",
-      "description": "Ring the device with optional pattern.",
+    "priority_add": {
+      "name": "Add priority caller",
+      "description": "Mark a phone number as a priority caller.",
+      "fields": {
+        "number": {
+          "name": "Phone number",
+          "description": "Phone number to mark as a priority caller.",
+          "example": "0541112222"
+        }
+      }
+    },
+    "priority_remove": {
+      "name": "Remove priority caller",
+      "description": "Remove a phone number from the priority list.",
+      "fields": {
+        "number": {
+          "name": "Phone number",
+          "description": "Phone number to remove from the priority list.",
+          "example": "0541112222"
+        }
+      }
+    },
+    "quick_dial_add": {
+      "name": "Add quick dial entry",
+      "description": "Add a quick dial shortcut.",
+      "fields": {
+        "code": {
+          "name": "Quick dial code",
+          "description": "Quick dial code (quote to preserve leading zeros).",
+          "example": "012"
+        },
+        "name": {
+          "name": "Display name",
+          "description": "Optional label for the quick dial entry.",
+          "example": "Mom"
+        },
+        "number": {
+          "name": "Phone number",
+          "description": "Phone number to dial when using the quick dial entry.",
+          "example": "0541234567"
+        }
+      }
+    },
+    "quick_dial_clear": {
+      "name": "Clear quick dial entries",
+      "description": "Remove all quick dial shortcuts from the device."
+    },
+    "quick_dial_export": {
+      "name": "Export quick dial entries",
+      "description": "Retrieve quick dial entries from the integration cache."
+    },
+    "quick_dial_import": {
+      "name": "Import quick dial entries",
+      "description": "Import multiple quick dial entries at once.",
+      "fields": {
+        "clear_existing": {
+          "name": "Clear existing entries",
+          "description": "Remove existing quick dial entries before importing.",
+          "example": true
+        },
+        "entries": {
+          "name": "Entries",
+          "description": "List of quick dial entries to import.",
+          "example": "[{\"code\": \"01\", \"number\": \"0541234567\", \"name\": \"Mom\"}]"
+        }
+      }
+    },
+    "quick_dial_remove": {
+      "name": "Remove quick dial entry",
+      "description": "Remove a quick dial shortcut by code.",
+      "fields": {
+        "code": {
+          "name": "Quick dial code",
+          "description": "Quick dial code to remove from the device.",
+          "example": "012"
+        }
+      }
+    },
+    "refetch_all": {
+      "name": "Refetch device data",
+      "description": "Ask the device to refresh and resend configuration data."
+    },
+    "reset_device": {
+      "name": "Reset device",
+      "description": "Reboot the TsuryPhone device."
+    },
+    "resilience_status": {
+      "name": "Get resilience status",
+      "description": "Retrieve diagnostic information from the resilience manager."
+    },
+    "resilience_test": {
+      "name": "Run resilience test",
+      "description": "Execute a resilience diagnostic test (connection, sequence, or stress).",
+      "fields": {
+        "test_type": {
+          "name": "Test type",
+          "description": "Type of resilience test to run.",
+          "example": "sequence"
+        }
+      }
+    },
+    "ring_device": {
+      "name": "Ring device",
+      "description": "Trigger the TsuryPhone device to ring.",
       "fields": {
         "pattern": {
-          "name": "Ring Pattern",
-          "description": "Optional ring pattern (leave empty for default)."
+          "name": "Ring pattern",
+          "description": "Optional ring pattern string.",
+          "example": "300,300,300"
+        }
+      }
+    },
+    "run_health_check": {
+      "name": "Run health check",
+      "description": "Perform a comprehensive health check through the resilience manager."
+    },
+    "set_audio": {
+      "name": "Set audio configuration",
+      "description": "Update audio gain/volume settings.",
+      "fields": {
+        "earpiece_gain": {
+          "name": "Earpiece gain",
+          "description": "Value between 1 and 7.",
+          "example": 5
+        },
+        "earpiece_volume": {
+          "name": "Earpiece volume",
+          "description": "Value between 1 and 7.",
+          "example": 4
+        },
+        "speaker_gain": {
+          "name": "Speaker gain",
+          "description": "Value between 1 and 7.",
+          "example": 5
+        },
+        "speaker_volume": {
+          "name": "Speaker volume",
+          "description": "Value between 1 and 7.",
+          "example": 6
         }
       }
     },
     "set_dnd": {
       "name": "Set Do Not Disturb",
-      "description": "Configure Do Not Disturb settings.",
+      "description": "Configure Do Not Disturb settings on the TsuryPhone device.",
       "fields": {
+        "end_hour": {
+          "name": "End hour",
+          "description": "End hour (0-23).",
+          "example": 7
+        },
+        "end_minute": {
+          "name": "End minute",
+          "description": "End minute (0-59).",
+          "example": 0
+        },
         "force": {
           "name": "Force DND",
-          "description": "Enable forced Do Not Disturb."
+          "description": "Force DND mode on or off.",
+          "example": true
         },
         "scheduled": {
           "name": "Scheduled DND",
-          "description": "Enable scheduled Do Not Disturb."
+          "description": "Enable scheduled DND handling.",
+          "example": true
         },
         "start_hour": {
-          "name": "Start Hour",
-          "description": "DND schedule start hour (0-23)."
+          "name": "Start hour",
+          "description": "Start hour (0-23).",
+          "example": 22
         },
         "start_minute": {
-          "name": "Start Minute", 
-          "description": "DND schedule start minute (0-59)."
-        },
-        "end_hour": {
-          "name": "End Hour",
-          "description": "DND schedule end hour (0-23)."
-        },
-        "end_minute": {
-          "name": "End Minute",
-          "description": "DND schedule end minute (0-59)."
+          "name": "Start minute",
+          "description": "Start minute (0-59).",
+          "example": 30
         }
       }
     },
-    "set_audio": {
-      "name": "Set Audio Configuration",
-      "description": "Configure audio settings (partial updates supported).",
+    "set_ha_url": {
+      "name": "Set Home Assistant URL",
+      "description": "Configure the Home Assistant base URL used by the device for webhooks.",
       "fields": {
-        "earpiece_volume": {
-          "name": "Earpiece Volume",
-          "description": "Earpiece volume level (1-7)."
-        },
-        "earpiece_gain": {
-          "name": "Earpiece Gain",
-          "description": "Earpiece gain level (1-7)."
-        },
-        "speaker_volume": {
-          "name": "Speaker Volume",
-          "description": "Speaker volume level (1-7)."
-        },
-        "speaker_gain": {
-          "name": "Speaker Gain",
-          "description": "Speaker gain level (1-7)."
+        "url": {
+          "name": "URL",
+          "description": "Base URL that the device should call back to.",
+          "example": "https://homeassistant.local:8123"
+        }
+      }
+    },
+    "set_maintenance_mode": {
+      "name": "Set maintenance mode",
+      "description": "Enable or disable maintenance mode on the device.",
+      "fields": {
+        "enabled": {
+          "name": "Enabled",
+          "description": "Whether maintenance mode should be enabled.",
+          "example": true
         }
       }
     },
     "set_ring_pattern": {
-      "name": "Set Ring Pattern",
-      "description": "Set the device ring pattern.",
+      "name": "Set ring pattern",
+      "description": "Update the ring pattern on the TsuryPhone device.",
       "fields": {
         "pattern": {
-          "name": "Pattern",
-          "description": "Ring pattern (e.g., '500,500,500' or '300,300x2')."
+          "name": "Ring pattern",
+          "description": "Ring pattern string to apply.",
+          "example": "300,300,300"
         }
       }
     },
-    "quick_dial_add": {
-      "name": "Add Quick Dial",
-      "description": "Add a quick dial entry.",
+    "switch_call_waiting": {
+      "name": "Switch call waiting",
+      "description": "Toggle the active call when call waiting is available."
+    },
+    "webhook_add": {
+      "name": "Add webhook action",
+      "description": "Register a webhook action on the device.",
       "fields": {
-        "code": {
-          "name": "Code",
-          "description": "Quick dial code (1-16 characters, alphanumeric and underscore)."
-        },
-        "number": {
-          "name": "Phone Number",
-          "description": "Phone number to dial."
+        "events": {
+          "name": "Events",
+          "description": "Event names that should trigger this webhook.",
+          "example": "[\"call_start\", \"ring\"]"
         },
         "name": {
-          "name": "Display Name",
-          "description": "Optional display name for the entry."
-        }
-      }
-    },
-    "quick_dial_remove": {
-      "name": "Remove Quick Dial",
-      "description": "Remove a quick dial entry.",
-      "fields": {
-        "code": {
-          "name": "Code",
-          "description": "Quick dial code to remove."
-        }
-      }
-    },
-    "blocked_add": {
-      "name": "Add Blocked Number",
-      "description": "Add a number to the blocked list.",
-      "fields": {
-        "number": {
-          "name": "Phone Number",
-          "description": "Phone number to block."
+          "name": "Display name",
+          "description": "Optional label for the webhook action.",
+          "example": "Notify on call start"
         },
-        "reason": {
-          "name": "Reason",
-          "description": "Optional reason for blocking."
+        "url": {
+          "name": "Webhook URL",
+          "description": "Full URL to call when the action triggers.",
+          "example": "https://example.com/api/webhook/tsuryphone"
         }
       }
     },
-    "blocked_remove": {
-      "name": "Remove Blocked Number",
-      "description": "Remove a number from the blocked list.",
+    "webhook_clear": {
+      "name": "Clear webhook actions",
+      "description": "Remove all webhook actions from the device."
+    },
+    "webhook_remove": {
+      "name": "Remove webhook action",
+      "description": "Remove a webhook action from the device.",
       "fields": {
-        "number": {
-          "name": "Phone Number",
-          "description": "Phone number to unblock."
+        "url": {
+          "name": "Webhook URL",
+          "description": "Webhook URL to remove from the device.",
+          "example": "https://example.com/api/webhook/tsuryphone"
         }
       }
+    },
+    "webhook_test": {
+      "name": "Test webhook",
+      "description": "Trigger a webhook action as a test.",
+      "fields": {
+        "url": {
+          "name": "Webhook URL",
+          "description": "Webhook URL to invoke for the test.",
+          "example": "https://example.com/api/webhook/tsuryphone"
+        }
+      }
+    },
+    "websocket_reconnect": {
+      "name": "Force websocket reconnect",
+      "description": "Force the integration to reconnect the websocket client."
     }
   },
   "device_automation": {
     "trigger_type": {
       "call_start": "Call started",
       "call_end": "Call ended",
-      "call_blocked": "Call blocked", 
+      "call_blocked": "Call blocked",
       "call_missed": "Call missed",
       "ring": "Phone ringing",
       "dnd_toggled": "Do Not Disturb toggled",
