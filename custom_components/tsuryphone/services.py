@@ -71,25 +71,33 @@ from .api_client import TsuryPhoneAPIError
 _LOGGER = logging.getLogger(__name__)
 
 # Service schemas
-DIAL_SCHEMA = vol.Schema(
+
+
+def _service_schema(schema: Any) -> vol.Schema:
+    """Allow standard service fields while tolerating target selectors."""
+
+    return vol.Schema(schema, extra=vol.ALLOW_EXTRA)
+
+
+DIAL_SCHEMA = _service_schema(
     {
         vol.Required("number"): cv.string,
     }
 )
 
-RING_DEVICE_SCHEMA = vol.Schema(
+RING_DEVICE_SCHEMA = _service_schema(
     {
         vol.Optional("pattern", default=""): cv.string,
     }
 )
 
-SET_RING_PATTERN_SCHEMA = vol.Schema(
+SET_RING_PATTERN_SCHEMA = _service_schema(
     {
         vol.Required("pattern"): cv.string,
     }
 )
 
-SET_DND_SCHEMA = vol.Schema(
+SET_DND_SCHEMA = _service_schema(
     {
         vol.Optional("force"): cv.boolean,
         vol.Optional("scheduled"): cv.boolean,
@@ -102,7 +110,7 @@ SET_DND_SCHEMA = vol.Schema(
     }
 )
 
-SET_AUDIO_SCHEMA = vol.Schema(
+SET_AUDIO_SCHEMA = _service_schema(
     {
         vol.Optional("earpiece_volume"): vol.All(
             vol.Coerce(int), vol.Range(min=AUDIO_MIN_LEVEL, max=AUDIO_MAX_LEVEL)
@@ -119,20 +127,20 @@ SET_AUDIO_SCHEMA = vol.Schema(
     }
 )
 
-CALL_HISTORY_SCHEMA = vol.Schema(
+CALL_HISTORY_SCHEMA = _service_schema(
     {
         vol.Optional("limit"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
     }
 )
 
-CALL_HISTORY_CLEAR_SCHEMA = vol.Schema(
+CALL_HISTORY_CLEAR_SCHEMA = _service_schema(
     {
         vol.Optional("older_than_days"): vol.All(vol.Coerce(int), vol.Range(min=1)),
         vol.Optional("keep_last"): vol.All(vol.Coerce(int), vol.Range(min=1)),
     }
 )
 
-QUICK_DIAL_ADD_SCHEMA = vol.Schema(
+QUICK_DIAL_ADD_SCHEMA = _service_schema(
     {
         vol.Required("code"): cv.string,
         vol.Required("number"): cv.string,
@@ -140,39 +148,39 @@ QUICK_DIAL_ADD_SCHEMA = vol.Schema(
     }
 )
 
-QUICK_DIAL_REMOVE_SCHEMA = vol.Schema(
+QUICK_DIAL_REMOVE_SCHEMA = _service_schema(
     {
         vol.Required("code"): cv.string,
     }
 )
 
-BLOCKED_ADD_SCHEMA = vol.Schema(
+BLOCKED_ADD_SCHEMA = _service_schema(
     {
         vol.Required("number"): cv.string,
         vol.Optional("reason"): cv.string,
     }
 )
 
-BLOCKED_REMOVE_SCHEMA = vol.Schema(
+BLOCKED_REMOVE_SCHEMA = _service_schema(
     {
         vol.Required("number"): cv.string,
     }
 )
 
 # Priority caller schemas
-PRIORITY_ADD_SCHEMA = vol.Schema(
+PRIORITY_ADD_SCHEMA = _service_schema(
     {
         vol.Required("number"): cv.string,
     }
 )
 
-PRIORITY_REMOVE_SCHEMA = vol.Schema(
+PRIORITY_REMOVE_SCHEMA = _service_schema(
     {
         vol.Required("number"): cv.string,
     }
 )
 
-WEBHOOK_ADD_SCHEMA = vol.Schema(
+WEBHOOK_ADD_SCHEMA = _service_schema(
     {
         vol.Required("url"): cv.string,
         vol.Required("events"): [cv.string],
@@ -180,40 +188,40 @@ WEBHOOK_ADD_SCHEMA = vol.Schema(
     }
 )
 
-WEBHOOK_REMOVE_SCHEMA = vol.Schema(
+WEBHOOK_REMOVE_SCHEMA = _service_schema(
     {
         vol.Required("url"): cv.string,
     }
 )
 
-WEBHOOK_TEST_SCHEMA = vol.Schema(
+WEBHOOK_TEST_SCHEMA = _service_schema(
     {
         vol.Required("url"): cv.string,
     }
 )
 
-MAINTENANCE_MODE_SCHEMA = vol.Schema(
+MAINTENANCE_MODE_SCHEMA = _service_schema(
     {
         vol.Required("enabled"): cv.boolean,
     }
 )
 
-DEVICE_ONLY_SCHEMA = vol.Schema({})
+DEVICE_ONLY_SCHEMA = _service_schema({})
 
-DIAL_QUICK_DIAL_SCHEMA = vol.Schema(
+DIAL_QUICK_DIAL_SCHEMA = _service_schema(
     {
         vol.Required("code"): cv.string,
     }
 )
 
-SET_HA_URL_SCHEMA = vol.Schema(
+SET_HA_URL_SCHEMA = _service_schema(
     {
         vol.Required("url"): cv.string,
     }
 )
 
 # Phase P4: Bulk import/export schemas
-QUICK_DIAL_IMPORT_SCHEMA = vol.Schema(
+QUICK_DIAL_IMPORT_SCHEMA = _service_schema(
     {
         vol.Required("entries"): [
             vol.Schema(
@@ -228,7 +236,7 @@ QUICK_DIAL_IMPORT_SCHEMA = vol.Schema(
     }
 )
 
-BLOCKED_IMPORT_SCHEMA = vol.Schema(
+BLOCKED_IMPORT_SCHEMA = _service_schema(
     {
         vol.Required("entries"): [
             vol.Schema(
@@ -243,7 +251,7 @@ BLOCKED_IMPORT_SCHEMA = vol.Schema(
 )
 
 # Phase P8: Resilience service schemas
-RESILIENCE_TEST_SCHEMA = vol.Schema(
+RESILIENCE_TEST_SCHEMA = _service_schema(
     {
         vol.Optional("test_type", default="connection"): vol.In(
             ["connection", "sequence", "stress"]
