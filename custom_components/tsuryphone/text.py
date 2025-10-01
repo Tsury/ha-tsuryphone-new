@@ -33,6 +33,7 @@ class TsuryPhoneTextDescription(TextEntityDescription):
     buffer_name: str
     field_name: str
     placeholder: str | None = None
+    max_length: int | None = None
 
 
 TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
@@ -41,7 +42,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Quick Dial Code",
         icon="mdi:numeric",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_CODE_LENGTH,
+        max_length=MAX_CODE_LENGTH,
         buffer_name="quick_dial",
         field_name="code",
         placeholder="123",
@@ -51,7 +52,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Quick Dial Number",
         icon="mdi:phone",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_NUMBER_LENGTH,
+        max_length=MAX_NUMBER_LENGTH,
         buffer_name="quick_dial",
         field_name="number",
         placeholder="+15551234567",
@@ -61,7 +62,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Quick Dial Name",
         icon="mdi:account",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_NAME_LENGTH,
+        max_length=MAX_NAME_LENGTH,
         buffer_name="quick_dial",
         field_name="name",
         placeholder="Family",
@@ -71,7 +72,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Blocked Number",
         icon="mdi:phone-remove",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_NUMBER_LENGTH,
+        max_length=MAX_NUMBER_LENGTH,
         buffer_name="blocked",
         field_name="number",
         placeholder="+15559876543",
@@ -81,7 +82,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Blocked Reason",
         icon="mdi:text",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_REASON_LENGTH,
+        max_length=MAX_REASON_LENGTH,
         buffer_name="blocked",
         field_name="reason",
         placeholder="Telemarketer",
@@ -91,7 +92,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Priority Number",
         icon="mdi:star",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_NUMBER_LENGTH,
+        max_length=MAX_NUMBER_LENGTH,
         buffer_name="priority",
         field_name="number",
         placeholder="+15557654321",
@@ -101,7 +102,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Webhook Code",
         icon="mdi:webhook",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_CODE_LENGTH,
+        max_length=MAX_CODE_LENGTH,
         buffer_name="webhook",
         field_name="code",
         placeholder="W1",
@@ -111,7 +112,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Webhook ID",
         icon="mdi:identifier",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_NAME_LENGTH,
+        max_length=MAX_NAME_LENGTH,
         buffer_name="webhook",
         field_name="webhook_id",
         placeholder="homeassistant_webhook",
@@ -121,7 +122,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         name="Webhook Action Name",
         icon="mdi:label",
         entity_category=EntityCategory.CONFIG,
-        native_max_length=MAX_NAME_LENGTH,
+        max_length=MAX_NAME_LENGTH,
         buffer_name="webhook",
         field_name="action_name",
         placeholder="Door Unlock",
@@ -166,7 +167,10 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         # TextEntityMode is not available on all Home Assistant versions.
         # Fall back to the string literal which is supported across releases.
         self._attr_mode = getattr(description, "mode", None) or "text"
-        self._attr_native_max_length = description.native_max_length
+        native_max = getattr(description, "native_max_length", None)
+        if native_max is None:
+            native_max = description.max_length
+        self._attr_native_max_length = native_max
         self._attr_native_min_length = 0
 
     @property
