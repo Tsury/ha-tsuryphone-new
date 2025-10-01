@@ -9,6 +9,9 @@ Welcome! Follow this playbook whenever you touch the integration so the workflow
 - **Use the repo's Python environment**: activate the maintained Python runtime whenever you run compile commands, tests, or scripts so everything executes under the supported Home Assistant version.
 - **Commit & push every task**: once a task is finished, stage, commit, and immediately `git push` to `main`. No batching or local todo piles.
 
+## Firmware collaboration principles
+- When requesting firmware changes for integration features, push updates into the shared, generic firmware integration layer so every current and future client (not just Home Assistant) automatically benefits.
+
 ## Technical guardrails
 - Target the latest Home Assistant release. Do **not** add backward-compatibility shims or legacy code paths unless the user explicitly asks for them.
 - Prefer explicit, modern APIs over defensive fallbacks; assume the environment meets the current minimum requirements.
