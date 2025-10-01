@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -288,7 +289,33 @@ def _resolve_target_device_contexts(call: ServiceCall) -> list[ServiceDeviceCont
     """Resolve targeted devices for a service call."""
 
     hass = call.hass
-    raw_target = dict(call.target or {})
+    raw_target: dict[str, Any] = {}
+
+    def _merge_target(source: Any) -> None:
+        if not source:
+            return
+
+        mapping: dict[str, Any]
+        if isinstance(source, Mapping):
+            mapping = dict(source)
+        elif hasattr(source, "items"):
+            mapping = dict(source.items())  # type: ignore[arg-type]
+        else:
+            try:
+                mapping = dict(source)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return
+
+        for key in ("device_id", "entity_id", "area_id"):
+            if key in mapping and mapping[key] is not None:
+                raw_target[key] = mapping[key]
+
+    _merge_target(getattr(call, "target", None))
+    _merge_target(call.data.get("target"))
+
+    for key in ("device_id", "entity_id", "area_id"):
+        if key in call.data and call.data[key] is not None:
+            raw_target[key] = call.data[key]
 
     normalized_target: dict[str, list[str]] = {}
     for key, validator in (
