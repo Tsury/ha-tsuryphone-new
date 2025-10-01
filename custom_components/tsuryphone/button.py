@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Iterable
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -24,94 +24,94 @@ _LOGGER = logging.getLogger(__name__)
 BUTTON_DESCRIPTIONS = (
     ButtonEntityDescription(
         key="answer",
-        name="Answer Call",
+        name="Call - Answer",
         icon="mdi:phone",
     ),
     ButtonEntityDescription(
         key="hangup",
-        name="Hang Up",
+        name="Call - Hang Up",
         icon="mdi:phone-hangup",
     ),
     ButtonEntityDescription(
-        key="ring",
-        name="Ring Device",
-        icon="mdi:phone-ring",
-        entity_category=EntityCategory.CONFIG,
-    ),
-    ButtonEntityDescription(
-        key="reset",
-        name="Reset Device",
-        icon="mdi:restart",
-        entity_category=EntityCategory.CONFIG,
-    ),
-    ButtonEntityDescription(
-        key="refetch",
-        name="Refresh Device Data",
-        icon="mdi:refresh",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    ButtonEntityDescription(
-        key="refresh_snapshot",
-        name="Refresh Snapshot",
-        icon="mdi:camera-flip",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    ButtonEntityDescription(
         key="dial_selected",
-        name="Dial Selected Quick Dial",
+        name="Quick Dial - Dial Selected",
         icon="mdi:speed-dial",
     ),
     ButtonEntityDescription(
-        key="quick_dial_add",
-        name="Add Quick Dial Entry",
-        icon="mdi:playlist-plus",
-        entity_category=EntityCategory.CONFIG,
-    ),
-    ButtonEntityDescription(
-        key="quick_dial_remove",
-        name="Remove Selected Quick Dial",
-        icon="mdi:playlist-remove",
-        entity_category=EntityCategory.CONFIG,
-    ),
-    ButtonEntityDescription(
         key="blocked_add",
-        name="Add Blocked Number",
+        name="Blocked - Add Number",
         icon="mdi:phone-plus",
         entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
         key="blocked_remove",
-        name="Remove Selected Blocked Number",
+        name="Blocked - Remove Selected",
         icon="mdi:phone-remove",
         entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
         key="priority_add",
-        name="Add Priority Number",
+        name="Priority - Add Number",
         icon="mdi:star-plus",
         entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
         key="priority_remove",
-        name="Remove Selected Priority Number",
+        name="Priority - Remove Selected",
         icon="mdi:star-minus",
         entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
+        key="quick_dial_add",
+        name="Quick Dial - Add Entry",
+        icon="mdi:playlist-plus",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    ButtonEntityDescription(
+        key="quick_dial_remove",
+        name="Quick Dial - Remove Selected",
+        icon="mdi:playlist-remove",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    ButtonEntityDescription(
         key="webhook_add",
-        name="Add Webhook Action",
+        name="Webhook - Add Action",
         icon="mdi:webhook",
         entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
         key="webhook_remove",
-        name="Remove Selected Webhook",
+        name="Webhook - Remove Selected",
         icon="mdi:webhook-off",
         entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
+        key="ring",
+        name="Device - Ring",
+        icon="mdi:phone-ring",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    ButtonEntityDescription(
+        key="reset",
+        name="Device - Reset",
+        icon="mdi:restart",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    ButtonEntityDescription(
+        key="refetch",
+        name="Device - Refresh Data",
+        icon="mdi:refresh",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ButtonEntityDescription(
+        key="refresh_snapshot",
+        name="Device - Snapshot",
+        icon="mdi:camera-flip",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ButtonEntityDescription(
         key="toggle_call_waiting",
-        name="Toggle Call Waiting",
+        name="Call - Toggle Waiting",
         icon="mdi:phone-plus",
     ),
 )
@@ -155,6 +155,44 @@ class TsuryPhoneButton(
 
         # Set device info
         self._attr_device_info = get_device_info(device_info)
+
+    def _buffer_has_values(
+        self, buffer_name: str, required_fields: Iterable[str]
+    ) -> bool:
+        """Check if coordinator buffer has required non-empty fields."""
+
+        buffer = getattr(self.coordinator, f"{buffer_name}_input", None)
+        if not buffer:
+            return False
+
+        for field in required_fields:
+            if not (buffer.get(field) or "").strip():
+                return False
+
+        return True
+
+    def _get_buffer_snapshot(self, buffer_name: str) -> dict[str, str]:
+        """Return a trimmed snapshot of a coordinator buffer."""
+
+        buffer = getattr(self.coordinator, f"{buffer_name}_input", None) or {}
+        return {key: (value or "").strip() for key, value in buffer.items()}
+
+    def _clear_buffer(
+        self, buffer_name: str, fields: Iterable[str] | None = None
+    ) -> None:
+        """Clear coordinator buffer fields and notify listeners."""
+
+        buffer = getattr(self.coordinator, f"{buffer_name}_input", None)
+        if not buffer:
+            return
+
+        target_fields = fields or list(buffer.keys())
+        for field in target_fields:
+            if field in buffer:
+                buffer[field] = ""
+
+        # Notify dependent entities (text inputs) so UI clears immediately
+        self.coordinator.async_update_listeners()
 
     async def async_press(self) -> None:
         """Handle the button press."""
@@ -272,10 +310,10 @@ class TsuryPhoneButton(
 
     async def _add_quick_dial_entry(self) -> None:
         """Add a quick dial entry from buffered text inputs."""
-        buffer = getattr(self.coordinator, "quick_dial_input", {})
-        code = (buffer.get("code") or "").strip()
-        number = (buffer.get("number") or "").strip()
-        name = (buffer.get("name") or "").strip()
+        buffer = self._get_buffer_snapshot("quick_dial")
+        code = buffer.get("code", "")
+        number = buffer.get("number", "")
+        name = buffer.get("name", "")
 
         missing: list[str] = []
         if not code:
@@ -291,6 +329,7 @@ class TsuryPhoneButton(
         try:
             await self.coordinator.api_client.add_quick_dial(code, number, name)
             self.coordinator.selected_quick_dial_code = code
+            self._clear_buffer("quick_dial")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to add quick dial entry: {err}") from err
@@ -305,6 +344,7 @@ class TsuryPhoneButton(
         try:
             await self.coordinator.api_client.remove_quick_dial(selected_code)
             self.coordinator.selected_quick_dial_code = None
+            self._clear_buffer("quick_dial")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(
@@ -313,9 +353,9 @@ class TsuryPhoneButton(
 
     async def _add_blocked_number(self) -> None:
         """Add a blocked number from buffered text inputs."""
-        buffer = getattr(self.coordinator, "blocked_input", {})
-        number = (buffer.get("number") or "").strip()
-        reason = (buffer.get("reason") or "").strip()
+        buffer = self._get_buffer_snapshot("blocked")
+        number = buffer.get("number", "")
+        reason = buffer.get("reason", "")
 
         if not number:
             raise HomeAssistantError("Enter a number to block")
@@ -323,6 +363,7 @@ class TsuryPhoneButton(
         try:
             await self.coordinator.api_client.add_blocked_number(number, reason)
             self.coordinator.selected_blocked_number = number
+            self._clear_buffer("blocked")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to add blocked number: {err}") from err
@@ -337,6 +378,7 @@ class TsuryPhoneButton(
         try:
             await self.coordinator.api_client.remove_blocked_number(selected_number)
             self.coordinator.selected_blocked_number = None
+            self._clear_buffer("blocked")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(
@@ -345,8 +387,8 @@ class TsuryPhoneButton(
 
     async def _add_priority_number(self) -> None:
         """Add a priority number from buffered text inputs."""
-        buffer = getattr(self.coordinator, "priority_input", {})
-        number = (buffer.get("number") or "").strip()
+        buffer = self._get_buffer_snapshot("priority")
+        number = buffer.get("number", "")
 
         if not number:
             raise HomeAssistantError("Enter a priority number to add")
@@ -354,6 +396,7 @@ class TsuryPhoneButton(
         try:
             await self.coordinator.api_client.add_priority_caller(number)
             self.coordinator.selected_priority_number = number
+            self._clear_buffer("priority")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(
@@ -372,6 +415,7 @@ class TsuryPhoneButton(
                 selected_number
             )
             self.coordinator.selected_priority_number = None
+            self._clear_buffer("priority")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(
@@ -380,10 +424,10 @@ class TsuryPhoneButton(
 
     async def _add_webhook_action(self) -> None:
         """Add a webhook action from buffered text inputs."""
-        buffer = getattr(self.coordinator, "webhook_input", {})
-        code = (buffer.get("code") or "").strip()
-        webhook_id = (buffer.get("webhook_id") or "").strip()
-        action_name = (buffer.get("action_name") or "").strip()
+        buffer = self._get_buffer_snapshot("webhook")
+        code = buffer.get("code", "")
+        webhook_id = buffer.get("webhook_id", "")
+        action_name = buffer.get("action_name", "")
 
         missing: list[str] = []
         if not code:
@@ -401,6 +445,7 @@ class TsuryPhoneButton(
                 code, webhook_id, action_name
             )
             self.coordinator.selected_webhook_code = code
+            self._clear_buffer("webhook")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to add webhook action: {err}") from err
@@ -415,6 +460,7 @@ class TsuryPhoneButton(
         try:
             await self.coordinator.api_client.remove_webhook_action(selected_code)
             self.coordinator.selected_webhook_code = None
+            self._clear_buffer("webhook")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(
@@ -444,7 +490,7 @@ class TsuryPhoneButton(
             return str(error)
 
     @property
-    def extra_state_attributes(self) -> dict[str, any] | None:
+    def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return additional state attributes."""
         state: TsuryPhoneState = self.coordinator.data
         attributes = {}
@@ -496,23 +542,22 @@ class TsuryPhoneButton(
                 attributes["selected_quick_dial"] = None
 
         elif self.entity_description.key == "quick_dial_add":
-            buffer = getattr(self.coordinator, "quick_dial_input", {})
-            code = (buffer.get("code") or "").strip()
-            number = (buffer.get("number") or "").strip()
-            attributes["can_execute"] = bool(code and number and state.connected)
+            buffer = self._get_buffer_snapshot("quick_dial")
+            has_required = self._buffer_has_values("quick_dial", ("code", "number"))
+            attributes["can_execute"] = bool(has_required and state.connected)
             attributes["required_fields"] = ["code", "number"]
-            missing = []
-            if not code:
-                missing.append("code")
-            if not number:
-                missing.append("number")
-            if missing:
-                attributes["missing_fields"] = missing
-            # Snapshot buffered values for UI hints (omit None)
+            if not has_required:
+                missing = [
+                    field
+                    for field in ("code", "number")
+                    if not buffer.get(field)
+                ]
+                if missing:
+                    attributes["missing_fields"] = missing
             attributes["buffer"] = {
-                "code": code,
-                "number": number,
-                "name": (buffer.get("name") or "").strip(),
+                "code": buffer.get("code", ""),
+                "number": buffer.get("number", ""),
+                "name": buffer.get("name", ""),
             }
 
         elif self.entity_description.key == "quick_dial_remove":
@@ -521,14 +566,14 @@ class TsuryPhoneButton(
             attributes["selected_code"] = selected_code
 
         elif self.entity_description.key == "blocked_add":
-            buffer = getattr(self.coordinator, "blocked_input", {})
-            number = (buffer.get("number") or "").strip()
-            attributes["can_execute"] = bool(number and state.connected)
-            if not number:
+            buffer = self._get_buffer_snapshot("blocked")
+            has_required = self._buffer_has_values("blocked", ("number",))
+            attributes["can_execute"] = bool(has_required and state.connected)
+            if not has_required:
                 attributes["missing_fields"] = ["number"]
             attributes["buffer"] = {
-                "number": number,
-                "reason": (buffer.get("reason") or "").strip(),
+                "number": buffer.get("number", ""),
+                "reason": buffer.get("reason", ""),
             }
 
         elif self.entity_description.key == "blocked_remove":
@@ -537,12 +582,12 @@ class TsuryPhoneButton(
             attributes["selected_number"] = selected_number
 
         elif self.entity_description.key == "priority_add":
-            buffer = getattr(self.coordinator, "priority_input", {})
-            number = (buffer.get("number") or "").strip()
-            attributes["can_execute"] = bool(number and state.connected)
-            if not number:
+            buffer = self._get_buffer_snapshot("priority")
+            has_required = self._buffer_has_values("priority", ("number",))
+            attributes["can_execute"] = bool(has_required and state.connected)
+            if not has_required:
                 attributes["missing_fields"] = ["number"]
-            attributes["buffer"] = {"number": number}
+            attributes["buffer"] = {"number": buffer.get("number", "")}
 
         elif self.entity_description.key == "priority_remove":
             selected_number = getattr(self.coordinator, "selected_priority_number", None)
@@ -550,24 +595,23 @@ class TsuryPhoneButton(
             attributes["selected_number"] = selected_number
 
         elif self.entity_description.key == "webhook_add":
-            buffer = getattr(self.coordinator, "webhook_input", {})
-            code = (buffer.get("code") or "").strip()
-            webhook_id = (buffer.get("webhook_id") or "").strip()
-            action_name = (buffer.get("action_name") or "").strip()
-            missing = []
-            if not code:
-                missing.append("code")
-            if not webhook_id:
-                missing.append("webhook_id")
+            buffer = self._get_buffer_snapshot("webhook")
+            has_required = self._buffer_has_values("webhook", ("code", "webhook_id"))
             attributes["required_fields"] = ["code", "webhook_id"]
-            if missing:
-                attributes["missing_fields"] = missing
+            if not has_required:
+                missing = [
+                    field
+                    for field in ("code", "webhook_id")
+                    if not buffer.get(field)
+                ]
+                if missing:
+                    attributes["missing_fields"] = missing
             attributes["buffer"] = {
-                "code": code,
-                "webhook_id": webhook_id,
-                "action_name": action_name,
+                "code": buffer.get("code", ""),
+                "webhook_id": buffer.get("webhook_id", ""),
+                "action_name": buffer.get("action_name", ""),
             }
-            attributes["can_execute"] = bool(not missing and state.connected)
+            attributes["can_execute"] = bool(has_required and state.connected)
 
         elif self.entity_description.key == "webhook_remove":
             selected_code = getattr(self.coordinator, "selected_webhook_code", None)
@@ -643,6 +687,27 @@ class TsuryPhoneButton(
             "webhook_add",
             "webhook_remove",
         ]:
-            return self.coordinator.last_update_success and state.connected
+            if not (self.coordinator.last_update_success and state.connected):
+                return False
+
+            key = self.entity_description.key
+            if key == "quick_dial_add":
+                return self._buffer_has_values("quick_dial", ("code", "number"))
+            if key == "quick_dial_remove":
+                return bool(getattr(self.coordinator, "selected_quick_dial_code", None))
+            if key == "blocked_add":
+                return self._buffer_has_values("blocked", ("number",))
+            if key == "blocked_remove":
+                return bool(getattr(self.coordinator, "selected_blocked_number", None))
+            if key == "priority_add":
+                return self._buffer_has_values("priority", ("number",))
+            if key == "priority_remove":
+                return bool(getattr(self.coordinator, "selected_priority_number", None))
+            if key == "webhook_add":
+                return self._buffer_has_values("webhook", ("code", "webhook_id"))
+            if key == "webhook_remove":
+                return bool(getattr(self.coordinator, "selected_webhook_code", None))
+
+            return False
 
         return self.coordinator.last_update_success

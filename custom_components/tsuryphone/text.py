@@ -37,39 +37,10 @@ class TsuryPhoneTextDescription(TextEntityDescription):
 
 
 TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
-    TsuryPhoneTextDescription(
-        key="quick_dial_code",
-        name="Quick Dial Code",
-        icon="mdi:numeric",
-        entity_category=EntityCategory.CONFIG,
-        max_length=MAX_CODE_LENGTH,
-        buffer_name="quick_dial",
-        field_name="code",
-        placeholder="123",
-    ),
-    TsuryPhoneTextDescription(
-        key="quick_dial_number",
-        name="Quick Dial Number",
-        icon="mdi:phone",
-        entity_category=EntityCategory.CONFIG,
-        max_length=MAX_NUMBER_LENGTH,
-        buffer_name="quick_dial",
-        field_name="number",
-        placeholder="+15551234567",
-    ),
-    TsuryPhoneTextDescription(
-        key="quick_dial_name",
-        name="Quick Dial Name",
-        icon="mdi:account",
-        entity_category=EntityCategory.CONFIG,
-        max_length=MAX_NAME_LENGTH,
-        buffer_name="quick_dial",
-        field_name="name",
-        placeholder="Family",
-    ),
+    # Blocked numbers
     TsuryPhoneTextDescription(
         key="blocked_number",
-        name="Blocked Number",
+        name="Blocked - Number",
         icon="mdi:phone-remove",
         entity_category=EntityCategory.CONFIG,
         max_length=MAX_NUMBER_LENGTH,
@@ -79,7 +50,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
     ),
     TsuryPhoneTextDescription(
         key="blocked_reason",
-        name="Blocked Reason",
+        name="Blocked - Reason",
         icon="mdi:text",
         entity_category=EntityCategory.CONFIG,
         max_length=MAX_REASON_LENGTH,
@@ -87,9 +58,10 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         field_name="reason",
         placeholder="Telemarketer",
     ),
+    # Priority callers
     TsuryPhoneTextDescription(
         key="priority_number",
-        name="Priority Number",
+        name="Priority - Number",
         icon="mdi:star",
         entity_category=EntityCategory.CONFIG,
         max_length=MAX_NUMBER_LENGTH,
@@ -97,9 +69,41 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         field_name="number",
         placeholder="+15557654321",
     ),
+    # Quick dial entries
+    TsuryPhoneTextDescription(
+        key="quick_dial_code",
+        name="Quick Dial - Code",
+        icon="mdi:numeric",
+        entity_category=EntityCategory.CONFIG,
+        max_length=MAX_CODE_LENGTH,
+        buffer_name="quick_dial",
+        field_name="code",
+        placeholder="123",
+    ),
+    TsuryPhoneTextDescription(
+        key="quick_dial_number",
+        name="Quick Dial - Number",
+        icon="mdi:phone",
+        entity_category=EntityCategory.CONFIG,
+        max_length=MAX_NUMBER_LENGTH,
+        buffer_name="quick_dial",
+        field_name="number",
+        placeholder="+15551234567",
+    ),
+    TsuryPhoneTextDescription(
+        key="quick_dial_name",
+        name="Quick Dial - Name",
+        icon="mdi:account",
+        entity_category=EntityCategory.CONFIG,
+        max_length=MAX_NAME_LENGTH,
+        buffer_name="quick_dial",
+        field_name="name",
+        placeholder="Family",
+    ),
+    # Webhook actions
     TsuryPhoneTextDescription(
         key="webhook_code",
-        name="Webhook Code",
+        name="Webhook - Code",
         icon="mdi:webhook",
         entity_category=EntityCategory.CONFIG,
         max_length=MAX_CODE_LENGTH,
@@ -109,7 +113,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
     ),
     TsuryPhoneTextDescription(
         key="webhook_id",
-        name="Webhook ID",
+        name="Webhook - ID",
         icon="mdi:identifier",
         entity_category=EntityCategory.CONFIG,
         max_length=MAX_NAME_LENGTH,
@@ -119,7 +123,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
     ),
     TsuryPhoneTextDescription(
         key="webhook_action_name",
-        name="Webhook Action Name",
+        name="Webhook - Action Name",
         icon="mdi:label",
         entity_category=EntityCategory.CONFIG,
         max_length=MAX_NAME_LENGTH,
