@@ -561,6 +561,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         reason = event.data.get("reason", "unknown")
         _LOGGER.info("Device shutdown: %s", reason)
 
+        # Maintenance mode is a transient runtime flag. After a shutdown the
+        # firmware boots in normal mode, so clear the cached flag proactively
+        # to avoid stale UI state while we wait for fresh telemetry.
+        if self.data.maintenance_mode:
+            _LOGGER.debug(
+                "Clearing maintenance mode due to shutdown event (%s)", reason
+            )
+            self.data.maintenance_mode = False
+
     def _handle_config_event(self, event: TsuryPhoneEvent) -> None:
         """Handle configuration change events."""
         if event.event == ConfigEvent.CONFIG_DELTA:
@@ -949,6 +958,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         _LOGGER.warning("Device reboot detected (seq regression)")
         self._reboot_detected = True
         self.data.reboot_detected = True
+
+        if self.data.maintenance_mode:
+            _LOGGER.debug("Clearing maintenance mode as part of reboot handling")
+            self.data.maintenance_mode = False
 
         # Cancel any active call timer
         self._stop_call_timer()
@@ -1451,6 +1464,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     phone_data.get("currentCallIsPriority")
                 )
 
+            if "isMaintenanceMode" in phone_data:
+                self.data.maintenance_mode = bool(
+                    phone_data.get("isMaintenanceMode")
+                )
+            elif isinstance(phone_data.get("maintenance"), dict):
+                maintenance_info = phone_data.get("maintenance", {})
+                if "enabled" in maintenance_info:
+                    self.data.maintenance_mode = bool(maintenance_info["enabled"])
+
             if "isHookOff" in phone_data:
                 self.data.hook_off = bool(phone_data.get("isHookOff"))
 
@@ -1459,6 +1481,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.current_call_is_priority = bool(
                 device_data.get("currentCallIsPriority")
             )
+
+        if "isMaintenanceMode" in device_data:
+            self.data.maintenance_mode = bool(device_data.get("isMaintenanceMode"))
+        elif "maintenanceMode" in device_data:
+            self.data.maintenance_mode = bool(device_data.get("maintenanceMode"))
+        elif isinstance(device_data.get("maintenance"), dict):
+            maintenance_info = device_data.get("maintenance", {})
+            if "enabled" in maintenance_info:
+                self.data.maintenance_mode = bool(maintenance_info["enabled"])
 
         if "isHookOff" in device_data:
             self.data.hook_off = bool(device_data.get("isHookOff"))
