@@ -93,6 +93,19 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Phase P4: Hybrid model state
         self.selected_quick_dial_code: str | None = None
+        self.selected_blocked_number: str | None = None
+        self.selected_priority_number: str | None = None
+        self.selected_webhook_code: str | None = None
+
+        # User input buffers for device management actions (exposed via text entities)
+        self.quick_dial_input: dict[str, str] = {"code": "", "number": "", "name": ""}
+        self.blocked_input: dict[str, str] = {"number": "", "reason": ""}
+        self.priority_input: dict[str, str] = {"number": ""}
+        self.webhook_input: dict[str, str] = {
+            "code": "",
+            "webhook_id": "",
+            "action_name": "",
+        }
 
         # Phase P5: Notification manager (will be set during setup)
         self._notification_manager = None
@@ -622,6 +635,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         q for q in self.data.quick_dials if q.code != entry.code
                     ]
                     self.data.quick_dials.append(entry)
+                    self._ensure_quick_dial_selection()
                 except (ValueError, KeyError) as err:
                     _LOGGER.warning("Invalid quick dial entry in config delta: %s", err)
             elif action == "remove" and isinstance(value, str):
@@ -629,6 +643,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 self.data.quick_dials = [
                     q for q in self.data.quick_dials if q.code != value
                 ]
+                self._ensure_quick_dial_selection()
         elif key.startswith("blocked."):
             # Blocked numbers list changes
             action = key.split(".", 1)[1]
@@ -642,6 +657,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         b for b in self.data.blocked_numbers if b.number != entry.number
                     ]
                     self.data.blocked_numbers.append(entry)
+                    self._ensure_blocked_selection()
                 except (ValueError, KeyError) as err:
                     _LOGGER.warning(
                         "Invalid blocked number entry in config delta: %s", err
@@ -651,6 +667,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 self.data.blocked_numbers = [
                     b for b in self.data.blocked_numbers if b.number != value
                 ]
+                self._ensure_blocked_selection()
         elif key.startswith("webhook."):
             # Webhook configuration changes
             action = key.split(".", 1)[1]
@@ -667,11 +684,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         w for w in self.data.webhooks if w.code != entry.code
                     ]
                     self.data.webhooks.append(entry)
+                    self._ensure_webhook_selection()
                 except (ValueError, KeyError) as err:
                     _LOGGER.warning("Invalid webhook entry in config delta: %s", err)
             elif action == "remove" and isinstance(value, str):
                 # Remove webhook by code
                 self.data.webhooks = [w for w in self.data.webhooks if w.code != value]
+                self._ensure_webhook_selection()
         elif key.startswith("priority."):
             # Priority callers list changes (firmware emits priority.add / priority.remove)
             action = key.split(".", 1)[1]
@@ -685,6 +704,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         if p.number != entry.number
                     ]
                     self.data.priority_callers.append(entry)
+                    self._ensure_priority_selection()
                 except (ValueError, KeyError) as err:
                     _LOGGER.warning(
                         "Invalid priority caller entry in config delta: %s", err
@@ -693,6 +713,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 self.data.priority_callers = [
                     p for p in self.data.priority_callers if p.number != value
                 ]
+                self._ensure_priority_selection()
         elif key == "maintenance.enabled":
             # Maintenance mode changes
             self.data.maintenance_mode = bool(value)
@@ -763,16 +784,31 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         continue
                     try:
+                        code = (
+                            q.get("code")
+                            or q.get("entry")
+                            or q.get("key")
+                            or q.get("id")
+                            or ""
+                        )
+                        number = (
+                            q.get("number")
+                            or q.get("value")
+                            or q.get("phone")
+                            or ""
+                        )
+                        name = q.get("name") or q.get("label") or ""
                         qd_list.append(
                             QuickDialEntry(
-                                code=q.get("code", ""),
-                                number=q.get("number", ""),
-                                name=q.get("name", ""),
+                                code=str(code),
+                                number=str(number),
+                                name=str(name),
                             )
                         )
                     except Exception:  # noqa: BLE001
                         _LOGGER.debug("Skipping invalid quick dial snapshot entry: %s", q)
             self.data.quick_dials = qd_list
+            self._ensure_quick_dial_selection()
 
             blocked_source = (
                 phone_section.get("blocked")
@@ -790,15 +826,23 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         continue
                     try:
+                        number = (
+                            b.get("number")
+                            or b.get("value")
+                            or b.get("phone")
+                            or ""
+                        )
+                        reason = b.get("reason") or b.get("note") or ""
                         blocked_list.append(
                             BlockedNumberEntry(
-                                number=b.get("number", ""),
-                                reason=b.get("reason", ""),
+                                number=str(number),
+                                reason=str(reason),
                             )
                         )
                     except Exception:  # noqa: BLE001
                         _LOGGER.debug("Skipping invalid blocked snapshot entry: %s", b)
             self.data.blocked_numbers = blocked_list
+            self._ensure_blocked_selection()
 
             priority_source = (
                 phone_section.get("priorityCallers")
@@ -809,11 +853,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if isinstance(priority_source, list):
                 for p in priority_source:
                     try:
-                        number = p.get("number", "") if isinstance(p, dict) else p
-                        priority_list.append(PriorityCallerEntry(number=number))
+                        number = (
+                            p.get("number")
+                            if isinstance(p, dict)
+                            else p
+                        )
+                        priority_list.append(PriorityCallerEntry(number=str(number)))
                     except Exception:  # noqa: BLE001
                         _LOGGER.debug("Skipping invalid priority snapshot entry: %s", p)
             self.data.priority_callers = priority_list
+            self._ensure_priority_selection()
 
             webhook_source = (
                 phone_section.get("webhooks")
@@ -829,17 +878,32 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         continue
                     try:
+                        code = (
+                            w.get("code")
+                            or w.get("entry")
+                            or w.get("key")
+                            or ""
+                        )
+                        webhook_id = (
+                            w.get("id")
+                            or w.get("webhook_id")
+                            or w.get("webhookId")
+                            or ""
+                        )
+                        action_name = w.get("actionName") or w.get("name") or ""
+                        active = w.get("active") if "active" in w else True
                         webhook_list.append(
                             WebhookEntry(
-                                code=w.get("code", ""),
-                                webhook_id=w.get("id", ""),
-                                action_name=w.get("actionName", ""),
-                                active=True,
+                                code=str(code),
+                                webhook_id=str(webhook_id),
+                                action_name=str(action_name),
+                                active=bool(active),
                             )
                         )
                     except Exception:  # noqa: BLE001
                         _LOGGER.debug("Skipping invalid webhook snapshot entry: %s", w)
             self.data.webhooks = webhook_list
+            self._ensure_webhook_selection()
 
             # Audio config
             audio = data.get("audioConfig", {})
@@ -1276,6 +1340,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         except ValueError:
                             pass
                 self.data.priority_callers = pr_list
+                self._ensure_priority_selection()
 
             # Quick dial entries
             quick_dial_source = (
@@ -1292,14 +1357,26 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     try:
                         qd_list.append(
                             QuickDialEntry(
-                                code=q.get("code", ""),
-                                number=q.get("number", ""),
-                                name=q.get("name", ""),
+                                code=str(
+                                    q.get("code")
+                                    or q.get("entry")
+                                    or q.get("key")
+                                    or q.get("id")
+                                    or ""
+                                ),
+                                number=str(
+                                    q.get("number")
+                                    or q.get("value")
+                                    or q.get("phone")
+                                    or ""
+                                ),
+                                name=str(q.get("name") or q.get("label") or ""),
                             )
                         )
                     except Exception:  # noqa: BLE001
                         _LOGGER.debug("Skipping invalid quick dial config entry: %s", q)
                 self.data.quick_dials = qd_list
+                self._ensure_quick_dial_selection()
 
             # Blocked number entries
             blocked_source = (
@@ -1316,13 +1393,19 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     try:
                         blocked_list.append(
                             BlockedNumberEntry(
-                                number=b.get("number", ""),
-                                reason=b.get("reason", ""),
+                                number=str(
+                                    b.get("number")
+                                    or b.get("value")
+                                    or b.get("phone")
+                                    or ""
+                                ),
+                                reason=str(b.get("reason") or b.get("note") or ""),
                             )
                         )
                     except Exception:  # noqa: BLE001
                         _LOGGER.debug("Skipping invalid blocked config entry: %s", b)
                 self.data.blocked_numbers = blocked_list
+                self._ensure_blocked_selection()
 
             # Webhook entries
             webhook_source = (
@@ -1337,15 +1420,26 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     try:
                         webhook_list.append(
                             WebhookEntry(
-                                code=w.get("code", ""),
-                                webhook_id=w.get("id", ""),
-                                action_name=w.get("actionName", ""),
-                                active=True,
+                                code=str(
+                                    w.get("code")
+                                    or w.get("entry")
+                                    or w.get("key")
+                                    or ""
+                                ),
+                                webhook_id=str(
+                                    w.get("id")
+                                    or w.get("webhook_id")
+                                    or w.get("webhookId")
+                                    or ""
+                                ),
+                                action_name=str(w.get("actionName") or w.get("name") or ""),
+                                active=bool(w.get("active", True)),
                             )
                         )
                     except Exception:  # noqa: BLE001
                         _LOGGER.debug("Skipping invalid webhook config entry: %s", w)
                 self.data.webhooks = webhook_list
+                self._ensure_webhook_selection()
 
             # Current call priority flag if exposed in full phone state context
             if "currentCallIsPriority" in phone_data:
@@ -1358,6 +1452,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.current_call_is_priority = bool(
                 device_data.get("currentCallIsPriority")
             )
+
+        # Validate tracked selections after bulk update
+        self._ensure_quick_dial_selection()
+        self._ensure_blocked_selection()
+        self._ensure_priority_selection()
+        self._ensure_webhook_selection()
 
     def _parse_app_state_value(self, value: Any, source: str) -> AppState | None:
         """Normalize various state encodings to AppState."""
@@ -1404,6 +1504,46 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         self._invalid_app_state_values.add(key)
         _LOGGER.warning("Unknown app state value %s from %s", value, source)
+
+    def _ensure_quick_dial_selection(self) -> None:
+        """Clear quick dial selection if entry no longer exists."""
+        if not self.selected_quick_dial_code:
+            return
+
+        if not any(
+            entry.code == self.selected_quick_dial_code for entry in self.data.quick_dials
+        ):
+            self.selected_quick_dial_code = None
+
+    def _ensure_blocked_selection(self) -> None:
+        """Clear blocked number selection if entry no longer exists."""
+        if not self.selected_blocked_number:
+            return
+
+        if not any(
+            entry.number == self.selected_blocked_number
+            for entry in self.data.blocked_numbers
+        ):
+            self.selected_blocked_number = None
+
+    def _ensure_priority_selection(self) -> None:
+        """Clear priority number selection if entry no longer exists."""
+        if not self.selected_priority_number:
+            return
+
+        if not any(
+            entry.number == self.selected_priority_number
+            for entry in self.data.priority_callers
+        ):
+            self.selected_priority_number = None
+
+    def _ensure_webhook_selection(self) -> None:
+        """Clear webhook selection if entry no longer exists."""
+        if not self.selected_webhook_code:
+            return
+
+        if not any(entry.code == self.selected_webhook_code for entry in self.data.webhooks):
+            self.selected_webhook_code = None
 
     def _event_timestamp_iso(self, event: TsuryPhoneEvent) -> str:
         """Return ISO 8601 timestamp for an event's reception time."""

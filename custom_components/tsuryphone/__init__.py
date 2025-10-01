@@ -33,6 +33,7 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.SELECT,
     Platform.BUTTON,
+    Platform.TEXT,
 ]
 
 type TsuryPhoneConfigEntry = ConfigEntry[TsuryPhoneDataUpdateCoordinator]

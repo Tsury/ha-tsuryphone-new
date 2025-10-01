@@ -33,6 +33,24 @@ SELECT_DESCRIPTIONS = (
         name="Quick Dial",
         icon="mdi:speed-dial",
     ),
+    SelectEntityDescription(
+        key="blocked_number",
+        name="Blocked Number",
+        icon="mdi:phone-remove",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SelectEntityDescription(
+        key="priority_number",
+        name="Priority Number",
+        icon="mdi:star",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SelectEntityDescription(
+        key="webhook_action",
+        name="Webhook Action",
+        icon="mdi:webhook",
+        entity_category=EntityCategory.CONFIG,
+    ),
 )
 
 
@@ -82,6 +100,12 @@ class TsuryPhoneSelect(
             return self._get_ring_pattern_options()
         elif self.entity_description.key == "quick_dial":
             return self._get_quick_dial_options()
+        elif self.entity_description.key == "blocked_number":
+            return self._get_blocked_number_options()
+        elif self.entity_description.key == "priority_number":
+            return self._get_priority_number_options()
+        elif self.entity_description.key == "webhook_action":
+            return self._get_webhook_action_options()
         return []
 
     @property
@@ -93,6 +117,12 @@ class TsuryPhoneSelect(
             return self._get_current_ring_pattern_option(state)
         elif self.entity_description.key == "quick_dial":
             return self._get_current_quick_dial_option(state)
+        elif self.entity_description.key == "blocked_number":
+            return self._get_current_blocked_option(state)
+        elif self.entity_description.key == "priority_number":
+            return self._get_current_priority_option(state)
+        elif self.entity_description.key == "webhook_action":
+            return self._get_current_webhook_option(state)
 
         return None
 
@@ -103,6 +133,12 @@ class TsuryPhoneSelect(
                 await self._select_ring_pattern(option)
             elif self.entity_description.key == "quick_dial":
                 await self._select_quick_dial(option)
+            elif self.entity_description.key == "blocked_number":
+                await self._select_blocked_number(option)
+            elif self.entity_description.key == "priority_number":
+                await self._select_priority_number(option)
+            elif self.entity_description.key == "webhook_action":
+                await self._select_webhook_action(option)
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(
                 f"Failed to select option {option}: {err}"
@@ -236,6 +272,119 @@ class TsuryPhoneSelect(
         self.coordinator.selected_quick_dial_code = code
         _LOGGER.debug("Selected quick dial: %s (code: %s)", option, code)
 
+    def _format_blocked_option(self, entry) -> str:
+        """Format blocked number option label."""
+        return f"{entry.number} ({entry.reason})" if entry.reason else entry.number
+
+    def _get_blocked_number_options(self) -> list[str]:
+        """Get blocked number options."""
+        state: TsuryPhoneState = self.coordinator.data
+
+        if not state.blocked_numbers:
+            return ["None"]
+
+        options = ["None"]
+        options.extend(self._format_blocked_option(entry) for entry in state.blocked_numbers)
+        return options
+
+    def _get_current_blocked_option(self, state: TsuryPhoneState) -> str:
+        """Get currently selected blocked number."""
+        if self.coordinator.selected_blocked_number and state.blocked_numbers:
+            for entry in state.blocked_numbers:
+                if entry.number == self.coordinator.selected_blocked_number:
+                    return self._format_blocked_option(entry)
+        return "None"
+
+    async def _select_blocked_number(self, option: str) -> None:
+        """Select a blocked number entry."""
+        if option == "None":
+            self.coordinator.selected_blocked_number = None
+            _LOGGER.debug("Blocked number selection cleared")
+            return
+
+        state: TsuryPhoneState = self.coordinator.data
+        for entry in state.blocked_numbers:
+            if self._format_blocked_option(entry) == option:
+                self.coordinator.selected_blocked_number = entry.number
+                _LOGGER.debug("Selected blocked number: %s", entry.number)
+                return
+
+        raise HomeAssistantError(f"Blocked number selection '{option}' not found")
+
+    def _get_priority_number_options(self) -> list[str]:
+        """Get priority number options."""
+        state: TsuryPhoneState = self.coordinator.data
+        if not state.priority_callers:
+            return ["None"]
+
+        options = ["None"]
+        options.extend(entry.number for entry in state.priority_callers)
+        return options
+
+    def _get_current_priority_option(self, state: TsuryPhoneState) -> str:
+        """Get the currently selected priority number."""
+        if self.coordinator.selected_priority_number and state.priority_callers:
+            for entry in state.priority_callers:
+                if entry.number == self.coordinator.selected_priority_number:
+                    return entry.number
+        return "None"
+
+    async def _select_priority_number(self, option: str) -> None:
+        """Select priority number."""
+        if option == "None":
+            self.coordinator.selected_priority_number = None
+            _LOGGER.debug("Priority selection cleared")
+            return
+
+        state: TsuryPhoneState = self.coordinator.data
+        if any(entry.number == option for entry in state.priority_callers):
+            self.coordinator.selected_priority_number = option
+            _LOGGER.debug("Selected priority number: %s", option)
+            return
+
+        raise HomeAssistantError(f"Priority number '{option}' not found")
+
+    def _format_webhook_option(self, entry) -> str:
+        """Format webhook select label."""
+        base = entry.code or entry.webhook_id
+        if entry.action_name:
+            return f"{entry.action_name} ({base})"
+        return str(base)
+
+    def _get_webhook_action_options(self) -> list[str]:
+        """Get webhook action options."""
+        state: TsuryPhoneState = self.coordinator.data
+        if not state.webhooks:
+            return ["None"]
+
+        options = ["None"]
+        options.extend(self._format_webhook_option(entry) for entry in state.webhooks)
+        return options
+
+    def _get_current_webhook_option(self, state: TsuryPhoneState) -> str:
+        """Get the currently selected webhook option."""
+        if self.coordinator.selected_webhook_code and state.webhooks:
+            for entry in state.webhooks:
+                if entry.code == self.coordinator.selected_webhook_code:
+                    return self._format_webhook_option(entry)
+        return "None"
+
+    async def _select_webhook_action(self, option: str) -> None:
+        """Select webhook action."""
+        if option == "None":
+            self.coordinator.selected_webhook_code = None
+            _LOGGER.debug("Webhook selection cleared")
+            return
+
+        state: TsuryPhoneState = self.coordinator.data
+        for entry in state.webhooks:
+            if self._format_webhook_option(entry) == option:
+                self.coordinator.selected_webhook_code = entry.code
+                _LOGGER.debug("Selected webhook action: %s", entry.code)
+                return
+
+        raise HomeAssistantError(f"Webhook action '{option}' not found")
+
     @property
     def extra_state_attributes(self) -> dict[str, any] | None:
         """Return additional state attributes."""
@@ -286,6 +435,37 @@ class TsuryPhoneSelect(
                             attributes["selected_number"] = entry.number
                             attributes["selected_name"] = entry.name
                             break
+        elif self.entity_description.key == "blocked_number":
+            attributes["total_blocked"] = state.blocked_count
+            if state.blocked_numbers:
+                attributes["blocked_numbers"] = [
+                    {"number": entry.number, "reason": entry.reason}
+                    for entry in state.blocked_numbers
+                ]
+            if self.coordinator.selected_blocked_number:
+                attributes["selected_number"] = self.coordinator.selected_blocked_number
+        elif self.entity_description.key == "priority_number":
+            attributes["total_priority"] = len(state.priority_callers)
+            if state.priority_callers:
+                attributes["priority_numbers"] = [
+                    entry.number for entry in state.priority_callers
+                ]
+            if self.coordinator.selected_priority_number:
+                attributes["selected_number"] = self.coordinator.selected_priority_number
+        elif self.entity_description.key == "webhook_action":
+            attributes["total_webhooks"] = len(state.webhooks)
+            if state.webhooks:
+                attributes["webhooks"] = [
+                    {
+                        "code": entry.code,
+                        "webhook_id": entry.webhook_id,
+                        "action_name": entry.action_name,
+                        "active": entry.active,
+                    }
+                    for entry in state.webhooks
+                ]
+            if self.coordinator.selected_webhook_code:
+                attributes["selected_code"] = self.coordinator.selected_webhook_code
 
         # Add connection status for troubleshooting
         if not state.connected:
