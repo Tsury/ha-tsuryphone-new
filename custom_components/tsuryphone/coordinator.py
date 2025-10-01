@@ -24,6 +24,9 @@ from .models import (
     DeviceInfo,
     CallHistoryEntry,
     PriorityCallerEntry,
+    QuickDialEntry,
+    BlockedNumberEntry,
+    WebhookEntry,
 )
 from .const import (
     DOMAIN,
@@ -609,8 +612,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if action == "add" and isinstance(value, dict):
                 # Add new quick dial entry
                 try:
-                    from .models import QuickDialEntry
-
                     entry = QuickDialEntry(
                         code=value.get("code", ""),
                         number=value.get("number", ""),
@@ -633,8 +634,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             action = key.split(".", 1)[1]
             if action == "add" and isinstance(value, dict):
                 try:
-                    from .models import BlockedNumberEntry
-
                     entry = BlockedNumberEntry(
                         number=value.get("number", ""), reason=value.get("reason", "")
                     )
@@ -657,8 +656,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             action = key.split(".", 1)[1]
             if action == "add" and isinstance(value, dict):
                 try:
-                    from .models import WebhookEntry
-
                     entry = WebhookEntry(
                         code=value.get("code", ""),
                         webhook_id=value.get("id", ""),
@@ -748,64 +745,100 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.stats.rssi_dbm = data.get("rssi", self.data.stats.rssi_dbm)
 
             # Lists (quick dials, blocked, priority, webhooks)
-            from .models import (
-                QuickDialEntry,
-                BlockedNumberEntry,
-                PriorityCallerEntry,
-                WebhookEntry,
-            )
+            phone_section = data.get("phone") or {}
 
-            qd_list = []
-            for q in data.get("quickDials", []):
-                try:
-                    qd_list.append(
-                        QuickDialEntry(
-                            code=q.get("code", ""),
-                            number=q.get("number", ""),
-                            name=q.get("name", ""),
+            quick_dial_source = (
+                phone_section.get("quickDial")
+                or phone_section.get("quickDialEntries")
+                or data.get("quickDial")
+                or data.get("quickDials")
+                or []
+            )
+            qd_list: list[QuickDialEntry] = []
+            if isinstance(quick_dial_source, list):
+                for q in quick_dial_source:
+                    if not isinstance(q, dict):
+                        _LOGGER.debug(
+                            "Skipping quick dial snapshot entry with invalid type: %s", q
                         )
-                    )
-                except Exception:  # noqa: BLE001
-                    _LOGGER.debug("Skipping invalid quick dial snapshot entry: %s", q)
+                        continue
+                    try:
+                        qd_list.append(
+                            QuickDialEntry(
+                                code=q.get("code", ""),
+                                number=q.get("number", ""),
+                                name=q.get("name", ""),
+                            )
+                        )
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.debug("Skipping invalid quick dial snapshot entry: %s", q)
             self.data.quick_dials = qd_list
 
-            blocked_list = []
-            for b in data.get("blockedNumbers", []):
-                try:
-                    blocked_list.append(
-                        BlockedNumberEntry(
-                            number=b.get("number", ""), reason=b.get("reason", "")
+            blocked_source = (
+                phone_section.get("blocked")
+                or phone_section.get("blockedNumbers")
+                or data.get("blocked")
+                or data.get("blockedNumbers")
+                or []
+            )
+            blocked_list: list[BlockedNumberEntry] = []
+            if isinstance(blocked_source, list):
+                for b in blocked_source:
+                    if not isinstance(b, dict):
+                        _LOGGER.debug(
+                            "Skipping blocked snapshot entry with invalid type: %s", b
                         )
-                    )
-                except Exception:  # noqa: BLE001
-                    _LOGGER.debug("Skipping invalid blocked snapshot entry: %s", b)
+                        continue
+                    try:
+                        blocked_list.append(
+                            BlockedNumberEntry(
+                                number=b.get("number", ""),
+                                reason=b.get("reason", ""),
+                            )
+                        )
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.debug("Skipping invalid blocked snapshot entry: %s", b)
             self.data.blocked_numbers = blocked_list
 
-            priority_list = []
-            for p in data.get("priorityCallers", []):
-                try:
-                    priority_list.append(
-                        PriorityCallerEntry(
-                            number=p.get("number", "") if isinstance(p, dict) else p
-                        )
-                    )
-                except Exception:  # noqa: BLE001
-                    _LOGGER.debug("Skipping invalid priority snapshot entry: %s", p)
+            priority_source = (
+                phone_section.get("priorityCallers")
+                or data.get("priorityCallers")
+                or []
+            )
+            priority_list: list[PriorityCallerEntry] = []
+            if isinstance(priority_source, list):
+                for p in priority_source:
+                    try:
+                        number = p.get("number", "") if isinstance(p, dict) else p
+                        priority_list.append(PriorityCallerEntry(number=number))
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.debug("Skipping invalid priority snapshot entry: %s", p)
             self.data.priority_callers = priority_list
 
-            webhook_list = []
-            for w in data.get("webhooks", []):
-                try:
-                    webhook_list.append(
-                        WebhookEntry(
-                            code=w.get("code", ""),
-                            webhook_id=w.get("id", ""),
-                            action_name=w.get("actionName", ""),
-                            active=True,
+            webhook_source = (
+                phone_section.get("webhooks")
+                or data.get("webhooks")
+                or []
+            )
+            webhook_list: list[WebhookEntry] = []
+            if isinstance(webhook_source, list):
+                for w in webhook_source:
+                    if not isinstance(w, dict):
+                        _LOGGER.debug(
+                            "Skipping webhook snapshot entry with invalid type: %s", w
                         )
-                    )
-                except Exception:  # noqa: BLE001
-                    _LOGGER.debug("Skipping invalid webhook snapshot entry: %s", w)
+                        continue
+                    try:
+                        webhook_list.append(
+                            WebhookEntry(
+                                code=w.get("code", ""),
+                                webhook_id=w.get("id", ""),
+                                action_name=w.get("actionName", ""),
+                                active=True,
+                            )
+                        )
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.debug("Skipping invalid webhook snapshot entry: %s", w)
             self.data.webhooks = webhook_list
 
             # Audio config
@@ -1243,6 +1276,76 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         except ValueError:
                             pass
                 self.data.priority_callers = pr_list
+
+            # Quick dial entries
+            quick_dial_source = (
+                phone_data.get("quickDial")
+                or phone_data.get("quickDialEntries")
+                or device_data.get("quickDial")
+                or device_data.get("quickDials")
+            )
+            if isinstance(quick_dial_source, list):
+                qd_list: list[QuickDialEntry] = []
+                for q in quick_dial_source:
+                    if not isinstance(q, dict):
+                        continue
+                    try:
+                        qd_list.append(
+                            QuickDialEntry(
+                                code=q.get("code", ""),
+                                number=q.get("number", ""),
+                                name=q.get("name", ""),
+                            )
+                        )
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.debug("Skipping invalid quick dial config entry: %s", q)
+                self.data.quick_dials = qd_list
+
+            # Blocked number entries
+            blocked_source = (
+                phone_data.get("blocked")
+                or phone_data.get("blockedNumbers")
+                or device_data.get("blocked")
+                or device_data.get("blockedNumbers")
+            )
+            if isinstance(blocked_source, list):
+                blocked_list: list[BlockedNumberEntry] = []
+                for b in blocked_source:
+                    if not isinstance(b, dict):
+                        continue
+                    try:
+                        blocked_list.append(
+                            BlockedNumberEntry(
+                                number=b.get("number", ""),
+                                reason=b.get("reason", ""),
+                            )
+                        )
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.debug("Skipping invalid blocked config entry: %s", b)
+                self.data.blocked_numbers = blocked_list
+
+            # Webhook entries
+            webhook_source = (
+                phone_data.get("webhooks")
+                or device_data.get("webhooks")
+            )
+            if isinstance(webhook_source, list):
+                webhook_list: list[WebhookEntry] = []
+                for w in webhook_source:
+                    if not isinstance(w, dict):
+                        continue
+                    try:
+                        webhook_list.append(
+                            WebhookEntry(
+                                code=w.get("code", ""),
+                                webhook_id=w.get("id", ""),
+                                action_name=w.get("actionName", ""),
+                                active=True,
+                            )
+                        )
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.debug("Skipping invalid webhook config entry: %s", w)
+                self.data.webhooks = webhook_list
 
             # Current call priority flag if exposed in full phone state context
             if "currentCallIsPriority" in phone_data:
