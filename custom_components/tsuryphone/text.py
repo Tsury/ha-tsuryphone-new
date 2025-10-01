@@ -8,11 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from homeassistant.components.text import (
-    TextEntity,
-    TextEntityDescription,
-    TextEntityMode,
-)
+from homeassistant.components.text import TextEntity, TextEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -46,7 +42,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:numeric",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_CODE_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="quick_dial",
         field_name="code",
         placeholder="123",
@@ -57,7 +52,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:phone",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_NUMBER_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="quick_dial",
         field_name="number",
         placeholder="+15551234567",
@@ -68,7 +62,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:account",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_NAME_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="quick_dial",
         field_name="name",
         placeholder="Family",
@@ -79,7 +72,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:phone-remove",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_NUMBER_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="blocked",
         field_name="number",
         placeholder="+15559876543",
@@ -90,7 +82,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:text",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_REASON_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="blocked",
         field_name="reason",
         placeholder="Telemarketer",
@@ -101,7 +92,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:star",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_NUMBER_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="priority",
         field_name="number",
         placeholder="+15557654321",
@@ -112,7 +102,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:webhook",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_CODE_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="webhook",
         field_name="code",
         placeholder="W1",
@@ -123,7 +112,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:identifier",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_NAME_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="webhook",
         field_name="webhook_id",
         placeholder="homeassistant_webhook",
@@ -134,7 +122,6 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         icon="mdi:label",
         entity_category=EntityCategory.CONFIG,
         native_max_length=MAX_NAME_LENGTH,
-        mode=TextEntityMode.TEXT,
         buffer_name="webhook",
         field_name="action_name",
         placeholder="Door Unlock",
@@ -176,7 +163,9 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
 
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
         self._attr_device_info = get_device_info(device_info)
-        self._attr_mode = description.mode or TextEntityMode.TEXT
+        # TextEntityMode is not available on all Home Assistant versions.
+        # Fall back to the string literal which is supported across releases.
+        self._attr_mode = getattr(description, "mode", None) or "text"
         self._attr_native_max_length = description.native_max_length
         self._attr_native_min_length = 0
 
