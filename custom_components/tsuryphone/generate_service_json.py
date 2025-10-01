@@ -19,6 +19,18 @@ def _load_yaml(path: Path) -> Dict[str, Any]:
         return yaml.safe_load(handle) or {}
 
 
+def _stringify(value: Any) -> str:
+    """Convert translation values to strings suitable for Home Assistant."""
+
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float, bool)):
+        return json.dumps(value, ensure_ascii=False)
+    return json.dumps(value, ensure_ascii=False)
+
+
 def _build_translations(services: Dict[str, Any]) -> Dict[str, Any]:
     translations: Dict[str, Any] = {}
     for service_key, service_data in sorted(services.items()):
@@ -28,7 +40,7 @@ def _build_translations(services: Dict[str, Any]) -> Dict[str, Any]:
         entry: Dict[str, Any] = {}
         for key in ("name", "description", "response"):
             if key in service_data:
-                entry[key] = service_data[key]
+                entry[key] = _stringify(service_data[key])
 
         fields = service_data.get("fields")
         if isinstance(fields, dict) and fields:
@@ -39,7 +51,7 @@ def _build_translations(services: Dict[str, Any]) -> Dict[str, Any]:
                 field_entry: Dict[str, Any] = {}
                 for key in ("name", "description", "example"):
                     if key in field_data:
-                        field_entry[key] = field_data[key]
+                        field_entry[key] = _stringify(field_data[key])
                 if field_entry:
                     translated_fields[field_key] = field_entry
             if translated_fields:

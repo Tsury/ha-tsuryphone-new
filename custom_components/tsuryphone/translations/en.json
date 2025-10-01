@@ -206,7 +206,7 @@
         "clear_existing": {
           "name": "Clear existing entries",
           "description": "Remove existing blocked numbers before importing.",
-          "example": true
+          "example": "true"
         },
         "entries": {
           "name": "Entries",
@@ -233,12 +233,12 @@
         "keep_last": {
           "name": "Keep last",
           "description": "Keep the specified number of most recent entries.",
-          "example": 100
+          "example": "100"
         },
         "older_than_days": {
           "name": "Older than (days)",
           "description": "Remove entries older than the specified number of days.",
-          "example": 30
+          "example": "30"
         }
       }
     },
@@ -271,7 +271,7 @@
         "limit": {
           "name": "Limit",
           "description": "Maximum number of entries to return.",
-          "example": 50
+          "example": "50"
         }
       }
     },
@@ -349,7 +349,7 @@
         "clear_existing": {
           "name": "Clear existing entries",
           "description": "Remove existing quick dial entries before importing.",
-          "example": true
+          "example": "true"
         },
         "entries": {
           "name": "Entries",
@@ -414,22 +414,22 @@
         "earpiece_gain": {
           "name": "Earpiece gain",
           "description": "Value between 1 and 7.",
-          "example": 5
+          "example": "5"
         },
         "earpiece_volume": {
           "name": "Earpiece volume",
           "description": "Value between 1 and 7.",
-          "example": 4
+          "example": "4"
         },
         "speaker_gain": {
           "name": "Speaker gain",
           "description": "Value between 1 and 7.",
-          "example": 5
+          "example": "5"
         },
         "speaker_volume": {
           "name": "Speaker volume",
           "description": "Value between 1 and 7.",
-          "example": 6
+          "example": "6"
         }
       }
     },
@@ -440,32 +440,32 @@
         "end_hour": {
           "name": "End hour",
           "description": "End hour (0-23).",
-          "example": 7
+          "example": "7"
         },
         "end_minute": {
           "name": "End minute",
           "description": "End minute (0-59).",
-          "example": 0
+          "example": "0"
         },
         "force": {
           "name": "Force DND",
           "description": "Force DND mode on or off.",
-          "example": true
+          "example": "true"
         },
         "scheduled": {
           "name": "Scheduled DND",
           "description": "Enable scheduled DND handling.",
-          "example": true
+          "example": "true"
         },
         "start_hour": {
           "name": "Start hour",
           "description": "Start hour (0-23).",
-          "example": 22
+          "example": "22"
         },
         "start_minute": {
           "name": "Start minute",
           "description": "Start minute (0-59).",
-          "example": 30
+          "example": "30"
         }
       }
     },
@@ -487,7 +487,7 @@
         "enabled": {
           "name": "Enabled",
           "description": "Whether maintenance mode should be enabled.",
-          "example": true
+          "example": "true"
         }
       }
     },
