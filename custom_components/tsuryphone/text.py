@@ -192,7 +192,7 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
 
         # Normalize whitespace and enforce max length if provided
         normalized = value.strip()
-        max_length = self.entity_description.native_max_length
+        max_length = self.entity_description.max_length
         if max_length is not None and len(normalized) > max_length:
             normalized = normalized[:max_length]
 
