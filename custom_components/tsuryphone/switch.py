@@ -28,6 +28,12 @@ SWITCH_DESCRIPTIONS = (
         icon="mdi:phone-off",
     ),
     SwitchEntityDescription(
+        key="dnd_schedule_enabled",
+        name="DND Schedule Enabled",
+        icon="mdi:calendar-clock",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SwitchEntityDescription(
         key="maintenance_mode",
         name="Maintenance Mode",
         icon="mdi:wrench",
@@ -82,6 +88,8 @@ class TsuryPhoneSwitch(
 
         if self.entity_description.key == "force_dnd":
             return state.dnd_config.force
+        elif self.entity_description.key == "dnd_schedule_enabled":
+            return state.dnd_config.scheduled
         elif self.entity_description.key == "maintenance_mode":
             return state.maintenance_mode
 
@@ -92,6 +100,8 @@ class TsuryPhoneSwitch(
         try:
             if self.entity_description.key == "force_dnd":
                 await self._set_dnd_force(True)
+            elif self.entity_description.key == "dnd_schedule_enabled":
+                await self._set_dnd_schedule_enabled(True)
             elif self.entity_description.key == "maintenance_mode":
                 await self._set_maintenance_mode(True)
         except TsuryPhoneAPIError as err:
@@ -102,6 +112,8 @@ class TsuryPhoneSwitch(
         try:
             if self.entity_description.key == "force_dnd":
                 await self._set_dnd_force(False)
+            elif self.entity_description.key == "dnd_schedule_enabled":
+                await self._set_dnd_schedule_enabled(False)
             elif self.entity_description.key == "maintenance_mode":
                 await self._set_maintenance_mode(False)
         except TsuryPhoneAPIError as err:
@@ -126,6 +138,17 @@ class TsuryPhoneSwitch(
 
         # Update local state optimistically
         self.coordinator.data.maintenance_mode = enabled
+
+        # Trigger coordinator update
+        await self.coordinator.async_request_refresh()
+
+    async def _set_dnd_schedule_enabled(self, enabled: bool) -> None:
+        """Set DND scheduled mode."""
+
+        await self.coordinator.api_client.set_dnd({"scheduled": enabled})
+
+        # Update local state optimistically
+        self.coordinator.data.dnd_config.scheduled = enabled
 
         # Trigger coordinator update
         await self.coordinator.async_request_refresh()
@@ -155,6 +178,16 @@ class TsuryPhoneSwitch(
                 attributes["schedule_enabled"] = False
 
             # Show current DND active state
+            attributes["dnd_currently_active"] = state.dnd_active
+
+        elif self.entity_description.key == "dnd_schedule_enabled":
+            attributes["schedule_enabled"] = state.dnd_config.scheduled
+            attributes["schedule_start"] = (
+                f"{state.dnd_config.start_hour:02d}:{state.dnd_config.start_minute:02d}"
+            )
+            attributes["schedule_end"] = (
+                f"{state.dnd_config.end_hour:02d}:{state.dnd_config.end_minute:02d}"
+            )
             attributes["dnd_currently_active"] = state.dnd_active
 
         elif self.entity_description.key == "maintenance_mode":
