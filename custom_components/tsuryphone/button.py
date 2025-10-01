@@ -308,7 +308,18 @@ class TsuryPhoneButton(
             "reset",
             "toggle_call_waiting",
         ]:
-            return self.coordinator.last_update_success and state.connected
+            if not (self.coordinator.last_update_success and state.connected):
+                return False
+
+            if self.entity_description.key == "answer":
+                return bool(
+                    state.is_incoming_call
+                    or state.is_call_active
+                    or state.is_dialing
+                    or state.ringing
+                )
+
+            return True
 
         # Data refresh buttons can work if we have coordinator data
         elif self.entity_description.key in ["refetch", "refresh_snapshot"]:
