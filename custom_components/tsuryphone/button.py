@@ -656,6 +656,14 @@ class TsuryPhoneButton(
                     or state.is_dialing
                     or state.ringing
                 )
+            if self.entity_description.key == "hangup":
+                return bool(
+                    state.is_call_active
+                    or state.is_incoming_call
+                    or state.is_dialing
+                )
+            if self.entity_description.key == "toggle_call_waiting":
+                return state.call_waiting_available
 
             return True
 

@@ -246,7 +246,10 @@ class TsuryPhoneSelect(
         # Phase P4: Store selection in coordinator for hybrid model
         if option == "None":
             # Clear selection
+            previous = self.coordinator.selected_quick_dial_code
             self.coordinator.selected_quick_dial_code = None
+            if previous is not None:
+                self.coordinator.async_update_listeners()
             _LOGGER.debug("Quick dial selection cleared")
             return
 
@@ -269,7 +272,10 @@ class TsuryPhoneSelect(
                 )
 
         # Store selection in coordinator
+        previous = self.coordinator.selected_quick_dial_code
         self.coordinator.selected_quick_dial_code = code
+        if previous != code:
+            self.coordinator.async_update_listeners()
         _LOGGER.debug("Selected quick dial: %s (code: %s)", option, code)
 
     def _format_blocked_option(self, entry) -> str:
@@ -298,14 +304,20 @@ class TsuryPhoneSelect(
     async def _select_blocked_number(self, option: str) -> None:
         """Select a blocked number entry."""
         if option == "None":
+            previous = self.coordinator.selected_blocked_number
             self.coordinator.selected_blocked_number = None
+            if previous is not None:
+                self.coordinator.async_update_listeners()
             _LOGGER.debug("Blocked number selection cleared")
             return
 
         state: TsuryPhoneState = self.coordinator.data
         for entry in state.blocked_numbers:
             if self._format_blocked_option(entry) == option:
+                previous = self.coordinator.selected_blocked_number
                 self.coordinator.selected_blocked_number = entry.number
+                if previous != entry.number:
+                    self.coordinator.async_update_listeners()
                 _LOGGER.debug("Selected blocked number: %s", entry.number)
                 return
 
@@ -332,13 +344,19 @@ class TsuryPhoneSelect(
     async def _select_priority_number(self, option: str) -> None:
         """Select priority number."""
         if option == "None":
+            previous = self.coordinator.selected_priority_number
             self.coordinator.selected_priority_number = None
+            if previous is not None:
+                self.coordinator.async_update_listeners()
             _LOGGER.debug("Priority selection cleared")
             return
 
         state: TsuryPhoneState = self.coordinator.data
         if any(entry.number == option for entry in state.priority_callers):
+            previous = self.coordinator.selected_priority_number
             self.coordinator.selected_priority_number = option
+            if previous != option:
+                self.coordinator.async_update_listeners()
             _LOGGER.debug("Selected priority number: %s", option)
             return
 
@@ -372,14 +390,20 @@ class TsuryPhoneSelect(
     async def _select_webhook_action(self, option: str) -> None:
         """Select webhook action."""
         if option == "None":
+            previous = self.coordinator.selected_webhook_code
             self.coordinator.selected_webhook_code = None
+            if previous is not None:
+                self.coordinator.async_update_listeners()
             _LOGGER.debug("Webhook selection cleared")
             return
 
         state: TsuryPhoneState = self.coordinator.data
         for entry in state.webhooks:
             if self._format_webhook_option(entry) == option:
+                previous = self.coordinator.selected_webhook_code
                 self.coordinator.selected_webhook_code = entry.code
+                if previous != entry.code:
+                    self.coordinator.async_update_listeners()
                 _LOGGER.debug("Selected webhook action: %s", entry.code)
                 return
 

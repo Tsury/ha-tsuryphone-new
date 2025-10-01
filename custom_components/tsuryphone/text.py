@@ -200,7 +200,12 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         if max_length is not None and len(normalized) > max_length:
             normalized = normalized[:max_length]
 
-        buffer[self.entity_description.field_name] = normalized
+        field_name = self.entity_description.field_name
+        current = buffer.get(field_name, "")
+
+        buffer[field_name] = normalized
+        if current != normalized:
+            self.coordinator.async_update_listeners()
         self.async_write_ha_state()
 
     @property
