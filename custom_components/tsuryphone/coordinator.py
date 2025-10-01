@@ -106,6 +106,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             "webhook_id": "",
             "action_name": "",
         }
+        self.dnd_schedule_input: dict[str, str] = {
+            "start_hour": "",
+            "start_minute": "",
+            "end_hour": "",
+            "end_minute": "",
+        }
 
         # Phase P5: Notification manager (will be set during setup)
         self._notification_manager = None
