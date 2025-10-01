@@ -30,6 +30,7 @@ from .const import (
     SERVICE_RING_DEVICE,
     SERVICE_SET_RING_PATTERN,
     SERVICE_RESET_DEVICE,
+    SERVICE_FACTORY_RESET_DEVICE,
     SERVICE_SET_DND,
     SERVICE_SET_AUDIO,
     SERVICE_GET_CALL_HISTORY,
@@ -597,6 +598,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to reset device: {err}") from err
 
+    async def async_factory_reset_device(call: ServiceCall) -> None:
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+
+        try:
+            await coordinator.api_client.factory_reset_device()
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(
+                f"Failed to factory reset device: {err}"
+            ) from err
+
     async def async_set_dnd(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
@@ -1086,6 +1098,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         (SERVICE_RING_DEVICE, async_ring_device, RING_DEVICE_SCHEMA),
         (SERVICE_SET_RING_PATTERN, async_set_ring_pattern, SET_RING_PATTERN_SCHEMA),
         (SERVICE_RESET_DEVICE, async_reset_device, DEVICE_ONLY_SCHEMA),
+        (
+            SERVICE_FACTORY_RESET_DEVICE,
+            async_factory_reset_device,
+            DEVICE_ONLY_SCHEMA,
+        ),
         (SERVICE_SET_DND, async_set_dnd, SET_DND_SCHEMA),
         (SERVICE_SET_AUDIO, async_set_audio, SET_AUDIO_SCHEMA),
         (SERVICE_GET_CALL_HISTORY, async_get_call_history, CALL_HISTORY_SCHEMA),

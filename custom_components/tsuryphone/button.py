@@ -98,6 +98,12 @@ BUTTON_DESCRIPTIONS = (
         entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
+        key="factory_reset",
+        name="Device - Factory Reset",
+        icon="mdi:factory",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    ButtonEntityDescription(
         key="refetch",
         name="Device - Refresh Data",
         icon="mdi:refresh",
@@ -205,6 +211,8 @@ class TsuryPhoneButton(
                 await self._ring_device()
             elif self.entity_description.key == "reset":
                 await self._reset_device()
+            elif self.entity_description.key == "factory_reset":
+                await self._factory_reset_device()
             elif self.entity_description.key == "refetch":
                 await self._refetch_data()
             elif self.entity_description.key == "refresh_snapshot":
@@ -262,6 +270,10 @@ class TsuryPhoneButton(
     async def _reset_device(self) -> None:
         """Reset the device."""
         await self.coordinator.api_client.reset_device()
+
+    async def _factory_reset_device(self) -> None:
+        """Factory reset the device."""
+        await self.coordinator.api_client.factory_reset_device()
 
     async def _refetch_data(self) -> None:
         """Refetch all device data."""

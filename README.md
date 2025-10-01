@@ -14,6 +14,7 @@ Local integration for the TsuryPhone firmware: real‑time phone state, call con
 - Audio configuration (earpiece & speaker volume + mic gain)
 - Ring pattern set & presets
 - Maintenance mode toggle
+- Factory reset trigger from Home Assistant
 - Handset hook status sensor for automations
 - Webhook action codes (dial short code triggers HA automations)
 - Call history (cached locally for retention)
@@ -42,7 +43,7 @@ Adjustable later via the integration Options (retention, verbosity, etc.).
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Binary Sensors    | Ringing, In Call, Handset Off Hook, Do Not Disturb, Maintenance Mode, Call Waiting Available                                               |
 | Sensors           | Phone State, Current Call Number, Call Duration, Last Call Number, Signal Strength, Memory, Call Counters, Quick Dial Count, Blocked Count |
-| Buttons           | Answer, Hang Up, Ring Device, Reset Device, Refresh Data, Toggle Call Waiting                                                              |
+| Buttons           | Answer, Hang Up, Ring Device, Reset Device, Factory Reset Device, Refresh Data, Toggle Call Waiting                                        |
 | Numbers / Selects | Audio levels, ring pattern selection (when exposed)                                                                                        |
 | Switch / Others   | (Subject to future expansion)                                                                                                              |
 
@@ -66,6 +67,7 @@ Less frequently needed / diagnostic entities default to disabled in the registry
 | `tsuryphone.dial_quick_dial`       | Dial quick dial code            | `device_id`, `code`                                     |
 | `tsuryphone.refetch_all`           | Force device full refetch       | `device_id`                                             |
 | `tsuryphone.reset_device`          | Reboot device                   | `device_id`                                             |
+| `tsuryphone.factory_reset_device`  | Wipe config, stats, Wi-Fi, reboot | `device_id`                                             |
 
 Additional advanced / diagnostic services are listed in the appendix.
 
@@ -161,6 +163,7 @@ In addition to core services listed earlier:
 - `tsuryphone.get_diagnostics`
 - `tsuryphone.get_missed_calls`
 - `tsuryphone.set_ha_url`
+- `tsuryphone.factory_reset_device`
 - Resilience / diagnostics: `tsuryphone.resilience_status`, `tsuryphone.resilience_test`, `tsuryphone.websocket_reconnect`, `tsuryphone.run_health_check`
 
 ### Appendix: Event Naming Pattern

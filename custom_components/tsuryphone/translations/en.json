@@ -171,6 +171,9 @@
       "dial_selected": {
         "name": "Dial Selected Quick Dial"
       },
+      "factory_reset": {
+        "name": "Factory Reset Device"
+      },
       "toggle_call_waiting": {
         "name": "Toggle Call Waiting"
       }
@@ -382,6 +385,10 @@
     "reset_device": {
       "name": "Reset device",
       "description": "Reboot the TsuryPhone device."
+    },
+    "factory_reset_device": {
+      "name": "Factory reset device",
+      "description": "Wipe stored configuration, statistics, and Wi-Fi credentials, then reboot the TsuryPhone device."
     },
     "resilience_status": {
       "name": "Get resilience status",

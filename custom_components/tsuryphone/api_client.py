@@ -20,6 +20,7 @@ from .const import (
     API_CALL_HANGUP,
     API_CALL_SWITCH_CALL_WAITING,
     API_SYSTEM_RESET,
+    API_SYSTEM_FACTORY_RESET,
     API_SYSTEM_RING,
     API_CONFIG_DND,
     API_CONFIG_MAINTENANCE,
@@ -187,6 +188,10 @@ class TsuryPhoneAPIClient:
     async def reset_device(self) -> dict[str, Any]:
         """Reset the device."""
         return await self._request("POST", API_SYSTEM_RESET)
+
+    async def factory_reset_device(self) -> dict[str, Any]:
+        """Factory reset the device."""
+        return await self._request("POST", API_SYSTEM_FACTORY_RESET)
 
     async def ring_device(self, pattern: str | None = None) -> dict[str, Any]:
         """Ring the device with optional pattern."""
