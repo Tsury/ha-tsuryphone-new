@@ -164,13 +164,8 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
 
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
         self._attr_device_info = get_device_info(device_info)
-        # TextEntityMode is not available on all Home Assistant versions.
-        # Fall back to the string literal which is supported across releases.
-        self._attr_mode = getattr(description, "mode", None) or "text"
-        native_max = getattr(description, "native_max_length", None)
-        if native_max is None:
-            native_max = description.max_length
-        self._attr_native_max_length = native_max
+        self._attr_mode = "text"
+        self._attr_native_max_length = description.max_length
         self._attr_native_min_length = 0
 
     @property
