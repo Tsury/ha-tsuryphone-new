@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.exceptions import HomeAssistantError
 
 from . import TsuryPhoneConfigEntry, get_device_info
 from .const import (
@@ -24,6 +25,7 @@ from .const import (
     MAX_REASON_LENGTH,
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
+from .api_client import TsuryPhoneAPIError
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -206,6 +208,7 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         super().__init__(coordinator)
         self.entity_description = description
         self._device_info = device_info
+        self._is_dnd_field = description.buffer_name == "dnd_schedule"
 
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
         self._attr_device_info = get_device_info(device_info)
@@ -216,6 +219,16 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
     @property
     def native_value(self) -> str:
         """Return the current buffered value."""
+        if self._is_dnd_field:
+            dnd_config = self.coordinator.data.dnd_config
+            value = getattr(dnd_config, self.entity_description.field_name, None)
+            if value is None:
+                return ""
+            try:
+                return f"{int(value):02d}"
+            except (TypeError, ValueError):
+                return str(value)
+
         buffer = getattr(
             self.coordinator,
             f"{self.entity_description.buffer_name}_input",
@@ -227,6 +240,10 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
 
     async def async_set_value(self, value: str) -> None:
         """Update the buffered value and expose it to dependent buttons."""
+        if self._is_dnd_field:
+            await self._async_set_dnd_field(value)
+            return
+
         buffer = getattr(
             self.coordinator,
             f"{self.entity_description.buffer_name}_input",
@@ -263,3 +280,59 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
     def available(self) -> bool:
         """Text entities are available whenever the coordinator has data."""
         return self.coordinator.last_update_success
+
+    async def _async_set_dnd_field(self, value: str) -> None:
+        """Apply DND schedule changes immediately when edited."""
+        normalized = value.strip()
+        field_name = self.entity_description.field_name
+
+        if not normalized:
+            raise HomeAssistantError("Enter a value before updating the schedule")
+
+        if not normalized.isdigit():
+            raise HomeAssistantError("Use numeric values for the DND schedule")
+
+        number = int(normalized)
+
+        ranges = {
+            "start_hour": (0, 23),
+            "end_hour": (0, 23),
+            "start_minute": (0, 59),
+            "end_minute": (0, 59),
+        }
+
+        if field_name not in ranges:
+            raise HomeAssistantError("Unsupported DND field")
+
+        min_value, max_value = ranges[field_name]
+        if not (min_value <= number <= max_value):
+            raise HomeAssistantError(
+                f"Value must be between {min_value} and {max_value}"
+            )
+
+        payload_field_map = {
+            "start_hour": "startHour",
+            "start_minute": "startMinute",
+            "end_hour": "endHour",
+            "end_minute": "endMinute",
+        }
+
+        dnd_config = self.coordinator.data.dnd_config
+        payload = {
+            "startHour": dnd_config.start_hour,
+            "startMinute": dnd_config.start_minute,
+            "endHour": dnd_config.end_hour,
+            "endMinute": dnd_config.end_minute,
+        }
+
+        payload[payload_field_map[field_name]] = number
+
+        try:
+            await self.coordinator.api_client.set_dnd(payload)
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(f"Failed to update DND schedule: {err}") from err
+
+        # Update coordinator state optimistically
+        setattr(dnd_config, field_name, number)
+        self.coordinator.async_update_listeners()
+        self.async_write_ha_state()

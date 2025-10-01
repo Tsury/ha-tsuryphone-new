@@ -86,12 +86,6 @@ BUTTON_DESCRIPTIONS = (
         entity_category=EntityCategory.CONFIG,
     ),
     ButtonEntityDescription(
-        key="dnd_update_schedule",
-        name="DND - Update Schedule",
-        icon="mdi:calendar-clock",
-        entity_category=EntityCategory.CONFIG,
-    ),
-    ButtonEntityDescription(
         key="ring",
         name="Device - Ring",
         icon="mdi:phone-ring",
@@ -121,27 +115,6 @@ BUTTON_DESCRIPTIONS = (
         icon="mdi:phone-plus",
     ),
 )
-
-DND_REQUIRED_FIELDS: tuple[str, ...] = (
-    "start_hour",
-    "start_minute",
-    "end_hour",
-    "end_minute",
-)
-
-DND_FIELD_RANGES: dict[str, tuple[int, int]] = {
-    "start_hour": (0, 23),
-    "end_hour": (0, 23),
-    "start_minute": (0, 59),
-    "end_minute": (0, 59),
-}
-
-DND_FIELD_LABELS: dict[str, str] = {
-    "start_hour": "start hour",
-    "start_minute": "start minute",
-    "end_hour": "end hour",
-    "end_minute": "end minute",
-}
 
 
 async def async_setup_entry(
@@ -221,43 +194,6 @@ class TsuryPhoneButton(
         # Notify dependent entities (text inputs) so UI clears immediately
         self.coordinator.async_update_listeners()
 
-    def _validate_dnd_schedule_inputs(
-        self,
-    ) -> tuple[dict[str, str], list[str], dict[str, str], dict[str, int], bool]:
-        """Validate DND schedule buffer and parse integer values."""
-
-        buffer = self._get_buffer_snapshot("dnd_schedule")
-        missing = [field for field in DND_REQUIRED_FIELDS if not buffer.get(field)]
-
-        invalid: dict[str, str] = {}
-        values: dict[str, int] = {}
-
-        for field in DND_REQUIRED_FIELDS:
-            raw_value = buffer.get(field, "")
-            if not raw_value:
-                continue
-
-            try:
-                int_value = int(raw_value)
-            except ValueError:
-                invalid[field] = "Enter an integer value"
-                continue
-
-            min_value, max_value = DND_FIELD_RANGES[field]
-            if not (min_value <= int_value <= max_value):
-                invalid[field] = f"Value must be between {min_value} and {max_value}"
-                continue
-
-            values[field] = int_value
-
-        valid = (
-            not missing
-            and not invalid
-            and len(values) == len(DND_REQUIRED_FIELDS)
-        )
-
-        return buffer, missing, invalid, values, valid
-
     async def async_press(self) -> None:
         """Handle the button press."""
         try:
@@ -291,8 +227,6 @@ class TsuryPhoneButton(
                 await self._add_webhook_action()
             elif self.entity_description.key == "webhook_remove":
                 await self._remove_selected_webhook()
-            elif self.entity_description.key == "dnd_update_schedule":
-                await self._update_dnd_schedule()
             elif self.entity_description.key == "toggle_call_waiting":
                 await self._toggle_call_waiting()
         except TsuryPhoneAPIError as err:
@@ -542,61 +476,6 @@ class TsuryPhoneButton(
 
         await self.coordinator.api_client.switch_call_waiting()
 
-    async def _update_dnd_schedule(self) -> None:
-        """Update the DND schedule using buffered inputs."""
-
-        (
-            _buffer,
-            missing,
-            invalid,
-            values,
-            valid,
-        ) = self._validate_dnd_schedule_inputs()
-
-        if missing:
-            missing_labels = ", ".join(
-                DND_FIELD_LABELS[field] for field in missing
-            )
-            raise HomeAssistantError(
-                "DND schedule input missing required field(s): " + missing_labels
-            )
-
-        if invalid:
-            invalid_labels = "; ".join(
-                f"{DND_FIELD_LABELS[field]}: {reason}"
-                for field, reason in invalid.items()
-            )
-            raise HomeAssistantError(
-                "DND schedule input has invalid value(s): " + invalid_labels
-            )
-
-        if not valid:
-            # Should not happen, but guard against unexpected state
-            raise HomeAssistantError("DND schedule input is not valid")
-
-        payload = {
-            "startHour": values["start_hour"],
-            "startMinute": values["start_minute"],
-            "endHour": values["end_hour"],
-            "endMinute": values["end_minute"],
-        }
-
-        try:
-            await self.coordinator.api_client.set_dnd(payload)
-
-            # Update local model optimistically
-            dnd_config = self.coordinator.data.dnd_config
-            dnd_config.start_hour = values["start_hour"]
-            dnd_config.start_minute = values["start_minute"]
-            dnd_config.end_hour = values["end_hour"]
-            dnd_config.end_minute = values["end_minute"]
-
-            self._clear_buffer("dnd_schedule")
-
-            await self.coordinator.async_request_refresh()
-        except TsuryPhoneAPIError as err:
-            raise HomeAssistantError(f"Failed to update DND schedule: {err}") from err
-
     def _get_user_friendly_error(self, error: TsuryPhoneAPIError) -> str:
         """Convert API error to user-friendly message."""
         if self.coordinator.api_client.is_api_error_code(
@@ -739,40 +618,6 @@ class TsuryPhoneButton(
             attributes["can_execute"] = bool(selected_code and state.connected)
             attributes["selected_code"] = selected_code
 
-        elif self.entity_description.key == "dnd_update_schedule":
-            (
-                buffer,
-                missing,
-                invalid,
-                values,
-                valid,
-            ) = self._validate_dnd_schedule_inputs()
-            attributes["required_fields"] = list(DND_REQUIRED_FIELDS)
-            attributes["buffer"] = buffer
-            if missing:
-                attributes["missing_fields"] = [
-                    DND_FIELD_LABELS[field] for field in missing
-                ]
-            if invalid:
-                attributes["invalid_fields"] = {
-                    DND_FIELD_LABELS[field]: reason
-                    for field, reason in invalid.items()
-                }
-
-            attributes["current_schedule"] = {
-                "scheduled": state.dnd_config.scheduled,
-                "start": f"{state.dnd_config.start_hour:02d}:{state.dnd_config.start_minute:02d}",
-                "end": f"{state.dnd_config.end_hour:02d}:{state.dnd_config.end_minute:02d}",
-            }
-
-            if valid:
-                attributes["proposed_schedule"] = {
-                    "start": f"{values['start_hour']:02d}:{values['start_minute']:02d}",
-                    "end": f"{values['end_hour']:02d}:{values['end_minute']:02d}",
-                }
-
-            attributes["can_execute"] = bool(valid and state.connected)
-
         elif self.entity_description.key in ["refetch", "refresh_snapshot"]:
             # Show last update time
             if hasattr(self.coordinator, "last_update_time"):
@@ -849,7 +694,6 @@ class TsuryPhoneButton(
             "priority_remove",
             "webhook_add",
             "webhook_remove",
-            "dnd_update_schedule",
         ]:
             if not (self.coordinator.last_update_success and state.connected):
                 return False
@@ -871,15 +715,6 @@ class TsuryPhoneButton(
                 return self._buffer_has_values("webhook", ("code", "webhook_id"))
             if key == "webhook_remove":
                 return bool(getattr(self.coordinator, "selected_webhook_code", None))
-            if key == "dnd_update_schedule":
-                (
-                    _buffer,
-                    _missing,
-                    _invalid,
-                    _values,
-                    valid,
-                ) = self._validate_dnd_schedule_inputs()
-                return valid
 
             return False
 
