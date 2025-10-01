@@ -62,6 +62,7 @@ from .const import (
     SERVICE_RESILIENCE_TEST,
     SERVICE_WEBSOCKET_RECONNECT,
     SERVICE_RUN_HEALTH_CHECK,
+    INTEGRATION_EVENT_SCHEMA_VERSION,
     AUDIO_MIN_LEVEL,
     AUDIO_MAX_LEVEL,
     RING_PATTERN_PRESETS,
@@ -454,7 +455,7 @@ async def async_resilience_test(call: ServiceCall) -> ServiceResponse:
     elif test_type == "sequence":
         # Test sequence handling by simulating events
         test_event_data = {
-            "schemaVersion": 2,
+            "schemaVersion": INTEGRATION_EVENT_SCHEMA_VERSION,
             "seq": coordinator.data.last_seq + 1,
             "ts": int(time.time() * 1000),
             "integration": "ha",

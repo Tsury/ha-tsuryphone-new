@@ -36,6 +36,11 @@ BINARY_SENSOR_DESCRIPTIONS = (
         device_class=BinarySensorDeviceClass.PROBLEM,
     ),
     BinarySensorEntityDescription(
+        key="hook_off",
+        name="Handset Off Hook",
+        icon="mdi:phone-hangup",
+    ),
+    BinarySensorEntityDescription(
         key="in_call",
         name="In Call",
         icon="mdi:phone-in-talk",
@@ -104,6 +109,8 @@ class TsuryPhoneBinarySensor(
             return state.dnd_active
         elif self.entity_description.key == "maintenance_mode":
             return state.maintenance_mode
+        elif self.entity_description.key == "hook_off":
+            return state.hook_off
         elif self.entity_description.key == "in_call":
             return state.is_call_active
         elif self.entity_description.key == "call_waiting_available":
@@ -151,6 +158,8 @@ class TsuryPhoneBinarySensor(
             # Add incoming call details when ringing
             if state.ringing and state.current_call.number:
                 attributes["incoming_number"] = state.current_call.number
+        elif self.entity_description.key == "hook_off":
+            attributes["handset"] = "off_hook" if state.hook_off else "on_hook"
         elif self.entity_description.key == "current_call_priority":
             # Add current priority call number if flag active
             if state.current_call_is_priority and state.current_call.number:

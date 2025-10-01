@@ -14,6 +14,7 @@ Local integration for the TsuryPhone firmware: real‑time phone state, call con
 - Audio configuration (earpiece & speaker volume + mic gain)
 - Ring pattern set & presets
 - Maintenance mode toggle
+- Handset hook status sensor for automations
 - Webhook action codes (dial short code triggers HA automations)
 - Call history (cached locally for retention)
 - Missed/blocked call notifications (optional)
@@ -39,7 +40,7 @@ Adjustable later via the integration Options (retention, verbosity, etc.).
 
 | Category          | Examples                                                                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Binary Sensors    | Ringing, In Call, Do Not Disturb, Maintenance Mode, Call Waiting Available                                                                 |
+| Binary Sensors    | Ringing, In Call, Handset Off Hook, Do Not Disturb, Maintenance Mode, Call Waiting Available                                               |
 | Sensors           | Phone State, Current Call Number, Call Duration, Last Call Number, Signal Strength, Memory, Call Counters, Quick Dial Count, Blocked Count |
 | Buttons           | Answer, Hang Up, Ring Device, Reset Device, Refresh Data, Toggle Call Waiting                                                              |
 | Numbers / Selects | Audio levels, ring pattern selection (when exposed)                                                                                        |

@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any
 from datetime import datetime
 
-from .const import AppState, EventCategory
+from .const import AppState, EventCategory, INTEGRATION_EVENT_SCHEMA_VERSION
 
 
 class CallDirection(str, Enum):
@@ -247,6 +247,7 @@ class TsuryPhoneState:
     ringing: bool = False
     dnd_active: bool = False
     maintenance_mode: bool = False
+    hook_off: bool = False
     call_waiting_available: bool = False
 
     # Device stats
@@ -364,7 +365,7 @@ class TsuryPhoneEvent:
     def from_json(cls, data: dict[str, Any]) -> TsuryPhoneEvent:
         """Create event from JSON data."""
         return cls(
-            schema_version=data.get("schemaVersion", 2),
+            schema_version=data.get("schemaVersion", INTEGRATION_EVENT_SCHEMA_VERSION),
             seq=data.get("seq", 0),
             ts=data.get("ts", 0),
             integration=data.get("integration", "ha"),

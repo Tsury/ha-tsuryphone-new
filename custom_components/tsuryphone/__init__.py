@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
@@ -36,7 +34,7 @@ PLATFORMS: list[Platform] = [
     Platform.TEXT,
 ]
 
-type TsuryPhoneConfigEntry = ConfigEntry[TsuryPhoneDataUpdateCoordinator]
+TsuryPhoneConfigEntry = ConfigEntry[TsuryPhoneDataUpdateCoordinator]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

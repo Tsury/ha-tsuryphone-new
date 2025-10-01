@@ -1022,6 +1022,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if "isMaintenanceMode" in event.data:
             self.data.maintenance_mode = bool(event.data["isMaintenanceMode"])
 
+        # Extract hook state if present
+        if "isHookOff" in event.data:
+            self.data.hook_off = bool(event.data["isHookOff"])
+
         # Extract system metrics if present (from addSystemInfo)
         if "freeHeap" in event.data:
             self.data.stats.free_heap_bytes = event.data["freeHeap"]
@@ -1453,11 +1457,17 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     phone_data.get("currentCallIsPriority")
                 )
 
+            if "isHookOff" in phone_data:
+                self.data.hook_off = bool(phone_data.get("isHookOff"))
+
         # Extract global fields that may appear outside phone section
         if "currentCallIsPriority" in device_data:
             self.data.current_call_is_priority = bool(
                 device_data.get("currentCallIsPriority")
             )
+
+        if "isHookOff" in device_data:
+            self.data.hook_off = bool(device_data.get("isHookOff"))
 
         # Validate tracked selections after bulk update
         self._ensure_quick_dial_selection()

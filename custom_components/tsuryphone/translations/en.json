@@ -53,11 +53,17 @@
       "maintenance_mode": {
         "name": "Maintenance Mode"
       },
+      "hook_off": {
+        "name": "Handset Off Hook"
+      },
       "in_call": {
         "name": "In Call"
       },
       "call_waiting_available": {
         "name": "Call Waiting Available"
+      },
+      "current_call_priority": {
+        "name": "Priority Call Active"
       }
     },
     "sensor": {

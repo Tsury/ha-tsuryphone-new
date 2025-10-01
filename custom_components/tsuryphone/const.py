@@ -13,7 +13,7 @@ DEFAULT_PORT: Final = 8080
 WEBSOCKET_PATH: Final = "/ws"
 
 # Integration event schema
-INTEGRATION_EVENT_SCHEMA_VERSION: Final = 2
+INTEGRATION_EVENT_SCHEMA_VERSION: Final = 3
 INTEGRATION_TAG: Final = "ha"
 
 # mDNS discovery
