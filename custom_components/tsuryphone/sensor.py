@@ -70,7 +70,6 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:wifi-strength-2",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         native_unit_of_measurement="dBm",
-        state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
@@ -79,7 +78,6 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:memory",
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
-        state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
@@ -116,7 +114,6 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:phone-in-talk",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
