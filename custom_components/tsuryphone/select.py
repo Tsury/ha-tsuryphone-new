@@ -17,7 +17,7 @@ from . import get_device_info, TsuryPhoneConfigEntry
 from .api_client import TsuryPhoneAPIError
 from .const import DOMAIN, RING_PATTERN_PRESETS
 from .coordinator import TsuryPhoneDataUpdateCoordinator
-from .models import TsuryPhoneState
+from .models import QuickDialEntry, TsuryPhoneState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,6 +86,7 @@ class TsuryPhoneSelect(
         super().__init__(coordinator)
         self.entity_description = description
         self._device_info = device_info
+        self._quick_dial_option_map: dict[str, str | None] = {}
 
         # Generate unique ID
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
@@ -201,25 +202,32 @@ class TsuryPhoneSelect(
         # Trigger coordinator update
         await self.coordinator.async_request_refresh()
 
+    def _format_quick_dial_option(self, entry: QuickDialEntry) -> str:
+        """Return a user-facing label for a quick dial entry."""
+        if entry.name:
+            base = f"{entry.name} ({entry.code})"
+        else:
+            base = entry.code
+
+        return f"{base} – {entry.number}" if entry.number else base
+
+    def _build_quick_dial_option_map(
+        self, state: TsuryPhoneState
+    ) -> dict[str, str | None]:
+        """Build and cache option->code mapping for quick dial select."""
+        option_map: dict[str, str | None] = {"None": None}
+
+        for entry in state.quick_dials or []:
+            label = self._format_quick_dial_option(entry)
+            option_map[label] = entry.code
+
+        self._quick_dial_option_map = option_map
+        return option_map
+
     def _get_quick_dial_options(self) -> list[str]:
         """Get quick dial options."""
-        state: TsuryPhoneState = self.coordinator.data
-
-        if not state.quick_dials:
-            return ["None"]
-
-        # Format: "Name (CODE)" if name exists, otherwise just "CODE"
-        options = []
-        for entry in state.quick_dials:
-            if entry.name:
-                options.append(f"{entry.name} ({entry.code})")
-            else:
-                options.append(entry.code)
-
-        # Add "None" option to deselect
-        options.insert(0, "None")
-
-        return options
+        option_map = self._build_quick_dial_option_map(self.coordinator.data)
+        return list(option_map.keys())
 
     def _get_current_quick_dial_option(self, state: TsuryPhoneState) -> str | None:
         """Get current quick dial selection."""
@@ -229,14 +237,10 @@ class TsuryPhoneSelect(
             and self.coordinator.selected_quick_dial_code
         ):
             selected_code = self.coordinator.selected_quick_dial_code
-            # Find the entry with this code
-            if state.quick_dials:
-                for entry in state.quick_dials:
-                    if entry.code == selected_code:
-                        if entry.name:
-                            return f"{entry.name} ({entry.code})"
-                        else:
-                            return entry.code
+            option_map = self._build_quick_dial_option_map(state)
+            for option_label, code in option_map.items():
+                if code == selected_code:
+                    return option_label
 
         # Default to "None" if nothing selected or selection not found
         return "None"
@@ -244,8 +248,12 @@ class TsuryPhoneSelect(
     async def _select_quick_dial(self, option: str) -> None:
         """Select quick dial option."""
         # Phase P4: Store selection in coordinator for hybrid model
+        option_map = self._quick_dial_option_map
+        state: TsuryPhoneState = self.coordinator.data
+        if option_map is None or option not in option_map:
+            option_map = self._build_quick_dial_option_map(state)
+
         if option == "None":
-            # Clear selection
             previous = self.coordinator.selected_quick_dial_code
             self.coordinator.selected_quick_dial_code = None
             if previous is not None:
@@ -253,25 +261,15 @@ class TsuryPhoneSelect(
             _LOGGER.debug("Quick dial selection cleared")
             return
 
-        # Parse the option to extract code
-        # Format is either "Name (CODE)" or just "CODE"
-        if "(" in option and option.endswith(")"):
-            # Extract code from "Name (CODE)" format
-            code = option.split("(")[-1].rstrip(")")
-        else:
-            # Option is just the code
-            code = option
+        code = option_map.get(option)
+        if not code:
+            raise HomeAssistantError(f"Unknown quick dial option: {option}")
 
-        # Validate the code exists in current quick dials
-        state: TsuryPhoneState = self.coordinator.data
-        if state.quick_dials:
-            valid_codes = [entry.code for entry in state.quick_dials]
-            if code not in valid_codes:
-                raise HomeAssistantError(
-                    f"Quick dial code '{code}' not found in current list"
-                )
+        if state.quick_dials and code not in [entry.code for entry in state.quick_dials]:
+            raise HomeAssistantError(
+                f"Quick dial code '{code}' not found in current list"
+            )
 
-        # Store selection in coordinator
         previous = self.coordinator.selected_quick_dial_code
         self.coordinator.selected_quick_dial_code = code
         if previous != code:

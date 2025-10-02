@@ -559,13 +559,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     ) -> str | None:
         if call_type:
             normalized = str(call_type).strip().lower()
-            legacy_map = {
-                "incoming": "incoming_answered",
-                "outgoing": "outgoing_answered",
-                "blocked": "incoming_blocked",
-                "missed": "incoming_missed",
-            }
-            return legacy_map.get(normalized, normalized)
+            if normalized in {"incoming", "outgoing", "blocked", "missed"}:
+                _LOGGER.debug(
+                    "Discarding legacy call type value from firmware: %s", normalized
+                )
+                return None
+            return normalized
 
         if is_incoming is None:
             return None
@@ -581,13 +580,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         normalized = str(call_type).strip().lower()
         mapping: dict[str, bool] = {
-            "incoming": True,
             "incoming_answered": True,
             "incoming_missed": True,
             "incoming_blocked": True,
-            "blocked": True,
-            "missed": True,
-            "outgoing": False,
             "outgoing_answered": False,
             "outgoing_unanswered": False,
         }
@@ -698,6 +693,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         else:
             self.data.ringing = new_state == AppState.INCOMING_CALL_RING
 
+        reset_call_state = False
+
         if (
             previous_state
             and new_state
@@ -709,23 +706,34 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             and new_state == AppState.IDLE
         ):
             self._detect_missed_call(event)
+            reset_call_state = True
 
         if previous_state == AppState.DIALING and new_state == AppState.IDLE:
             self._detect_unanswered_outgoing(event)
+            reset_call_state = True
 
-        if new_state == AppState.IDLE and self.data.current_call.number:
-            self._update_last_call_info(
-                self.data.current_call.number,
-                is_incoming=self.data.current_call.is_incoming,
-                call_start_ts=self.data.current_call.call_start_ts
-                or self.data.current_call.start_time,
-                duration_ms=0,
-                call_type=(
-                    "incoming_answered"
-                    if self.data.current_call.is_incoming
-                    else "outgoing_answered"
-                ),
-            )
+        if new_state == AppState.IDLE:
+            if previous_state == AppState.IN_CALL and self.data.current_call.number:
+                self._update_last_call_info(
+                    self.data.current_call.number,
+                    is_incoming=self.data.current_call.is_incoming,
+                    call_start_ts=self.data.current_call.call_start_ts
+                    or self.data.current_call.start_time,
+                    duration_ms=0,
+                    call_type=(
+                        "incoming_answered"
+                        if self.data.current_call.is_incoming
+                        else "outgoing_answered"
+                    ),
+                )
+            if (
+                self.data.current_call.number
+                or self.data.current_dialing_number
+                or self.data.ringing
+            ):
+                reset_call_state = True
+
+        if reset_call_state:
             self._reset_current_call_state()
 
     def _handle_dialing_update(self, event: TsuryPhoneEvent) -> None:
