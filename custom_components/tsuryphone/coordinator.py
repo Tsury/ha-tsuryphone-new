@@ -120,12 +120,50 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._reboot_detected = False
         self._last_refetch_time: float = 0
         self._invalid_app_state_values: set[str] = set()
+        self._invalid_bool_values: set[str] = set()
 
     def _ensure_state(self) -> TsuryPhoneState:
         """Ensure coordinator state object exists."""
         if self.data is None:
             self.data = TsuryPhoneState(device_info=self.device_info)
         return self.data
+
+    def _coerce_bool(
+        self,
+        value: Any,
+        field: str,
+        *,
+        default: bool | None = False,
+    ) -> bool:
+        """Normalize incoming boolean-like values from firmware payloads."""
+
+        if isinstance(value, bool):
+            return value
+
+        if value is None:
+            return default if default is not None else False
+
+        if isinstance(value, (int, float)):
+            return value != 0
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if not normalized:
+                return default if default is not None else False
+            if normalized in {"true", "1", "yes", "on", "y"}:
+                return True
+            if normalized in {"false", "0", "no", "off", "n"}:
+                return False
+
+        key = f"{field}:{value!r}"
+        if key not in self._invalid_bool_values:
+            self._invalid_bool_values.add(key)
+            _LOGGER.debug("Unexpected boolean value for %s: %r", field, value)
+
+        if default is not None:
+            return default
+
+        return bool(value)
 
     async def _async_setup(self) -> None:
         """Set up the coordinator."""
@@ -456,10 +494,25 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract additional firmware fields per schema
         if "dndActive" in event.data:
-            self.data.dnd_active = bool(event.data["dndActive"])
+            self.data.dnd_active = self._coerce_bool(
+                event.data["dndActive"],
+                "event.dndActive",
+                default=self.data.dnd_active,
+            )
 
         if "isMaintenanceMode" in event.data:
-            self.data.maintenance_mode = bool(event.data["isMaintenanceMode"])
+            self.data.maintenance_mode = self._coerce_bool(
+                event.data["isMaintenanceMode"],
+                "event.isMaintenanceMode",
+                default=self.data.maintenance_mode,
+            )
+
+        if "isHookOff" in event.data:
+            self.data.hook_off = self._coerce_bool(
+                event.data["isHookOff"],
+                "event.isHookOff",
+                default=self.data.hook_off,
+            )
 
         # Update current call number if provided
         current_call_number = event.data.get("currentCallNumber", "")
@@ -473,14 +526,22 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Handle incoming call direction
         if event.data.get("isIncomingCall") is not None:
-            self.data.current_call.is_incoming = event.data.get("isIncomingCall")
+            self.data.current_call.is_incoming = self._coerce_bool(
+                event.data["isIncomingCall"],
+                "event.isIncomingCall",
+                default=self.data.current_call.is_incoming,
+            )
 
         # Update derived states
-        self.data.ringing = event.data.get(
-            "isRinging", new_state == AppState.INCOMING_CALL_RING
-        )
+        if "isRinging" in event.data:
+            self.data.ringing = self._coerce_bool(
+                event.data["isRinging"],
+                "event.isRinging",
+                default=self.data.ringing,
+            )
+        else:
+            self.data.ringing = new_state == AppState.INCOMING_CALL_RING
 
-        # Detect missed calls (R52)
         if (
             previous_state
             and new_state
@@ -499,12 +560,21 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _handle_ring_state(self, event: TsuryPhoneEvent) -> None:
         """Handle ring state change."""
-        self.data.ringing = event.data.get("isRinging", False)
+        if "isRinging" in event.data:
+            self.data.ringing = self._coerce_bool(
+                event.data["isRinging"],
+                "event.isRinging",
+                default=self.data.ringing,
+            )
 
     def _handle_dnd_state(self, event: TsuryPhoneEvent) -> None:
         """Handle DND state change."""
         if "dndActive" in event.data:
-            self.data.dnd_active = bool(event.data["dndActive"])
+            self.data.dnd_active = self._coerce_bool(
+                event.data["dndActive"],
+                "event.dndActive",
+                default=self.data.dnd_active,
+            )
 
     def _handle_call_info_update(self, event: TsuryPhoneEvent) -> None:
         """Handle supplementary call info."""
@@ -513,12 +583,17 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if current_number:
             self.data.current_call.number = current_number
 
-    def _handle_system_event(self, event: TsuryPhoneEvent) -> None:
-        """Handle system events."""
-        if event.event == "stats":
-            self._handle_stats_update(event)
-        elif event.event == "status":
+            if "dndActive" in event.data:
+                self.data.dnd_active = self._coerce_bool(
+                    event.data["dndActive"],
+                    "event.dndActive",
+                )
             self._handle_status_update(event)
+            if "isMaintenanceMode" in event.data:
+                self.data.maintenance_mode = self._coerce_bool(
+                    event.data["isMaintenanceMode"],
+                    "event.isMaintenanceMode",
+                )
         elif event.event == "error":
             self._handle_system_error(event)
         elif event.event == "shutdown":
@@ -627,7 +702,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 setattr(self.data.dnd_config, model_field, value)
                 # Update active DND status if needed
                 if dnd_field == "force":
-                    self.data.dnd_active = bool(value) or self.data.dnd_active
+                    forced = self._coerce_bool(
+                        value,
+                        "config.delta.dnd.force",
+                        default=self.data.dnd_active,
+                    )
+                    self.data.dnd_active = forced or self.data.dnd_active
         elif key.startswith("quick_dial."):
             # Quick dial list changes
             action = key.split(".", 1)[1]
@@ -725,7 +805,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 self._ensure_priority_selection()
         elif key == "maintenance.enabled":
             # Maintenance mode changes
-            self.data.maintenance_mode = bool(value)
+            self.data.maintenance_mode = self._coerce_bool(
+                value,
+                "config.delta.maintenance.enabled",
+                default=self.data.maintenance_mode,
+            )
         else:
             _LOGGER.debug("Unhandled config delta key: %s", key)
 
@@ -749,19 +833,35 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             )
 
             # Phone state info
-            self.data.dnd_active = data.get("dndActive", self.data.dnd_active)
-            self.data.ringing = data.get("isRinging", self.data.ringing)
-            self.data.maintenance_mode = data.get(
-                "isMaintenanceMode", self.data.maintenance_mode
-            )
+            if "dndActive" in data:
+                self.data.dnd_active = self._coerce_bool(
+                    data["dndActive"],
+                    "snapshot.dndActive",
+                    default=self.data.dnd_active,
+                )
+            if "isRinging" in data:
+                self.data.ringing = self._coerce_bool(
+                    data["isRinging"],
+                    "snapshot.isRinging",
+                    default=self.data.ringing,
+                )
+            if "isMaintenanceMode" in data:
+                self.data.maintenance_mode = self._coerce_bool(
+                    data["isMaintenanceMode"],
+                    "snapshot.isMaintenanceMode",
+                    default=self.data.maintenance_mode,
+                )
 
             # Call info
             call_number = data.get("currentCallNumber", "")
             if call_number:
                 self.data.current_call.number = call_number
-            self.data.current_call.is_incoming = data.get(
-                "isIncomingCall", self.data.current_call.is_incoming
-            )
+            if "isIncomingCall" in data:
+                self.data.current_call.is_incoming = self._coerce_bool(
+                    data["isIncomingCall"],
+                    "snapshot.isIncomingCall",
+                    default=self.data.current_call.is_incoming,
+                )
             if data.get("callStartTs"):
                 self.data.current_call.start_ts = data.get("callStartTs")
 
@@ -906,7 +1006,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                                 code=str(code),
                                 webhook_id=str(webhook_id),
                                 action_name=str(action_name),
-                                active=bool(active),
+                                active=self._coerce_bool(
+                                    active,
+                                    "snapshot.webhooks.active",
+                                    default=True,
+                                ),
                             )
                         )
                     except Exception:  # noqa: BLE001
@@ -1023,15 +1127,27 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract DND status if present
         if "dndActive" in event.data:
-            self.data.dnd_active = bool(event.data["dndActive"])
+            self.data.dnd_active = self._coerce_bool(
+                event.data["dndActive"],
+                "event.context.dndActive",
+                default=self.data.dnd_active,
+            )
 
         # Extract maintenance mode if present
         if "isMaintenanceMode" in event.data:
-            self.data.maintenance_mode = bool(event.data["isMaintenanceMode"])
+            self.data.maintenance_mode = self._coerce_bool(
+                event.data["isMaintenanceMode"],
+                "event.context.isMaintenanceMode",
+                default=self.data.maintenance_mode,
+            )
 
         # Extract hook state if present
         if "isHookOff" in event.data:
-            self.data.hook_off = bool(event.data["isHookOff"])
+            self.data.hook_off = self._coerce_bool(
+                event.data["isHookOff"],
+                "event.context.isHookOff",
+                default=self.data.hook_off,
+            )
 
         # Extract system metrics if present (from addSystemInfo)
         if "freeHeap" in event.data:
@@ -1043,7 +1159,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract call info if present
         if "isIncomingCall" in event.data:
-            self.data.current_call.is_incoming = bool(event.data["isIncomingCall"])
+            self.data.current_call.is_incoming = self._coerce_bool(
+                event.data["isIncomingCall"],
+                "event.context.isIncomingCall",
+                default=self.data.current_call.is_incoming,
+            )
 
         # Extract call waiting info if available (firmware debt R61)
         if "callWaitingId" in event.data:
@@ -1450,7 +1570,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                                     or ""
                                 ),
                                 action_name=str(w.get("actionName") or w.get("name") or ""),
-                                active=bool(w.get("active", True)),
+                                active=self._coerce_bool(
+                                    w.get("active", True),
+                                    "config.webhooks.active",
+                                    default=True,
+                                ),
                             )
                         )
                     except Exception:  # noqa: BLE001
@@ -1460,39 +1584,69 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
             # Current call priority flag if exposed in full phone state context
             if "currentCallIsPriority" in phone_data:
-                self.data.current_call_is_priority = bool(
-                    phone_data.get("currentCallIsPriority")
+                self.data.current_call_is_priority = self._coerce_bool(
+                    phone_data.get("currentCallIsPriority"),
+                    "config.phone.currentCallIsPriority",
+                    default=self.data.current_call_is_priority,
                 )
 
             if "isMaintenanceMode" in phone_data:
-                self.data.maintenance_mode = bool(
-                    phone_data.get("isMaintenanceMode")
+                self.data.maintenance_mode = self._coerce_bool(
+                    phone_data.get("isMaintenanceMode"),
+                    "config.phone.isMaintenanceMode",
+                    default=self.data.maintenance_mode,
                 )
             elif isinstance(phone_data.get("maintenance"), dict):
                 maintenance_info = phone_data.get("maintenance", {})
                 if "enabled" in maintenance_info:
-                    self.data.maintenance_mode = bool(maintenance_info["enabled"])
+                    self.data.maintenance_mode = self._coerce_bool(
+                        maintenance_info["enabled"],
+                        "config.phone.maintenance.enabled",
+                        default=self.data.maintenance_mode,
+                    )
 
             if "isHookOff" in phone_data:
-                self.data.hook_off = bool(phone_data.get("isHookOff"))
+                self.data.hook_off = self._coerce_bool(
+                    phone_data.get("isHookOff"),
+                    "config.phone.isHookOff",
+                    default=self.data.hook_off,
+                )
 
         # Extract global fields that may appear outside phone section
         if "currentCallIsPriority" in device_data:
-            self.data.current_call_is_priority = bool(
-                device_data.get("currentCallIsPriority")
+            self.data.current_call_is_priority = self._coerce_bool(
+                device_data.get("currentCallIsPriority"),
+                "config.device.currentCallIsPriority",
+                default=self.data.current_call_is_priority,
             )
 
         if "isMaintenanceMode" in device_data:
-            self.data.maintenance_mode = bool(device_data.get("isMaintenanceMode"))
+            self.data.maintenance_mode = self._coerce_bool(
+                device_data.get("isMaintenanceMode"),
+                "config.device.isMaintenanceMode",
+                default=self.data.maintenance_mode,
+            )
         elif "maintenanceMode" in device_data:
-            self.data.maintenance_mode = bool(device_data.get("maintenanceMode"))
+            self.data.maintenance_mode = self._coerce_bool(
+                device_data.get("maintenanceMode"),
+                "config.device.maintenanceMode",
+                default=self.data.maintenance_mode,
+            )
         elif isinstance(device_data.get("maintenance"), dict):
             maintenance_info = device_data.get("maintenance", {})
             if "enabled" in maintenance_info:
-                self.data.maintenance_mode = bool(maintenance_info["enabled"])
+                self.data.maintenance_mode = self._coerce_bool(
+                    maintenance_info["enabled"],
+                    "config.device.maintenance.enabled",
+                    default=self.data.maintenance_mode,
+                )
 
         if "isHookOff" in device_data:
-            self.data.hook_off = bool(device_data.get("isHookOff"))
+            self.data.hook_off = self._coerce_bool(
+                device_data.get("isHookOff"),
+                "config.device.isHookOff",
+                default=self.data.hook_off,
+            )
 
         # Validate tracked selections after bulk update
         self._ensure_quick_dial_selection()
