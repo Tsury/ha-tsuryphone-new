@@ -42,7 +42,7 @@ Adjustable later via the integration Options (retention, verbosity, etc.).
 | Category          | Examples                                                                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Binary Sensors    | Ringing, In Call, Handset Off Hook, Do Not Disturb, Maintenance Mode, Call Waiting Available                                               |
-| Sensors           | Phone State, Current Call Number, Call Duration, Last Call Number, Signal Strength, Memory, Call Counters, Quick Dial Count, Blocked Count |
+| Sensors           | Phone State, Current Call Number, Call Duration, Last Call Number, Last Call Type, Signal Strength, Memory, Call Counters, Quick Dial Count, Blocked Count |
 | Buttons           | Answer, Hang Up, Ring Device, Reset Device, Factory Reset Device, Refresh Data, Toggle Call Waiting                                        |
 | Numbers / Selects | Audio levels, ring pattern selection (when exposed)                                                                                        |
 | Switch / Others   | (Subject to future expansion)                                                                                                              |

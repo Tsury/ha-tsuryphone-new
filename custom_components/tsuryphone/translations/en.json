@@ -82,6 +82,9 @@
       "last_call_number": {
         "name": "Last Call Number"
       },
+      "last_call_type": {
+        "name": "Last Call Type"
+      },
       "uptime": {
         "name": "Uptime"
       },

@@ -415,11 +415,21 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             duration_s = duration_ms // 1000
 
         # Update last call info
+        resolved_incoming = (
+            bool(is_incoming)
+            if is_incoming is not None
+            else self.data.current_call.is_incoming
+        )
+        call_type = (
+            "incoming_answered" if resolved_incoming else "outgoing_answered"
+        )
+
         self._update_last_call_info(
             number,
-            is_incoming=is_incoming,
+            is_incoming=resolved_incoming,
             call_start_ts=call_start_ts,
             duration_ms=duration_ms,
+            call_type=call_type,
         )
 
         # Finalize call history entry
@@ -468,6 +478,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Update blocked call statistics
         self.data.stats.calls_blocked += 1
 
+        # Update last call snapshot
+        self._update_last_call_info(
+            number,
+            is_incoming=True,
+            call_start_ts=event.ts,
+            duration_ms=None,
+            call_type="incoming_blocked",
+        )
+
     def _update_last_call_info(
         self,
         number: str,
@@ -475,11 +494,22 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         is_incoming: bool | None = None,
         call_start_ts: int | None = None,
         duration_ms: int | None = None,
+        call_type: str | None = None,
     ) -> None:
         """Update last call metadata before clearing current call state."""
         if not number:
             return
 
+        normalized_call_type = self._normalize_call_type(
+            call_type,
+            is_incoming,
+            duration_ms,
+        )
+
+        if is_incoming is None:
+            is_incoming = self._infer_is_incoming_from_call_type(
+                normalized_call_type
+            )
         if is_incoming is None:
             is_incoming = self.data.current_call.is_incoming
 
@@ -491,10 +521,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             )
 
         self.data.last_call.number = number
-        self.data.last_call.is_incoming = bool(is_incoming)
+        if is_incoming is not None:
+            self.data.last_call.is_incoming = bool(is_incoming)
         self.data.last_call.start_time = call_start_ts
         self.data.last_call.call_start_ts = call_start_ts
         self.data.last_call.duration_ms = duration_ms
+
+        if normalized_call_type:
+            self.data.last_call.call_type = normalized_call_type
+        elif not self.data.last_call.call_type and is_incoming is not None:
+            self.data.last_call.call_type = (
+                "incoming_answered"
+                if self.data.last_call.is_incoming
+                else "outgoing_answered"
+            )
 
     def _reset_current_call_state(self, *, number: str | None = None) -> None:
         """Clear current call-related state and associated helpers."""
@@ -510,6 +550,48 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self.data.current_dialing_number = ""
         self.data.current_call_is_priority = False
         self.data.ringing = False
+
+    def _normalize_call_type(
+        self,
+        call_type: str | None,
+        is_incoming: bool | None,
+        duration_ms: int | None,
+    ) -> str | None:
+        if call_type:
+            normalized = str(call_type).strip().lower()
+            legacy_map = {
+                "incoming": "incoming_answered",
+                "outgoing": "outgoing_answered",
+                "blocked": "incoming_blocked",
+                "missed": "incoming_missed",
+            }
+            return legacy_map.get(normalized, normalized)
+
+        if is_incoming is None:
+            return None
+
+        if duration_ms is not None and duration_ms <= 0:
+            return "incoming_missed" if is_incoming else "outgoing_unanswered"
+
+        return "incoming_answered" if is_incoming else "outgoing_answered"
+
+    def _infer_is_incoming_from_call_type(self, call_type: str | None) -> bool | None:
+        if not call_type:
+            return None
+
+        normalized = str(call_type).strip().lower()
+        mapping: dict[str, bool] = {
+            "incoming": True,
+            "incoming_answered": True,
+            "incoming_missed": True,
+            "incoming_blocked": True,
+            "blocked": True,
+            "missed": True,
+            "outgoing": False,
+            "outgoing_answered": False,
+            "outgoing_unanswered": False,
+        }
+        return mapping.get(normalized)
 
     def _handle_system_event(self, event: TsuryPhoneEvent) -> None:
         """Handle system events from firmware."""
@@ -628,6 +710,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         ):
             self._detect_missed_call(event)
 
+        if previous_state == AppState.DIALING and new_state == AppState.IDLE:
+            self._detect_unanswered_outgoing(event)
+
         if new_state == AppState.IDLE and self.data.current_call.number:
             self._update_last_call_info(
                 self.data.current_call.number,
@@ -635,6 +720,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 call_start_ts=self.data.current_call.call_start_ts
                 or self.data.current_call.start_time,
                 duration_ms=0,
+                call_type=(
+                    "incoming_answered"
+                    if self.data.current_call.is_incoming
+                    else "outgoing_answered"
+                ),
             )
             self._reset_current_call_state()
 
@@ -685,22 +775,50 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _handle_stats_update(self, event: TsuryPhoneEvent) -> None:
         """Handle statistics update."""
-        # Based on firmware analysis: stats can be in nested structure or flat
-        # Try nested structure first (addStatsInfo creates calls.totals nested structure)
-        if "calls" in event.data and "totals" in event.data["calls"]:
-            totals = event.data["calls"]["totals"]
-            self.data.stats.calls_total = totals.get("total", 0)
-            self.data.stats.calls_incoming = totals.get("incoming", 0)
-            self.data.stats.calls_outgoing = totals.get("outgoing", 0)
-            self.data.stats.calls_blocked = totals.get("blocked", 0)
-            self.data.stats.talk_time_seconds = totals.get("talkTimeSeconds", 0)
-        # Fallback to flat structure for backwards compatibility
-        elif "total" in event.data:
-            self.data.stats.calls_total = event.data.get("total", 0)
-            self.data.stats.calls_incoming = event.data.get("incoming", 0)
-            self.data.stats.calls_outgoing = event.data.get("outgoing", 0)
-            self.data.stats.calls_blocked = event.data.get("blocked", 0)
-            self.data.stats.talk_time_seconds = event.data.get("talkTimeSeconds", 0)
+        calls_section = event.data.get("calls")
+        totals_data: dict[str, Any] | None = None
+        last_call_data: dict[str, Any] | None = None
+
+        if isinstance(calls_section, dict):
+            totals_candidate = calls_section.get("totals")
+            if isinstance(totals_candidate, dict):
+                totals_data = totals_candidate
+            last_call_candidate = calls_section.get("lastCall")
+            if isinstance(last_call_candidate, dict):
+                last_call_data = last_call_candidate
+        else:
+            if any(key in event.data for key in ("total", "incoming", "outgoing", "blocked")):
+                totals_data = event.data
+            last_call_candidate = event.data.get("lastCall")
+            if isinstance(last_call_candidate, dict):
+                last_call_data = last_call_candidate
+
+        def _as_int(value: Any, default: int = 0) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        if totals_data:
+            self.data.stats.calls_total = _as_int(totals_data.get("total"))
+            self.data.stats.calls_incoming = _as_int(totals_data.get("incoming"))
+            self.data.stats.calls_outgoing = _as_int(totals_data.get("outgoing"))
+            self.data.stats.calls_blocked = _as_int(totals_data.get("blocked"))
+            self.data.stats.talk_time_seconds = _as_int(
+                totals_data.get("talkTimeSeconds")
+            )
+
+        if last_call_data:
+            number = str(last_call_data.get("number", ""))
+            call_type = str(last_call_data.get("type", ""))
+            is_incoming = self._infer_is_incoming_from_call_type(call_type)
+            self._update_last_call_info(
+                number,
+                is_incoming=is_incoming,
+                call_start_ts=None,
+                duration_ms=None,
+                call_type=call_type or None,
+            )
 
     def _handle_status_update(self, event: TsuryPhoneEvent) -> None:
         """Handle system status update."""
@@ -1291,6 +1409,49 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             # This would indicate firmware now exposes call waiting
             self.data.call_waiting_available = event.data["callWaitingId"] != -1
 
+    def _detect_unanswered_outgoing(self, event: TsuryPhoneEvent) -> None:
+        """Detect and record unanswered outgoing calls."""
+        number = (
+            event.data.get("currentDialingNumber")
+            or event.data.get("number", "")
+            or self.data.current_dialing_number
+            or self.data.current_call.number
+        )
+
+        if not number:
+            return
+
+        # Avoid duplicates if we already logged an outgoing answered call
+        if any(
+            entry.call_type == "outgoing" and entry.number == number
+            for entry in self.data.call_history[-5:]
+        ):
+            return
+
+        self._pending_call_starts.pop(number, None)
+
+        history_entry = CallHistoryEntry(
+            call_type="outgoing",
+            number=number,
+            is_incoming=False,
+            duration_s=None,
+            ts_device=event.ts,
+            received_ts=event.received_at,
+            seq=event.seq,
+            reason="unanswered",
+            synthetic=True,
+        )
+
+        self.data.add_call_history_entry(history_entry)
+
+        self._update_last_call_info(
+            number,
+            is_incoming=False,
+            call_start_ts=event.ts,
+            duration_ms=None,
+            call_type="outgoing_unanswered",
+        )
+
     def _detect_missed_call(self, event: TsuryPhoneEvent) -> None:
         """Detect and record missed calls."""
         # Look for current call number from recent state
@@ -1320,6 +1481,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         )
 
         self.data.add_call_history_entry(history_entry)
+
+        self._update_last_call_info(
+            number,
+            is_incoming=True,
+            call_start_ts=event.ts,
+            duration_ms=None,
+            call_type="incoming_missed",
+        )
 
         # Fire missed call event
         self.hass.bus.async_fire(

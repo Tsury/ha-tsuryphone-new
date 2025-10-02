@@ -45,6 +45,7 @@ class CallInfo:
     duration_ms: int | None = None
     call_id: int = -1
     call_waiting_id: int = -1
+    call_type: str = ""
 
 
 @dataclass

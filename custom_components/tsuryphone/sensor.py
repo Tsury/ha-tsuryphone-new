@@ -56,6 +56,11 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:phone-log",
     ),
     SensorEntityDescription(
+        key="last_call_type",
+        name="Last Call Type",
+        icon="mdi:phone-log",
+    ),
+    SensorEntityDescription(
         key="uptime",
         name="Uptime",
         icon="mdi:clock-outline",
@@ -211,6 +216,8 @@ class TsuryPhoneSensor(
             return 0
         elif self.entity_description.key == "last_call_number":
             return state.last_call.number if state.last_call.number else None
+        elif self.entity_description.key == "last_call_type":
+            return state.last_call.call_type if state.last_call.call_type else None
         elif self.entity_description.key == "uptime":
             return state.stats.uptime_seconds
         elif self.entity_description.key == "rssi":
@@ -271,7 +278,7 @@ class TsuryPhoneSensor(
             if state.current_call.number:
                 attributes["is_incoming"] = state.current_call.is_incoming
                 attributes["call_start_ts"] = state.current_call.start_time
-                attributes["call_type"] = (
+                attributes["call_type"] = state.current_call.call_type or (
                     "incoming" if state.current_call.is_incoming else "outgoing"
                 )
 
@@ -279,9 +286,17 @@ class TsuryPhoneSensor(
             if state.last_call.number:
                 attributes["is_incoming"] = state.last_call.is_incoming
                 attributes["call_start_ts"] = state.last_call.start_time
-                attributes["call_type"] = (
+                attributes["call_type"] = state.last_call.call_type or (
                     "incoming" if state.last_call.is_incoming else "outgoing"
                 )
+                if state.last_call.duration_ms is not None:
+                    attributes["duration_seconds"] = state.last_call.duration_ms // 1000
+
+        elif self.entity_description.key == "last_call_type":
+            if state.last_call.call_type:
+                attributes["number"] = state.last_call.number
+                attributes["is_incoming"] = state.last_call.is_incoming
+                attributes["call_start_ts"] = state.last_call.start_time
                 if state.last_call.duration_ms is not None:
                     attributes["duration_seconds"] = state.last_call.duration_ms // 1000
 
