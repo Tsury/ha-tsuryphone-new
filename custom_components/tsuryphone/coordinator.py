@@ -392,44 +392,43 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _handle_call_end(self, event: TsuryPhoneEvent) -> None:
         """Handle call end event."""
-        number = event.data.get("number", "")
-        is_incoming = event.data.get("isIncoming", False)
-        call_start_ts = event.data.get("callStartTs", 0)
+        number = event.data.get("number") or self.data.current_call.number
+        is_incoming = event.data.get("isIncoming")
+        if is_incoming is None:
+            is_incoming = self.data.current_call.is_incoming
+
+        call_start_ts = event.data.get("callStartTs") or \
+            self.data.current_call.call_start_ts or self.data.current_call.start_time
+
         duration_ms = event.data.get("durationMs")
+        if duration_ms is None and self._call_start_monotonic > 0:
+            duration_ms = int((time.monotonic() - self._call_start_monotonic) * 1000)
 
         # Clear transient flags so HA reflects idle state without delay
         self.data.ringing = False
         self.data.current_dialing_number = ""
         self.data.current_call_is_priority = False
 
-        # Stop call timer
-        self._stop_call_timer()
-
         # Calculate duration (prefer device duration, fallback to local)
         duration_s = None
         if duration_ms is not None:
             duration_s = duration_ms // 1000
-        elif self._call_start_monotonic > 0:
-            duration_s = int(time.monotonic() - self._call_start_monotonic)
 
         # Update last call info
-        self.data.last_call.number = number
-        self.data.last_call.is_incoming = is_incoming
-        self.data.last_call.start_time = call_start_ts
-        self.data.last_call.call_start_ts = call_start_ts
-        self.data.last_call.duration_ms = duration_ms
-
-        # Clear current call
-        self.data.current_call = type(self.data.current_call)()
+        self._update_last_call_info(
+            number,
+            is_incoming=is_incoming,
+            call_start_ts=call_start_ts,
+            duration_ms=duration_ms,
+        )
 
         # Finalize call history entry
-        pending_call = self._pending_call_starts.get(number)
+        pending_call = self._pending_call_starts.pop(number, None) if number else None
         if pending_call:
             # Update existing provisional entry
             entry = pending_call["entry"]
             entry.duration_s = duration_s
             self.data.add_call_history_entry(entry)
-            del self._pending_call_starts[number]
         else:
             # Synthesize call start (R45 - handle end-only scenario)
             _LOGGER.debug("Synthesizing call start for end-only event")
@@ -445,6 +444,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 synthetic=True,
             )
             self.data.add_call_history_entry(history_entry)
+
+        # Clear remaining current call state
+        self._reset_current_call_state(number=number)
 
     def _handle_call_blocked(self, event: TsuryPhoneEvent) -> None:
         """Handle blocked call event."""
@@ -465,6 +467,49 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Update blocked call statistics
         self.data.stats.calls_blocked += 1
+
+    def _update_last_call_info(
+        self,
+        number: str,
+        *,
+        is_incoming: bool | None = None,
+        call_start_ts: int | None = None,
+        duration_ms: int | None = None,
+    ) -> None:
+        """Update last call metadata before clearing current call state."""
+        if not number:
+            return
+
+        if is_incoming is None:
+            is_incoming = self.data.current_call.is_incoming
+
+        if not call_start_ts:
+            call_start_ts = (
+                self.data.current_call.call_start_ts
+                or self.data.current_call.start_time
+                or 0
+            )
+
+        self.data.last_call.number = number
+        self.data.last_call.is_incoming = bool(is_incoming)
+        self.data.last_call.start_time = call_start_ts
+        self.data.last_call.call_start_ts = call_start_ts
+        self.data.last_call.duration_ms = duration_ms
+
+    def _reset_current_call_state(self, *, number: str | None = None) -> None:
+        """Clear current call-related state and associated helpers."""
+        active_number = number or self.data.current_call.number
+
+        if active_number:
+            self._pending_call_starts.pop(active_number, None)
+
+        self._stop_call_timer()
+
+        # Reset transient call state fields
+        self.data.current_call = type(self.data.current_call)()
+        self.data.current_dialing_number = ""
+        self.data.current_call_is_priority = False
+        self.data.ringing = False
 
     def _handle_system_event(self, event: TsuryPhoneEvent) -> None:
         """Handle system events from firmware."""
@@ -582,6 +627,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             and new_state == AppState.IDLE
         ):
             self._detect_missed_call(event)
+
+        if new_state == AppState.IDLE and self.data.current_call.number:
+            self._update_last_call_info(
+                self.data.current_call.number,
+                is_incoming=self.data.current_call.is_incoming,
+                call_start_ts=self.data.current_call.call_start_ts
+                or self.data.current_call.start_time,
+                duration_ms=0,
+            )
+            self._reset_current_call_state()
 
     def _handle_dialing_update(self, event: TsuryPhoneEvent) -> None:
         """Handle dialing number update."""

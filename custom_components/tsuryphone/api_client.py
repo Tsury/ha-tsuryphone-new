@@ -172,6 +172,10 @@ class TsuryPhoneAPIClient:
             )
         return await self._request("POST", API_CALL_DIAL, {"number": number})
 
+    async def dial(self, number: str) -> dict[str, Any]:
+        """Backward compatible alias for dialing a number."""
+        return await self.dial_number(number)
+
     async def answer_call(self) -> dict[str, Any]:
         """Answer incoming call."""
         return await self._request("POST", API_CALL_ANSWER)
