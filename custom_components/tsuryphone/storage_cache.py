@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -12,7 +11,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .models import CallHistoryEntry, TsuryPhoneState, CallDirection
+from .models import CallHistoryEntry, TsuryPhoneState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +65,34 @@ class TsuryPhoneStorageCache:
         self._call_history_cache: list[CallHistoryEntry] = []
         self._device_state_cache: dict[str, Any] = {}
         self._cache_loaded = False
+
+    @staticmethod
+    def _parse_timestamp(value: Any) -> datetime | None:
+        """Convert supported timestamp representations to an aware UTC datetime."""
+        if value is None:
+            return None
+
+        if isinstance(value, datetime):
+            if value.tzinfo:
+                return dt_util.as_utc(value)
+            return value.replace(tzinfo=dt_util.UTC)
+
+        if isinstance(value, (int, float)):
+            try:
+                return dt_util.utc_from_timestamp(float(value))
+            except (ValueError, OSError):
+                return None
+
+        if isinstance(value, str):
+            parsed = dt_util.parse_datetime(value)
+            if parsed:
+                return dt_util.as_utc(parsed)
+            try:
+                return dt_util.utc_from_timestamp(float(value))
+            except (ValueError, OSError):
+                return None
+
+        return None
 
     async def async_initialize(self) -> None:
         """Initialize the storage cache."""
@@ -208,10 +235,12 @@ class TsuryPhoneStorageCache:
 
             # Clean up old backups
             cutoff_date = dt_util.utcnow() - timedelta(days=self.state_backup_retention_days)
-            existing_data["backups"] = [
-                backup for backup in existing_data["backups"]
-                if datetime.fromisoformat(backup["timestamp"]) > cutoff_date
-            ]
+            filtered_backups: list[dict[str, Any]] = []
+            for backup in existing_data["backups"]:
+                parsed_timestamp = self._parse_timestamp(backup.get("timestamp"))
+                if parsed_timestamp and parsed_timestamp > cutoff_date:
+                    filtered_backups.append(backup)
+            existing_data["backups"] = filtered_backups
 
             # Keep only the latest 10 backups
             existing_data["backups"] = existing_data["backups"][-10:]
@@ -246,12 +275,17 @@ class TsuryPhoneStorageCache:
         if not entries:
             return entries
 
-        # Sort entries by timestamp (newest first)
-        sorted_entries = sorted(
-            entries,
-            key=lambda e: e.timestamp or datetime.min,
-            reverse=True
-        )
+        aware_min = datetime.min.replace(tzinfo=dt_util.UTC)
+
+        def _entry_timestamp(entry: CallHistoryEntry) -> datetime:
+            ts = entry.timestamp
+            if ts is None:
+                return aware_min
+            if ts.tzinfo:
+                return dt_util.as_utc(ts)
+            return ts.replace(tzinfo=dt_util.UTC)
+
+        sorted_entries = sorted(entries, key=_entry_timestamp, reverse=True)
 
         # Apply retention policies
         cleaned_entries = []
@@ -259,13 +293,19 @@ class TsuryPhoneStorageCache:
 
         for entry in sorted_entries:
             # Skip entries that are too old
-            if entry.timestamp and entry.timestamp < cutoff_date:
-                continue
-            
+            entry_ts = entry.timestamp
+            if entry_ts:
+                if entry_ts.tzinfo:
+                    entry_ts = dt_util.as_utc(entry_ts)
+                else:
+                    entry_ts = entry_ts.replace(tzinfo=dt_util.UTC)
+                if entry_ts < cutoff_date:
+                    continue
+
             # Skip if we've reached max entries
             if len(cleaned_entries) >= self.max_call_history_entries:
                 break
-            
+
             cleaned_entries.append(entry)
 
         _LOGGER.debug("Cleaned call history: %d -> %d entries", len(entries), len(cleaned_entries))
@@ -295,11 +335,12 @@ class TsuryPhoneStorageCache:
                 if existing_data and "backups" in existing_data:
                     original_count = len(existing_data["backups"])
                     cutoff_date = dt_util.utcnow() - timedelta(days=self.state_backup_retention_days)
-                    
-                    existing_data["backups"] = [
-                        backup for backup in existing_data["backups"]
-                        if datetime.fromisoformat(backup["timestamp"]) > cutoff_date
-                    ]
+                    filtered_backups = []
+                    for backup in existing_data["backups"]:
+                        parsed_timestamp = self._parse_timestamp(backup.get("timestamp"))
+                        if parsed_timestamp and parsed_timestamp > cutoff_date:
+                            filtered_backups.append(backup)
+                    existing_data["backups"] = filtered_backups
                     
                     stats["config_backups_removed"] = original_count - len(existing_data["backups"])
                     

@@ -8,6 +8,8 @@ from enum import Enum
 from typing import Any
 from datetime import datetime
 
+from homeassistant.util import dt as dt_util
+
 from .const import AppState, EventCategory, INTEGRATION_EVENT_SCHEMA_VERSION
 
 
@@ -180,9 +182,22 @@ class CallHistoryEntry:
     @property
     def timestamp(self) -> datetime | None:
         """Get timestamp as datetime object."""
-        if self.ts_device:
-            return datetime.fromtimestamp(self.ts_device)
-        return None
+        if not self.ts_device:
+            return None
+
+        try:
+            ts_value = float(self.ts_device)
+        except (TypeError, ValueError):
+            return None
+
+        # Firmware timestamps are typically in seconds, but handle millisecond inputs.
+        if ts_value > 1_000_000_000_000:  # larger than year 33658 in seconds
+            ts_value /= 1000.0
+
+        try:
+            return dt_util.utc_from_timestamp(ts_value)
+        except (ValueError, OSError):
+            return None
 
     @property
     def missed(self) -> bool:

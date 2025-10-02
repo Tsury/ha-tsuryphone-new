@@ -284,6 +284,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def _process_event_directly(self, event: TsuryPhoneEvent) -> None:
         """Process event directly without resilience checks."""
         self._ensure_state()
+        self.data.connected = True
+        self.data.last_seen = time.time()
         # Check for reboot detection
         if hasattr(event, "_reboot_detected") and event._reboot_detected:
             self._handle_reboot_detection(event)
@@ -350,6 +352,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         is_incoming = event.data.get("isIncoming", False)
         call_start_ts = event.data.get("callStartTs", event.ts)
 
+        previous_state = self.data.app_state
+        if previous_state != AppState.IN_CALL:
+            self.data.previous_app_state = previous_state
+            self.data.app_state = AppState.IN_CALL
+
+        # Once call starts, ringing/dialing flags should clear immediately
+        self.data.ringing = False
+        self.data.current_dialing_number = ""
+
         # Update current call info
         self.data.current_call.number = number
         self.data.current_call.is_incoming = is_incoming
@@ -385,6 +396,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         is_incoming = event.data.get("isIncoming", False)
         call_start_ts = event.data.get("callStartTs", 0)
         duration_ms = event.data.get("durationMs")
+
+        # Clear transient flags so HA reflects idle state without delay
+        self.data.ringing = False
+        self.data.current_dialing_number = ""
+        self.data.current_call_is_priority = False
 
         # Stop call timer
         self._stop_call_timer()
@@ -449,6 +465,19 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Update blocked call statistics
         self.data.stats.calls_blocked += 1
+
+    def _handle_system_event(self, event: TsuryPhoneEvent) -> None:
+        """Handle system events from firmware."""
+        if event.event == SystemEvent.STATS:
+            self._handle_stats_update(event)
+        elif event.event == SystemEvent.STATUS:
+            self._handle_status_update(event)
+        elif event.event == SystemEvent.ERROR:
+            self._handle_system_error(event)
+        elif event.event == SystemEvent.SHUTDOWN:
+            self._handle_system_shutdown(event)
+        else:
+            _LOGGER.debug("Unhandled system event type: %s", event.event)
 
     def _handle_phone_state_event(self, event: TsuryPhoneEvent) -> None:
         """Handle phone state events."""
@@ -1163,6 +1192,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 event.data["isIncomingCall"],
                 "event.context.isIncomingCall",
                 default=self.data.current_call.is_incoming,
+            )
+
+        if "currentCallIsPriority" in event.data:
+            self.data.current_call_is_priority = self._coerce_bool(
+                event.data["currentCallIsPriority"],
+                "event.context.currentCallIsPriority",
+                default=self.data.current_call_is_priority,
             )
 
         # Extract call waiting info if available (firmware debt R61)

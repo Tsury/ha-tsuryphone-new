@@ -91,6 +91,8 @@ class PhoneStateEvent(StrEnum):
     STATE = "state"
     DIALING = "dialing"
     RING = "ring"
+    RINGING = "ringing"
+    IDLE = "idle"
     DND = "dnd"
     CALL_INFO = "call_info"
 

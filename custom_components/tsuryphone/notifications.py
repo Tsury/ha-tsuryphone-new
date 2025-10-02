@@ -1,6 +1,7 @@
 """Persistent notification support for TsuryPhone integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -11,7 +12,6 @@ from homeassistant.components.persistent_notification import (
     async_dismiss,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -38,6 +38,34 @@ class TsuryPhoneNotificationManager:
         
         # Track notification states to avoid spam
         self._notification_states: dict[str, dict[str, Any]] = {}
+
+    def _coerce_to_datetime_utc(self, value: Any) -> datetime | None:
+        """Convert supported timestamp representations to an aware UTC datetime."""
+        if value is None:
+            return None
+
+        if isinstance(value, datetime):
+            if value.tzinfo:
+                return dt_util.as_utc(value)
+            return value.replace(tzinfo=dt_util.UTC)
+
+        if isinstance(value, (int, float)):
+            try:
+                return dt_util.utc_from_timestamp(float(value))
+            except (ValueError, OSError):
+                return None
+
+        if isinstance(value, str):
+            parsed = dt_util.parse_datetime(value)
+            if parsed:
+                return dt_util.as_utc(parsed)
+            # Fall back to treating the string as a numeric timestamp
+            try:
+                return dt_util.utc_from_timestamp(float(value))
+            except (ValueError, OSError):
+                return None
+
+        return None
         
     def get_notification_id(self, notification_type: str) -> str:
         """Generate notification ID for this device."""
@@ -95,7 +123,10 @@ class TsuryPhoneNotificationManager:
         # Check if device has been offline for an extended period
         if not state.connected and state.last_seen:
             try:
-                last_seen_dt = datetime.fromisoformat(state.last_seen)
+                last_seen_dt = self._coerce_to_datetime_utc(state.last_seen)
+                if last_seen_dt is None:
+                    raise ValueError(f"Unsupported last_seen value: {state.last_seen!r}")
+
                 offline_duration = dt_util.utcnow() - last_seen_dt
                 
                 # Create notification if offline for more than 10 minutes
@@ -107,14 +138,14 @@ class TsuryPhoneNotificationManager:
                         message=(
                             f"TsuryPhone device '{self.coordinator.device_info.name}' has been offline for "
                             f"{self._format_duration(offline_duration)}. "
-                            f"Last seen: {last_seen_dt.strftime('%Y-%m-%d %H:%M:%S')}. "
+                            f"Last seen: {dt_util.as_local(last_seen_dt).strftime('%Y-%m-%d %H:%M:%S')}. "
                             "Please check device power and network connectivity."
                         ),
                         title="TsuryPhone Device Offline",
                         notification_id=notification_id,
                     )
                     self._set_notification_active(NOTIFICATION_ID_SYSTEM_ERROR, {
-                        "offline_since": state.last_seen,
+                        "offline_since": last_seen_dt.isoformat(),
                         "message_type": "device_offline"
                     })
                     _LOGGER.warning("Created offline notification for device %s", self.device_id)
@@ -225,7 +256,6 @@ class TsuryPhoneNotificationManager:
     
     async def _auto_dismiss_notification(self, notification_id: str, notification_type: str, delay_seconds: int) -> None:
         """Auto-dismiss a notification after a delay."""
-        import asyncio
         await asyncio.sleep(delay_seconds)
         
         if self._is_notification_active(notification_type):

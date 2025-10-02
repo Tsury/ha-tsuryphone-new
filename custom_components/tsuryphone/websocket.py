@@ -72,6 +72,8 @@ class TsuryPhoneWebSocketClient:
         self._ping_task: asyncio.Task | None = None
         self._ping_interval = 30  # seconds
         self._ping_timeout = 10   # seconds
+        self._last_reboot_warning = 0.0
+        self._reboot_warning_interval = 60  # seconds
 
     @property
     def connected(self) -> bool:
@@ -314,16 +316,28 @@ class TsuryPhoneWebSocketClient:
             
             # Check sequence number for reboot detection
             seq = raw_event.get("seq", 0)
-            if seq <= self._last_seq and self._last_seq > 0:
-                _LOGGER.warning(
-                    "Sequence regression detected: %d <= %d (possible device reboot)",
-                    seq,
-                    self._last_seq
-                )
+            previous_seq = self._last_seq
+            if seq <= previous_seq and previous_seq > 0:
+                now = time.time()
+                if now - self._last_reboot_warning >= self._reboot_warning_interval:
+                    _LOGGER.warning(
+                        "Sequence regression detected: %d <= %d (possible device reboot)",
+                        seq,
+                        previous_seq
+                    )
+                    self._last_reboot_warning = now
+                else:
+                    _LOGGER.debug(
+                        "Sequence regression detected (suppressed warning): %d <= %d",
+                        seq,
+                        previous_seq
+                    )
                 # Don't drop the event, but signal potential reboot
                 raw_event["_reboot_detected"] = True
             
-            self._last_seq = max(seq, self._last_seq)
+            self._last_seq = max(seq, previous_seq)
+            if seq > previous_seq:
+                self._last_reboot_warning = 0.0
             
             # Convert to structured event
             event = TsuryPhoneEvent.from_json(raw_event)

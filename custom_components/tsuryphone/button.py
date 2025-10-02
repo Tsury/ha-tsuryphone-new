@@ -248,7 +248,12 @@ class TsuryPhoneButton(
         """Answer the incoming call."""
         state: TsuryPhoneState = self.coordinator.data
 
-        if not state.is_incoming_call:
+        if not (
+            state.is_incoming_call
+            or state.is_call_active
+            or state.is_dialing
+            or state.ringing
+        ):
             raise HomeAssistantError("No incoming call to answer")
 
         await self.coordinator.api_client.answer_call()
@@ -257,7 +262,12 @@ class TsuryPhoneButton(
         """Hang up the active call."""
         state: TsuryPhoneState = self.coordinator.data
 
-        if not state.is_call_active:
+        if not (
+            state.is_call_active
+            or state.is_incoming_call
+            or state.is_dialing
+            or state.current_call.number
+        ):
             raise HomeAssistantError("No active call to hang up")
 
         await self.coordinator.api_client.hangup_call()
