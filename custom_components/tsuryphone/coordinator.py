@@ -960,6 +960,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
             # Lists (quick dials, blocked, priority, webhooks)
             phone_section = data.get("phone") or {}
+            if not isinstance(phone_section, dict):
+                phone_section = {}
+
+            config_section = data.get("config") or {}
+            if not isinstance(config_section, dict):
+                config_section = {}
 
             quick_dial_source = (
                 phone_section.get("quickDial")
@@ -1103,7 +1109,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self._ensure_webhook_selection()
 
             # Audio config
-            audio = data.get("audioConfig", {})
+            audio = data.get("audioConfig") or config_section.get("audio") or {}
             if audio:
                 for fw_key, model_attr in {
                     "earpieceVolume": "earpiece_volume",
@@ -1115,7 +1121,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         setattr(self.data.audio_config, model_attr, audio[fw_key])
 
             # DND config
-            dnd = data.get("dndConfig", {})
+            dnd_sources: tuple[dict[str, Any] | None, ...] = (
+                data.get("dndConfig"),
+                config_section.get("dnd") if isinstance(config_section.get("dnd"), dict) else None,
+                config_section.get("dndConfig")
+                if isinstance(config_section.get("dndConfig"), dict)
+                else None,
+                data.get("dnd") if isinstance(data.get("dnd"), dict) else None,
+            )
+            dnd = next((section for section in dnd_sources if section), None)
             if dnd:
                 mapping = {
                     "force": "force",
@@ -1126,8 +1140,24 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     "endMinute": "end_minute",
                 }
                 for fw_key, attr in mapping.items():
-                    if fw_key in dnd and hasattr(self.data.dnd_config, attr):
-                        setattr(self.data.dnd_config, attr, dnd[fw_key])
+                    if fw_key not in dnd or not hasattr(self.data.dnd_config, attr):
+                        continue
+
+                    value = dnd[fw_key]
+                    if attr in {"force", "scheduled"}:
+                        coerced = self._coerce_bool(
+                            value,
+                            f"snapshot.dnd.{fw_key}",
+                            default=getattr(self.data.dnd_config, attr),
+                        )
+                        setattr(self.data.dnd_config, attr, coerced)
+                    else:
+                        try:
+                            setattr(self.data.dnd_config, attr, int(value))
+                        except (TypeError, ValueError):
+                            _LOGGER.debug(
+                                "Skipping invalid DND value for %s: %r", fw_key, value
+                            )
 
             # Ring pattern
             if "ringPattern" in data:
@@ -1524,6 +1554,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Implementation would be similar to config delta handling but for full state
         _LOGGER.debug("Updating state from device data")
 
+        config_section = device_data.get("config") or {}
+        if not isinstance(config_section, dict):
+            config_section = {}
+
         # Update phone state and related lists
         if "phone" in device_data:
             phone_data = device_data["phone"]
@@ -1704,6 +1738,62 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 )
 
         # Extract global fields that may appear outside phone section
+        audio_section = (
+            device_data.get("audioConfig")
+            or config_section.get("audio")
+            or device_data.get("audio")
+        )
+        if isinstance(audio_section, dict):
+            for fw_key, model_attr in {
+                "earpieceVolume": "earpiece_volume",
+                "earpieceGain": "earpiece_gain",
+                "speakerVolume": "speaker_volume",
+                "speakerGain": "speaker_gain",
+            }.items():
+                if fw_key in audio_section and hasattr(self.data.audio_config, model_attr):
+                    setattr(self.data.audio_config, model_attr, audio_section[fw_key])
+
+        dnd_sources: tuple[dict[str, Any] | None, ...] = (
+            device_data.get("dndConfig")
+            if isinstance(device_data.get("dndConfig"), dict)
+            else None,
+            config_section.get("dnd")
+            if isinstance(config_section.get("dnd"), dict)
+            else None,
+            config_section.get("dndConfig")
+            if isinstance(config_section.get("dndConfig"), dict)
+            else None,
+            device_data.get("dnd") if isinstance(device_data.get("dnd"), dict) else None,
+        )
+        dnd_section = next((section for section in dnd_sources if section), None)
+        if dnd_section:
+            for fw_key, attr in {
+                "force": "force",
+                "scheduled": "scheduled",
+                "startHour": "start_hour",
+                "startMinute": "start_minute",
+                "endHour": "end_hour",
+                "endMinute": "end_minute",
+            }.items():
+                if fw_key not in dnd_section or not hasattr(self.data.dnd_config, attr):
+                    continue
+
+                value = dnd_section[fw_key]
+                if attr in {"force", "scheduled"}:
+                    coerced = self._coerce_bool(
+                        value,
+                        f"config.dnd.{fw_key}",
+                        default=getattr(self.data.dnd_config, attr),
+                    )
+                    setattr(self.data.dnd_config, attr, coerced)
+                else:
+                    try:
+                        setattr(self.data.dnd_config, attr, int(value))
+                    except (TypeError, ValueError):
+                        _LOGGER.debug(
+                            "Skipping invalid DND value for %s: %r", fw_key, value
+                        )
+
         if "currentCallIsPriority" in device_data:
             self.data.current_call_is_priority = self._coerce_bool(
                 device_data.get("currentCallIsPriority"),
