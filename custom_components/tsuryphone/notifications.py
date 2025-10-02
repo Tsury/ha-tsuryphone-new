@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -94,8 +95,7 @@ class TsuryPhoneNotificationManager:
         if state.maintenance_mode:
             # Create/update maintenance mode notification
             if not self._is_notification_active(NOTIFICATION_ID_MAINTENANCE):
-                await async_create(
-                    self.hass,
+                await self._persistent_notification_create(
                     message=(
                         f"TsuryPhone device '{self.coordinator.device_info.name}' is in maintenance mode. "
                         "Normal phone operations may be disrupted. "
@@ -112,7 +112,7 @@ class TsuryPhoneNotificationManager:
         else:
             # Dismiss maintenance mode notification if it exists
             if self._is_notification_active(NOTIFICATION_ID_MAINTENANCE):
-                await async_dismiss(self.hass, notification_id)
+                await self._persistent_notification_dismiss(notification_id)
                 self._clear_notification_state(NOTIFICATION_ID_MAINTENANCE)
                 _LOGGER.info("Dismissed maintenance mode notification for device %s", self.device_id)
     
@@ -133,8 +133,7 @@ class TsuryPhoneNotificationManager:
                 if (offline_duration > timedelta(minutes=10) and 
                     not self._is_notification_active(NOTIFICATION_ID_SYSTEM_ERROR)):
                     
-                    await async_create(
-                        self.hass,
+                    await self._persistent_notification_create(
                         message=(
                             f"TsuryPhone device '{self.coordinator.device_info.name}' has been offline for "
                             f"{self._format_duration(offline_duration)}. "
@@ -156,7 +155,7 @@ class TsuryPhoneNotificationManager:
             if (self._is_notification_active(NOTIFICATION_ID_SYSTEM_ERROR) and
                 self._notification_states[NOTIFICATION_ID_SYSTEM_ERROR].get("message_type") == "device_offline"):
                 
-                await async_dismiss(self.hass, notification_id)
+                await self._persistent_notification_dismiss(notification_id)
                 self._clear_notification_state(NOTIFICATION_ID_SYSTEM_ERROR)
                 _LOGGER.info("Dismissed offline notification for device %s", self.device_id)
     
@@ -176,8 +175,7 @@ class TsuryPhoneNotificationManager:
                 should_notify = time_since_last > timedelta(hours=1)
             
             if should_notify:
-                await async_create(
-                    self.hass,
+                await self._persistent_notification_create(
                     message=(
                         f"TsuryPhone device '{self.coordinator.device_info.name}' has rebooted. "
                         "The device is reconnecting and synchronizing state. "
@@ -234,8 +232,7 @@ class TsuryPhoneNotificationManager:
                     f"on TsuryPhone device '{self.coordinator.device_info.name}' in the last 24 hours."
                 )
             
-            await async_create(
-                self.hass,
+            await self._persistent_notification_create(
                 message=message,
                 title="TsuryPhone Missed Calls",
                 notification_id=notification_id,
@@ -250,7 +247,7 @@ class TsuryPhoneNotificationManager:
         
         # Dismiss notification if no recent missed calls
         elif missed_calls_count == 0 and self._is_notification_active(NOTIFICATION_ID_MISSED_CALLS):
-            await async_dismiss(self.hass, notification_id)
+            await self._persistent_notification_dismiss(notification_id)
             self._clear_notification_state(NOTIFICATION_ID_MISSED_CALLS)
             _LOGGER.info("Dismissed missed calls notification for device %s", self.device_id)
     
@@ -259,7 +256,7 @@ class TsuryPhoneNotificationManager:
         await asyncio.sleep(delay_seconds)
         
         if self._is_notification_active(notification_type):
-            await async_dismiss(self.hass, notification_id)
+            await self._persistent_notification_dismiss(notification_id)
             self._clear_notification_state(notification_type)
             _LOGGER.info("Auto-dismissed %s notification for device %s", notification_type, self.device_id)
     
@@ -287,6 +284,18 @@ class TsuryPhoneNotificationManager:
             return f"{minutes} minutes"
         else:
             return "less than a minute"
+
+    async def _persistent_notification_create(self, **kwargs: Any) -> None:
+        """Create or update a persistent notification, handling sync/async variants."""
+        result = async_create(self.hass, **kwargs)
+        if inspect.isawaitable(result):
+            await result
+
+    async def _persistent_notification_dismiss(self, notification_id: str) -> None:
+        """Dismiss a persistent notification, handling sync/async variants."""
+        result = async_dismiss(self.hass, notification_id)
+        if inspect.isawaitable(result):
+            await result
     
     async def async_dismiss_all_notifications(self) -> None:
         """Dismiss all notifications for this device."""
