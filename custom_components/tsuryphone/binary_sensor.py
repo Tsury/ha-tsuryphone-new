@@ -33,7 +33,6 @@ BINARY_SENSOR_DESCRIPTIONS = (
         key="maintenance_mode",
         name="Maintenance Mode",
         icon="mdi:wrench",
-        device_class=BinarySensorDeviceClass.PROBLEM,
     ),
     BinarySensorEntityDescription(
         key="hook_off",

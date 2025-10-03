@@ -18,6 +18,7 @@ from .api_client import TsuryPhoneAPIError
 from .const import DOMAIN, RING_PATTERN_PRESETS
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .models import QuickDialEntry, TsuryPhoneState
+from .validation import is_valid_ring_pattern
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -498,16 +499,7 @@ class TsuryPhoneSelect(
 
     def _validate_pattern(self, pattern: str) -> bool:
         """Validate ring pattern format (basic check)."""
-        if not pattern:
-            return True  # Empty is valid (default)
-
-        # Basic validation - firmware will do full validation
-        if len(pattern) > 32:
-            return False
-
-        # Check for valid characters (digits, commas, single 'x')
-        valid_chars = set("0123456789,x")
-        return all(c in valid_chars for c in pattern)
+        return is_valid_ring_pattern(pattern)
 
     @property
     def available(self) -> bool:

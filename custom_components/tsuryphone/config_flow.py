@@ -33,6 +33,7 @@ from .const import (
     AUDIO_MAX_LEVEL,
     RING_PATTERN_PRESETS,
 )
+from .validation import is_valid_ring_pattern
 
 # Import for type hints - will be imported at runtime to avoid circular imports
 from typing import TYPE_CHECKING
@@ -493,14 +494,7 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
 
     def _validate_ring_pattern(self, pattern: str) -> bool:
         """Validate ring pattern format."""
-        if not pattern:
-            return True
-
-        if len(pattern) > 32:
-            return False
-
-        valid_chars = set("0123456789,x")
-        return all(c in valid_chars for c in pattern)
+        return is_valid_ring_pattern(pattern)
 
     async def async_step_quick_dial_manager(
         self, user_input: dict[str, Any] | None = None

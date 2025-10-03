@@ -122,8 +122,8 @@ class DiagnosticEvent(StrEnum):
 RING_PATTERN_PRESETS: Final = {
     "default": "",  # Device native
     "pulse_short": "300,300x2",
-    "classic": "500,500",
-    "long_gap": "800,400",
+    "classic": "500,500,500",
+    "long_gap": "800,400,800",
     "triple": "300,300,300",
     "stagger": "500,250,500",
     "alarm": "200,200x5",
