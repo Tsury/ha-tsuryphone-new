@@ -15,6 +15,21 @@ dial:
       selector:
         text:
 
+dial_digit:
+  name: Dial digit
+  description: Append a single digit to the pending dial buffer on the TsuryPhone device.
+  target:
+    device:
+      integration: tsuryphone
+  fields:
+    digit:
+      name: Digit
+      description: Single digit (0-9) to enqueue while the phone is idle.
+      required: true
+      example: "5"
+      selector:
+        text:
+
 answer:
   name: Answer call
   description: Answer an incoming call on the TsuryPhone device.

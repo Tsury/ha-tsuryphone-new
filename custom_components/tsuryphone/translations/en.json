@@ -109,12 +109,6 @@
       "talk_time_total": {
         "name": "Total Talk Time"
       },
-      "quick_dial_count": {
-        "name": "Quick Dial Count"
-      },
-      "blocked_count": {
-        "name": "Blocked Numbers Count"
-      },
       "last_blocked_number": {
         "name": "Last Blocked Number"
       },

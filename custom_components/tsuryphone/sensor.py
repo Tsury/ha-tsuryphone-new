@@ -24,7 +24,6 @@ from . import get_device_info, TsuryPhoneConfigEntry
 from .const import DOMAIN, AppState
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .models import TsuryPhoneState
-from .webhook_helpers import get_webhook_entity_attributes
 
 SENSOR_DESCRIPTIONS = (
     SensorEntityDescription(
@@ -122,20 +121,6 @@ SENSOR_DESCRIPTIONS = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
-        key="quick_dial_count",
-        name="Quick Dial Count",
-        icon="mdi:speed-dial",
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    SensorEntityDescription(
-        key="blocked_count",
-        name="Blocked Numbers Count",
-        icon="mdi:phone-off",
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    SensorEntityDescription(
         key="last_blocked_number",
         name="Last Blocked Number",
         icon="mdi:phone-remove",
@@ -146,13 +131,6 @@ SENSOR_DESCRIPTIONS = (
         name="Call History Size",
         icon="mdi:history",
         state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    # Phase P4: Webhook management sensor
-    SensorEntityDescription(
-        key="webhook_status",
-        name="Webhook Status",
-        icon="mdi:webhook",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
@@ -234,25 +212,10 @@ class TsuryPhoneSensor(
             return state.stats.calls_blocked
         elif self.entity_description.key == "talk_time_total":
             return state.stats.talk_time_seconds
-        elif self.entity_description.key == "quick_dial_count":
-            return state.quick_dial_count
-        elif self.entity_description.key == "blocked_count":
-            return state.blocked_count
         elif self.entity_description.key == "last_blocked_number":
             return state.last_blocked_number if state.last_blocked_number else None
         elif self.entity_description.key == "call_history_size":
             return state.call_history_size
-        elif self.entity_description.key == "webhook_status":
-            # Phase P4: Webhook status sensor
-            if not state.webhooks:
-                return "no_webhooks"
-            active_count = len([w for w in state.webhooks if w.active])
-            if active_count == 0:
-                return "inactive"
-            elif active_count == len(state.webhooks):
-                return "all_active"
-            else:
-                return "partially_active"
 
         return None
 
@@ -336,11 +299,6 @@ class TsuryPhoneSensor(
                 else:
                     quality = "poor"
                 attributes["signal_quality"] = quality
-
-        elif self.entity_description.key == "webhook_status":
-            # Phase P4: Add webhook management attributes
-            webhook_attrs = get_webhook_entity_attributes(self.coordinator)
-            attributes.update(webhook_attrs)
 
         # Add connection status for troubleshooting
         if not state.connected:

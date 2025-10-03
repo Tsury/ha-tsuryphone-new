@@ -13,20 +13,35 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.exceptions import HomeAssistantError
 
-from . import get_device_info, TsuryPhoneConfigEntry
+from . import get_device_info
 from .api_client import TsuryPhoneAPIError
 from .const import (
     DOMAIN,
+    AppState,
     ERROR_CODE_CODE_CONFLICT,
     ERROR_CODE_NO_INCOMING_CALL,
     ERROR_CODE_NO_ACTIVE_CALL,
+    ERROR_CODE_PHONE_NOT_READY,
+    ERROR_CODE_MISSING_DIGIT,
+    ERROR_CODE_INVALID_DIGIT,
+    ERROR_CODE_DIAL_BUFFER_FULL,
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .models import TsuryPhoneState
 
 _LOGGER = logging.getLogger(__name__)
 
-BUTTON_DESCRIPTIONS = (
+_DIGIT_BUTTON_DESCRIPTIONS = tuple(
+    ButtonEntityDescription(
+        key=f"dial_digit_{digit}",
+        name=f"Call - Dial Digit {digit}",
+        icon="mdi:dialpad",
+    )
+    for digit in range(10)
+)
+
+
+BUTTON_DESCRIPTIONS = _DIGIT_BUTTON_DESCRIPTIONS + (
     ButtonEntityDescription(
         key="answer",
         name="Call - Answer",
@@ -130,7 +145,7 @@ BUTTON_DESCRIPTIONS = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: TsuryPhoneConfigEntry,
+    config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up TsuryPhone button entities from a config entry."""
@@ -242,6 +257,10 @@ class TsuryPhoneButton(
                 await self._remove_selected_webhook()
             elif self.entity_description.key == "toggle_call_waiting":
                 await self._toggle_call_waiting()
+            elif self.entity_description.key.startswith("dial_digit_"):
+                await self._dial_digit(
+                    self.entity_description.key.removeprefix("dial_digit_")
+                )
         except TsuryPhoneAPIError as err:
             # Provide user-friendly error messages
             error_msg = self._get_user_friendly_error(err)
@@ -341,6 +360,22 @@ class TsuryPhoneButton(
         # Clear selection so UI inputs reset after action completes
         self.coordinator.selected_quick_dial_code = None
         self.coordinator.async_update_listeners()
+
+    async def _dial_digit(self, digit: str) -> None:
+        """Send a single digit to the device dial buffer."""
+
+        digit = digit.strip()
+        if not digit:
+            raise HomeAssistantError("Digit is required")
+
+        if len(digit) != 1 or digit < "0" or digit > "9":
+            raise HomeAssistantError("Digit must be between 0 and 9")
+
+        state: TsuryPhoneState = self.coordinator.data
+        if state.app_state != AppState.IDLE:
+            raise HomeAssistantError("Phone must be idle to dial digits")
+
+        await self.coordinator.api_client.dial_digit(digit)
 
     async def _add_quick_dial_entry(self) -> None:
         """Add a quick dial entry from buffered text inputs."""
@@ -524,6 +559,22 @@ class TsuryPhoneButton(
             error, ERROR_CODE_CODE_CONFLICT
         ):
             return "Code conflicts with an existing quick dial or webhook action"
+        elif self.coordinator.api_client.is_api_error_code(
+            error, ERROR_CODE_PHONE_NOT_READY
+        ):
+            return "Phone is busy"
+        elif self.coordinator.api_client.is_api_error_code(
+            error, ERROR_CODE_MISSING_DIGIT
+        ):
+            return "Digit is required"
+        elif self.coordinator.api_client.is_api_error_code(
+            error, ERROR_CODE_INVALID_DIGIT
+        ):
+            return "Digit must be between 0 and 9"
+        elif self.coordinator.api_client.is_api_error_code(
+            error, ERROR_CODE_DIAL_BUFFER_FULL
+        ):
+            return "Dial buffer is full"
         else:
             return str(error)
 
@@ -578,6 +629,11 @@ class TsuryPhoneButton(
                             break
             else:
                 attributes["selected_quick_dial"] = None
+
+        elif self.entity_description.key.startswith("dial_digit_"):
+            attributes["can_execute"] = state.app_state == AppState.IDLE
+            if state.current_dialing_number:
+                attributes["current_dialing_number"] = state.current_dialing_number
 
         elif self.entity_description.key == "quick_dial_add":
             buffer = self._get_buffer_snapshot("quick_dial")

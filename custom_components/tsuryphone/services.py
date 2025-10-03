@@ -25,6 +25,7 @@ from homeassistant.exceptions import ServiceValidationError, HomeAssistantError
 from .const import (
     DOMAIN,
     SERVICE_DIAL,
+    SERVICE_DIAL_DIGIT,
     SERVICE_ANSWER,
     SERVICE_HANGUP,
     SERVICE_RING_DEVICE,
@@ -87,6 +88,19 @@ DIAL_SCHEMA = _service_schema(
         vol.Required("number"): cv.string,
     }
 )
+
+
+def _validate_digit(value: Any) -> str:
+    """Validate a single dial digit."""
+
+    digit = cv.string(value)
+    digit = digit.strip()
+    if len(digit) != 1 or digit < "0" or digit > "9":
+        raise vol.Invalid("Digit must be a single character between 0 and 9")
+    return digit
+
+
+DIAL_DIGIT_SCHEMA = _service_schema({vol.Required("digit"): _validate_digit})
 
 RING_DEVICE_SCHEMA = _service_schema(
     {
@@ -544,6 +558,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             await coordinator.api_client.dial(number)
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to dial {number}: {err}") from err
+
+    async def async_dial_digit(call: ServiceCall) -> None:
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+        digit = call.data["digit"]
+
+        try:
+            await coordinator.api_client.dial_digit(digit)
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(
+                f"Failed to send digit {digit}: {err}"
+            ) from err
 
     async def async_answer(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
@@ -1097,7 +1123,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     # Register all services
     services_config = [
-        (SERVICE_DIAL, async_dial, DIAL_SCHEMA),
+    (SERVICE_DIAL, async_dial, DIAL_SCHEMA),
+    (SERVICE_DIAL_DIGIT, async_dial_digit, DIAL_DIGIT_SCHEMA),
         (SERVICE_ANSWER, async_answer, DEVICE_ONLY_SCHEMA),
         (SERVICE_HANGUP, async_hangup, DEVICE_ONLY_SCHEMA),
         (SERVICE_RING_DEVICE, async_ring_device, RING_DEVICE_SCHEMA),
@@ -1192,7 +1219,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 async def async_unload_services(hass: HomeAssistant) -> None:
     """Unload services for TsuryPhone integration."""
     services_to_remove = [
-        SERVICE_DIAL,
+    SERVICE_DIAL,
+    SERVICE_DIAL_DIGIT,
         SERVICE_ANSWER,
         SERVICE_HANGUP,
         SERVICE_RING_DEVICE,
