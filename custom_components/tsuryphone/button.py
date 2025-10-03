@@ -15,7 +15,12 @@ from homeassistant.exceptions import HomeAssistantError
 
 from . import get_device_info, TsuryPhoneConfigEntry
 from .api_client import TsuryPhoneAPIError
-from .const import DOMAIN, ERROR_CODE_NO_INCOMING_CALL, ERROR_CODE_NO_ACTIVE_CALL
+from .const import (
+    DOMAIN,
+    ERROR_CODE_CODE_CONFLICT,
+    ERROR_CODE_NO_INCOMING_CALL,
+    ERROR_CODE_NO_ACTIVE_CALL,
+)
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .models import TsuryPhoneState
 
@@ -515,6 +520,10 @@ class TsuryPhoneButton(
             error, ERROR_CODE_NO_ACTIVE_CALL
         ):
             return "No active call"
+        elif self.coordinator.api_client.is_api_error_code(
+            error, ERROR_CODE_CODE_CONFLICT
+        ):
+            return "Code conflicts with an existing quick dial or webhook action"
         else:
             return str(error)
 
