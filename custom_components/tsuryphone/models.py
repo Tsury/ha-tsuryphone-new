@@ -83,11 +83,19 @@ class WebhookEntry:
     webhook_id: str
     action_name: str = ""
     active: bool = True  # Whether webhook is active/reachable
+    events: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
         if not self.code or not self.webhook_id:
             raise ValueError("Code and webhook_id are required for webhook entry")
+        # Normalize events to strings
+        normalized_events: list[str] = []
+        for event in self.events:
+            if not event:
+                continue
+            normalized_events.append(str(event))
+        self.events = normalized_events
 
 
 @dataclass

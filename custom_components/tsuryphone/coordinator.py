@@ -397,8 +397,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if is_incoming is None:
             is_incoming = self.data.current_call.is_incoming
 
-        call_start_ts = event.data.get("callStartTs") or \
-            self.data.current_call.call_start_ts or self.data.current_call.start_time
+        call_start_ts = (
+            event.data.get("callStartTs")
+            or self.data.current_call.call_start_ts
+            or self.data.current_call.start_time
+        )
 
         duration_ms = event.data.get("durationMs")
         if duration_ms is None and self._call_start_monotonic > 0:
@@ -420,9 +423,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if is_incoming is not None
             else self.data.current_call.is_incoming
         )
-        call_type = (
-            "incoming_answered" if resolved_incoming else "outgoing_answered"
-        )
+        call_type = "incoming_answered" if resolved_incoming else "outgoing_answered"
 
         self._update_last_call_info(
             number,
@@ -507,9 +508,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         )
 
         if is_incoming is None:
-            is_incoming = self._infer_is_incoming_from_call_type(
-                normalized_call_type
-            )
+            is_incoming = self._infer_is_incoming_from_call_type(normalized_call_type)
         if is_incoming is None:
             is_incoming = self.data.current_call.is_incoming
 
@@ -795,7 +794,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if isinstance(last_call_candidate, dict):
                 last_call_data = last_call_candidate
         else:
-            if any(key in event.data for key in ("total", "incoming", "outgoing", "blocked")):
+            if any(
+                key in event.data
+                for key in ("total", "incoming", "outgoing", "blocked")
+            ):
                 totals_data = event.data
             last_call_candidate = event.data.get("lastCall")
             if isinstance(last_call_candidate, dict):
@@ -972,11 +974,19 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             action = key.split(".", 1)[1]
             if action == "add" and isinstance(value, dict):
                 try:
+                    raw_events = value.get("events") or value.get("eventTypes") or []
+                    if isinstance(raw_events, (list, tuple, set)):
+                        events = [str(event) for event in raw_events if event]
+                    elif raw_events:
+                        events = [str(raw_events)]
+                    else:
+                        events = []
                     entry = WebhookEntry(
                         code=value.get("code", ""),
                         webhook_id=value.get("id", ""),
                         action_name=value.get("actionName", ""),
                         active=True,  # New webhooks are active by default
+                        events=events,
                     )
                     # Remove any existing entry with same code
                     self.data.webhooks = [
@@ -1105,7 +1115,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 for q in quick_dial_source:
                     if not isinstance(q, dict):
                         _LOGGER.debug(
-                            "Skipping quick dial snapshot entry with invalid type: %s", q
+                            "Skipping quick dial snapshot entry with invalid type: %s",
+                            q,
                         )
                         continue
                     try:
@@ -1117,10 +1128,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                             or ""
                         )
                         number = (
-                            q.get("number")
-                            or q.get("value")
-                            or q.get("phone")
-                            or ""
+                            q.get("number") or q.get("value") or q.get("phone") or ""
                         )
                         name = q.get("name") or q.get("label") or ""
                         qd_list.append(
@@ -1131,7 +1139,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                             )
                         )
                     except Exception:  # noqa: BLE001
-                        _LOGGER.debug("Skipping invalid quick dial snapshot entry: %s", q)
+                        _LOGGER.debug(
+                            "Skipping invalid quick dial snapshot entry: %s", q
+                        )
             self.data.quick_dials = qd_list
             self._ensure_quick_dial_selection()
 
@@ -1152,10 +1162,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         continue
                     try:
                         number = (
-                            b.get("number")
-                            or b.get("value")
-                            or b.get("phone")
-                            or ""
+                            b.get("number") or b.get("value") or b.get("phone") or ""
                         )
                         reason = b.get("reason") or b.get("note") or ""
                         blocked_list.append(
@@ -1178,22 +1185,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if isinstance(priority_source, list):
                 for p in priority_source:
                     try:
-                        number = (
-                            p.get("number")
-                            if isinstance(p, dict)
-                            else p
-                        )
+                        number = p.get("number") if isinstance(p, dict) else p
                         priority_list.append(PriorityCallerEntry(number=str(number)))
                     except Exception:  # noqa: BLE001
                         _LOGGER.debug("Skipping invalid priority snapshot entry: %s", p)
             self.data.priority_callers = priority_list
             self._ensure_priority_selection()
 
-            webhook_source = (
-                phone_section.get("webhooks")
-                or data.get("webhooks")
-                or []
-            )
+            webhook_source = phone_section.get("webhooks") or data.get("webhooks") or []
             webhook_list: list[WebhookEntry] = []
             if isinstance(webhook_source, list):
                 for w in webhook_source:
@@ -1203,12 +1202,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         continue
                     try:
-                        code = (
-                            w.get("code")
-                            or w.get("entry")
-                            or w.get("key")
-                            or ""
-                        )
+                        code = w.get("code") or w.get("entry") or w.get("key") or ""
                         webhook_id = (
                             w.get("id")
                             or w.get("webhook_id")
@@ -1217,6 +1211,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         action_name = w.get("actionName") or w.get("name") or ""
                         active = w.get("active") if "active" in w else True
+                        raw_events = w.get("events") or w.get("eventTypes") or []
+                        if isinstance(raw_events, (list, tuple, set)):
+                            events = [str(event) for event in raw_events if event]
+                        elif raw_events:
+                            events = [str(raw_events)]
+                        else:
+                            events = []
                         webhook_list.append(
                             WebhookEntry(
                                 code=str(code),
@@ -1227,6 +1228,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                                     "snapshot.webhooks.active",
                                     default=True,
                                 ),
+                                events=events,
                             )
                         )
                     except Exception:  # noqa: BLE001
@@ -1249,10 +1251,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             # DND config
             dnd_sources: tuple[dict[str, Any] | None, ...] = (
                 data.get("dndConfig"),
-                config_section.get("dnd") if isinstance(config_section.get("dnd"), dict) else None,
-                config_section.get("dndConfig")
-                if isinstance(config_section.get("dndConfig"), dict)
-                else None,
+                (
+                    config_section.get("dnd")
+                    if isinstance(config_section.get("dnd"), dict)
+                    else None
+                ),
+                (
+                    config_section.get("dndConfig")
+                    if isinstance(config_section.get("dndConfig"), dict)
+                    else None
+                ),
                 data.get("dnd") if isinstance(data.get("dnd"), dict) else None,
             )
             dnd = next((section for section in dnd_sources if section), None)
@@ -1847,16 +1855,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 self._ensure_blocked_selection()
 
             # Webhook entries
-            webhook_source = (
-                phone_data.get("webhooks")
-                or device_data.get("webhooks")
-            )
+            webhook_source = phone_data.get("webhooks") or device_data.get("webhooks")
             if isinstance(webhook_source, list):
                 webhook_list: list[WebhookEntry] = []
                 for w in webhook_source:
                     if not isinstance(w, dict):
                         continue
                     try:
+                        raw_events = w.get("events") or w.get("eventTypes") or []
+                        if isinstance(raw_events, (list, tuple, set)):
+                            events = [str(event) for event in raw_events if event]
+                        elif raw_events:
+                            events = [str(raw_events)]
+                        else:
+                            events = []
                         webhook_list.append(
                             WebhookEntry(
                                 code=str(
@@ -1871,12 +1883,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                                     or w.get("webhookId")
                                     or ""
                                 ),
-                                action_name=str(w.get("actionName") or w.get("name") or ""),
+                                action_name=str(
+                                    w.get("actionName") or w.get("name") or ""
+                                ),
                                 active=self._coerce_bool(
                                     w.get("active", True),
                                     "config.webhooks.active",
                                     default=True,
                                 ),
+                                events=events,
                             )
                         )
                     except Exception:  # noqa: BLE001
@@ -1927,20 +1942,32 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 "speakerVolume": "speaker_volume",
                 "speakerGain": "speaker_gain",
             }.items():
-                if fw_key in audio_section and hasattr(self.data.audio_config, model_attr):
+                if fw_key in audio_section and hasattr(
+                    self.data.audio_config, model_attr
+                ):
                     setattr(self.data.audio_config, model_attr, audio_section[fw_key])
 
         dnd_sources: tuple[dict[str, Any] | None, ...] = (
-            device_data.get("dndConfig")
-            if isinstance(device_data.get("dndConfig"), dict)
-            else None,
-            config_section.get("dnd")
-            if isinstance(config_section.get("dnd"), dict)
-            else None,
-            config_section.get("dndConfig")
-            if isinstance(config_section.get("dndConfig"), dict)
-            else None,
-            device_data.get("dnd") if isinstance(device_data.get("dnd"), dict) else None,
+            (
+                device_data.get("dndConfig")
+                if isinstance(device_data.get("dndConfig"), dict)
+                else None
+            ),
+            (
+                config_section.get("dnd")
+                if isinstance(config_section.get("dnd"), dict)
+                else None
+            ),
+            (
+                config_section.get("dndConfig")
+                if isinstance(config_section.get("dndConfig"), dict)
+                else None
+            ),
+            (
+                device_data.get("dnd")
+                if isinstance(device_data.get("dnd"), dict)
+                else None
+            ),
         )
         dnd_section = next((section for section in dnd_sources if section), None)
         if dnd_section:
@@ -2064,7 +2091,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             return
 
         if not any(
-            entry.code == self.selected_quick_dial_code for entry in self.data.quick_dials
+            entry.code == self.selected_quick_dial_code
+            for entry in self.data.quick_dials
         ):
             self.selected_quick_dial_code = None
 
@@ -2095,7 +2123,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if not self.selected_webhook_code:
             return
 
-        if not any(entry.code == self.selected_webhook_code for entry in self.data.webhooks):
+        if not any(
+            entry.code == self.selected_webhook_code for entry in self.data.webhooks
+        ):
             self.selected_webhook_code = None
 
     def _event_timestamp_iso(self, event: TsuryPhoneEvent) -> str:

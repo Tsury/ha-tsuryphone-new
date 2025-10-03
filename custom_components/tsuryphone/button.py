@@ -333,6 +333,10 @@ class TsuryPhoneButton(
         # Dial the number
         await self.coordinator.api_client.dial(selected_entry.number)
 
+        # Clear selection so UI inputs reset after action completes
+        self.coordinator.selected_quick_dial_code = None
+        self.coordinator.async_update_listeners()
+
     async def _add_quick_dial_entry(self) -> None:
         """Add a quick dial entry from buffered text inputs."""
         buffer = self._get_buffer_snapshot("quick_dial")
