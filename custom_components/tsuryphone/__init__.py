@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.network import get_url
+from urllib.parse import urlparse
 
 from .api_client import TsuryPhoneAPIClient, TsuryPhoneAPIError
 from .coordinator import TsuryPhoneDataUpdateCoordinator
@@ -42,6 +44,91 @@ else:
     TsuryPhoneConfigEntry = ConfigEntry
 
 
+def _normalize_url(url: str | None) -> str | None:
+    """Normalize a Home Assistant URL candidate."""
+
+    if not url:
+        return None
+
+    candidate = url.strip()
+    if not candidate:
+        return None
+
+    # Remove trailing slash for consistency
+    if candidate.endswith("/"):
+        candidate = candidate[:-1]
+
+    parsed = urlparse(candidate)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+
+    host = parsed.hostname or ""
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return None
+
+    return candidate
+
+
+async def _ensure_device_ha_url(
+    hass: HomeAssistant,
+    api_client: TsuryPhoneAPIClient,
+    device_data: dict,
+) -> None:
+    """Ensure the TsuryPhone device knows how to reach this Home Assistant instance."""
+
+    desired_url: str | None = None
+
+    # Prefer explicitly configured URLs
+    for candidate in (hass.config.external_url, hass.config.internal_url):
+        desired_url = _normalize_url(candidate)
+        if desired_url:
+            break
+
+    if not desired_url:
+        try:
+            # Fall back to Home Assistant's best guess if explicit URLs are missing
+            guessed_url = get_url(
+                hass,
+                allow_external=True,
+                allow_internal=True,
+                allow_ip=True,
+                allow_cloud=False,
+            )
+        except HomeAssistantError:  # URL discovery not available yet
+            guessed_url = None
+
+        desired_url = _normalize_url(guessed_url)
+
+    if not desired_url:
+        _LOGGER.debug("Skipping HA URL sync: no suitable Home Assistant URL available")
+        return
+
+    # Extract current URL from the device response, if present, to avoid unnecessary writes
+    current_url: str | None = None
+    if isinstance(device_data, dict):
+        phone_section = device_data.get("phone")
+        if isinstance(phone_section, dict):
+            current_url = phone_section.get("homeAssistantUrl")
+        if not current_url:
+            current_url = device_data.get("homeAssistantUrl")
+
+    current_url = _normalize_url(current_url)
+    if current_url == desired_url:
+        _LOGGER.debug("Device already configured with Home Assistant URL %s", desired_url)
+        return
+
+    try:
+        await api_client.set_ha_url(desired_url)
+    except TsuryPhoneAPIError as err:
+        _LOGGER.warning(
+            "Failed to update TsuryPhone Home Assistant URL to %s: %s",
+            desired_url,
+            err,
+        )
+    else:
+        _LOGGER.info("Updated TsuryPhone Home Assistant URL to %s", desired_url)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up TsuryPhone from a config entry."""
     _LOGGER.debug("Setting up TsuryPhone integration for %s", entry.title)
@@ -69,6 +156,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as err:
         _LOGGER.exception("Unexpected error connecting to TsuryPhone device")
         raise ConfigEntryNotReady(f"Unexpected error: {err}") from err
+
+    # Ensure device can reach this Home Assistant instance for webhook callbacks
+    await _ensure_device_ha_url(hass, api_client, device_data)
 
     # Create device info model
     device_info = TsuryDeviceInfo(
