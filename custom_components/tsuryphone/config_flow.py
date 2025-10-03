@@ -12,7 +12,7 @@ from homeassistant import config_entries
 from homeassistant.components import zeroconf
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -278,11 +278,13 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Handle options flow initialization."""
         # Get coordinator
-        if DOMAIN not in self.hass.data:
+        if self.config_entry.state != ConfigEntryState.LOADED:
             return self.async_abort(reason="integration_not_loaded")
 
-        coordinator_data = self.hass.data[DOMAIN].get(self.config_entry.entry_id)
-        if not coordinator_data:
+        coordinator_data: TsuryPhoneDataUpdateCoordinator | None = (
+            self.config_entry.runtime_data
+        )
+        if coordinator_data is None:
             return self.async_abort(reason="coordinator_not_found")
 
         self.coordinator = coordinator_data

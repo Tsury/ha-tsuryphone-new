@@ -179,10 +179,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store coordinator in runtime data for platform access
     entry.runtime_data = coordinator
     
-    # Store in hass.data for backwards compatibility
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
-    
     # Phase P5: Set up notifications
     coordinator._notification_manager = await async_setup_notifications(hass, coordinator)
     
@@ -235,13 +231,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Stop coordinator
     if unload_ok:
-        coordinator: TsuryPhoneDataUpdateCoordinator = entry.runtime_data
-        
-        # Phase P5: Clean up notifications
-        if hasattr(coordinator, '_notification_manager'):
-            await async_unload_notifications(hass, coordinator)
-        
-        await coordinator.async_shutdown()
+        coordinator: TsuryPhoneDataUpdateCoordinator | None = entry.runtime_data
+
+        if coordinator is not None:
+            # Phase P5: Clean up notifications
+            if hasattr(coordinator, "_notification_manager"):
+                await async_unload_notifications(hass, coordinator)
+
+            await coordinator.async_shutdown()
 
         # Unload services if this is the last config entry
         remaining_entries = [
@@ -251,9 +248,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not remaining_entries:
             await async_unload_services(hass)
 
-    # Clean up stored data
-    if entry.entry_id in hass.data[DOMAIN]:
-        hass.data[DOMAIN].pop(entry.entry_id)
+    entry.runtime_data = None
 
     _LOGGER.debug("TsuryPhone integration unloaded for %s", entry.title)
     return unload_ok

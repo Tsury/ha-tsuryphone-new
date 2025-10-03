@@ -106,6 +106,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             "webhook_id": "",
             "action_name": "",
         }
+        self.dial_digit_input: dict[str, str] = {"digit": ""}
 
         # Phase P5: Notification manager (will be set during setup)
         self._notification_manager = None

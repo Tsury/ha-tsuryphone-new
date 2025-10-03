@@ -31,17 +31,12 @@ from .models import TsuryPhoneState
 
 _LOGGER = logging.getLogger(__name__)
 
-_DIGIT_BUTTON_DESCRIPTIONS = tuple(
+BUTTON_DESCRIPTIONS = (
     ButtonEntityDescription(
-        key=f"dial_digit_{digit}",
-        name=f"Call - Dial Digit {digit}",
+        key="dial_digit_send",
+        name="Call - Send Dial Digit",
         icon="mdi:dialpad",
-    )
-    for digit in range(10)
-)
-
-
-BUTTON_DESCRIPTIONS = _DIGIT_BUTTON_DESCRIPTIONS + (
+    ),
     ButtonEntityDescription(
         key="answer",
         name="Call - Answer",
@@ -239,6 +234,8 @@ class TsuryPhoneButton(
                 await self._refresh_snapshot()
             elif self.entity_description.key == "dial_selected":
                 await self._dial_selected_quick_dial()
+            elif self.entity_description.key == "dial_digit_send":
+                await self._dial_digit_from_buffer()
             elif self.entity_description.key == "quick_dial_add":
                 await self._add_quick_dial_entry()
             elif self.entity_description.key == "quick_dial_remove":
@@ -257,10 +254,6 @@ class TsuryPhoneButton(
                 await self._remove_selected_webhook()
             elif self.entity_description.key == "toggle_call_waiting":
                 await self._toggle_call_waiting()
-            elif self.entity_description.key.startswith("dial_digit_"):
-                await self._dial_digit(
-                    self.entity_description.key.removeprefix("dial_digit_")
-                )
         except TsuryPhoneAPIError as err:
             # Provide user-friendly error messages
             error_msg = self._get_user_friendly_error(err)
@@ -361,14 +354,16 @@ class TsuryPhoneButton(
         self.coordinator.selected_quick_dial_code = None
         self.coordinator.async_update_listeners()
 
-    async def _dial_digit(self, digit: str) -> None:
-        """Send a single digit to the device dial buffer."""
+    async def _dial_digit_from_buffer(self) -> None:
+        """Send the buffered digit to the device dial buffer and clear it."""
 
-        digit = digit.strip()
+        buffer = self._get_buffer_snapshot("dial_digit")
+        digit = buffer.get("digit", "").strip()
+
         if not digit:
-            raise HomeAssistantError("Digit is required")
+            raise HomeAssistantError("Enter a digit to send")
 
-        if len(digit) != 1 or digit < "0" or digit > "9":
+        if len(digit) != 1 or digit not in "0123456789":
             raise HomeAssistantError("Digit must be between 0 and 9")
 
         state: TsuryPhoneState = self.coordinator.data
@@ -376,6 +371,10 @@ class TsuryPhoneButton(
             raise HomeAssistantError("Phone must be idle to dial digits")
 
         await self.coordinator.api_client.dial_digit(digit)
+
+        # Clear the buffer so the UI input resets after sending
+        self._clear_buffer("dial_digit", ("digit",))
+        self.coordinator.async_update_listeners()
 
     async def _add_quick_dial_entry(self) -> None:
         """Add a quick dial entry from buffered text inputs."""
@@ -630,8 +629,11 @@ class TsuryPhoneButton(
             else:
                 attributes["selected_quick_dial"] = None
 
-        elif self.entity_description.key.startswith("dial_digit_"):
-            attributes["can_execute"] = state.app_state == AppState.IDLE
+        elif self.entity_description.key == "dial_digit_send":
+            buffer = self._get_buffer_snapshot("dial_digit")
+            digit = buffer.get("digit", "")
+            attributes["buffered_digit"] = digit
+            attributes["can_execute"] = bool(digit and state.app_state == AppState.IDLE)
             if state.current_dialing_number:
                 attributes["current_dialing_number"] = state.current_dialing_number
 

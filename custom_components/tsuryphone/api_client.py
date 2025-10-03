@@ -167,7 +167,7 @@ class TsuryPhoneAPIClient:
         return await self._request("GET", API_DIAGNOSTICS)
 
     # Call control endpoints
-    async def dial_number(self, number: str) -> dict[str, Any]:
+    async def dial(self, number: str) -> dict[str, Any]:
         """Dial a phone number."""
         if not number:
             raise TsuryPhoneAPIError(
@@ -175,23 +175,19 @@ class TsuryPhoneAPIClient:
             )
         return await self._request("POST", API_CALL_DIAL, {"number": number})
 
-    async def dial(self, number: str) -> dict[str, Any]:
-        """Backward compatible alias for dialing a number."""
-        return await self.dial_number(number)
+    async def dial_digit(self, digit: str) -> dict[str, Any]:
+        """Send a single dial digit to the device."""
+        if digit is None or digit == "":
+            raise TsuryPhoneAPIError(
+                "Digit is required", ERROR_CODE_MISSING_DIGIT
+            )
 
-        async def dial_digit(self, digit: str) -> dict[str, Any]:
-            """Send a single dial digit to the device."""
-            if digit is None or digit == "":
-                raise TsuryPhoneAPIError(
-                    "Digit is required", ERROR_CODE_MISSING_DIGIT
-                )
+        if len(digit) != 1 or digit < "0" or digit > "9":
+            raise TsuryPhoneAPIError(
+                "Digit must be between 0 and 9", ERROR_CODE_INVALID_DIGIT
+            )
 
-            if len(digit) != 1 or digit < "0" or digit > "9":
-                raise TsuryPhoneAPIError(
-                    "Digit must be between 0 and 9", ERROR_CODE_INVALID_DIGIT
-                )
-
-            return await self._request("POST", API_CALL_DIAL_DIGIT, {"digit": digit})
+        return await self._request("POST", API_CALL_DIAL_DIGIT, {"digit": digit})
 
     async def answer_call(self) -> dict[str, Any]:
         """Answer incoming call."""

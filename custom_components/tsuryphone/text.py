@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.exceptions import HomeAssistantError
 
-from . import TsuryPhoneConfigEntry, get_device_info
+from . import get_device_info
 from .const import (
     DOMAIN,
     MAX_CODE_LENGTH,
@@ -39,6 +39,15 @@ class TsuryPhoneTextDescription(TextEntityDescription):
 
 
 TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
+    TsuryPhoneTextDescription(
+        key="dial_digit",
+        name="Call - Dial Digit",
+        icon="mdi:dialpad",
+        max_length=1,
+        buffer_name="dial_digit",
+        field_name="digit",
+        placeholder="5",
+    ),
     # Blocked numbers
     TsuryPhoneTextDescription(
         key="blocked_number",
@@ -179,7 +188,7 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: TsuryPhoneConfigEntry,
+    config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up TsuryPhone text entities from a config entry."""
