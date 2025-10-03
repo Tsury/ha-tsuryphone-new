@@ -87,7 +87,7 @@ BUTTON_DESCRIPTIONS = (
     ),
     ButtonEntityDescription(
         key="ring",
-        name="Device - Ring",
+        name="Ring Pattern - Test (Bypass DND)",
         icon="mdi:phone-ring",
         entity_category=EntityCategory.CONFIG,
     ),
@@ -273,9 +273,12 @@ class TsuryPhoneButton(
         await self.coordinator.api_client.hangup_call()
 
     async def _ring_device(self) -> None:
-        """Ring the device with current pattern."""
-        # Use empty pattern to trigger default device ring
-        await self.coordinator.api_client.ring_device("")
+        """Ring the device using the configured pattern while bypassing DND."""
+
+        state: TsuryPhoneState = self.coordinator.data
+        pattern = state.ring_pattern or ""
+
+        await self.coordinator.api_client.ring_device(pattern, force=True)
 
     async def _reset_device(self) -> None:
         """Reset the device."""

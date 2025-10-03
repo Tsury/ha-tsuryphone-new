@@ -43,6 +43,13 @@ ring_device:
       example: "300,300,300"
       selector:
         text:
+    force:
+      name: Bypass DND
+      description: Whether to enforce ringing even when Do Not Disturb is active.
+      required: false
+      default: false
+      selector:
+        boolean:
 
 set_ring_pattern:
   name: Set ring pattern

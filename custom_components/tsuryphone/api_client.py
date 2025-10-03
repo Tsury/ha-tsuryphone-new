@@ -197,11 +197,16 @@ class TsuryPhoneAPIClient:
         """Factory reset the device."""
         return await self._request("POST", API_SYSTEM_FACTORY_RESET)
 
-    async def ring_device(self, pattern: str | None = None) -> dict[str, Any]:
-        """Ring the device with optional pattern."""
-        data = {}
+    async def ring_device(
+        self, pattern: str | None = None, *, force: bool | None = None
+    ) -> dict[str, Any]:
+        """Ring the device with optional pattern and DND override."""
+
+        data: dict[str, Any] = {}
         if pattern:
             data["pattern"] = pattern
+        if force is not None:
+            data["force"] = force
         return await self._request("POST", API_SYSTEM_RING, data)
 
     # Configuration endpoints

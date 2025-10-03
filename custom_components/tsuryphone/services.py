@@ -91,6 +91,7 @@ DIAL_SCHEMA = _service_schema(
 RING_DEVICE_SCHEMA = _service_schema(
     {
         vol.Optional("pattern", default=""): cv.string,
+        vol.Optional("force"): cv.boolean,
     }
 )
 
@@ -572,9 +573,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
         pattern = call.data.get("pattern", "")
+        force_bypass = call.data.get("force")
 
         try:
-            await coordinator.api_client.ring_device(pattern)
+            if force_bypass is None:
+                await coordinator.api_client.ring_device(pattern)
+            else:
+                await coordinator.api_client.ring_device(pattern, force=force_bypass)
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to ring device: {err}") from err
 
