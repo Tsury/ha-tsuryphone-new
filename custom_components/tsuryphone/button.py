@@ -34,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 BUTTON_DESCRIPTIONS = (
     ButtonEntityDescription(
         key="dial_digit_send",
-        name="Call - Send Dial Digit",
+        name="Call - Dial Digit - Send",
         icon="mdi:dialpad",
     ),
     ButtonEntityDescription(
@@ -284,6 +284,7 @@ class TsuryPhoneButton(
             or state.is_incoming_call
             or state.is_dialing
             or state.current_call.number
+            or state.current_dialing_number
         ):
             raise HomeAssistantError("No active call to hang up")
 
@@ -594,13 +595,22 @@ class TsuryPhoneButton(
                 attributes["incoming_number"] = state.current_call.number
 
         elif self.entity_description.key == "hangup":
-            attributes["can_execute"] = state.is_call_active
-            if state.is_call_active and state.current_call.number:
+            can_execute = bool(
+                state.is_call_active
+                or state.is_incoming_call
+                or state.is_dialing
+                or state.current_call.number
+                or state.current_dialing_number
+            )
+            attributes["can_execute"] = can_execute
+            if state.current_call.number:
                 attributes["active_call_number"] = state.current_call.number
                 # Add call duration
                 duration = self.coordinator.current_call_duration_seconds
                 if duration > 0:
                     attributes["call_duration_seconds"] = duration
+            if state.current_dialing_number:
+                attributes["current_dialing_number"] = state.current_dialing_number
 
         elif self.entity_description.key == "ring":
             attributes["current_ring_pattern"] = state.ring_pattern or "default"
@@ -757,6 +767,8 @@ class TsuryPhoneButton(
                     state.is_call_active
                     or state.is_incoming_call
                     or state.is_dialing
+                    or state.current_call.number
+                    or state.current_dialing_number
                 )
             if self.entity_description.key == "toggle_call_waiting":
                 return state.call_waiting_available

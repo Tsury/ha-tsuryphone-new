@@ -558,13 +558,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         duration_ms: int | None,
     ) -> str | None:
         if call_type:
-            normalized = str(call_type).strip().lower()
-            if normalized in {"incoming", "outgoing", "blocked", "missed"}:
-                _LOGGER.debug(
-                    "Discarding legacy call type value from firmware: %s", normalized
-                )
-                return None
-            return normalized
+            return str(call_type).strip().lower()
 
         if is_incoming is None:
             return None
