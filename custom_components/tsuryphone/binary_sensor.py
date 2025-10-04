@@ -131,10 +131,13 @@ class TsuryPhoneBinarySensor(
 
         # Add specific attributes per sensor type
         if self.entity_description.key == "call_waiting_available":
-            # Add heuristic mode indicator (R61 detail)
-            attributes["mode"] = (
-                "heuristic"  # Will be "firmware" when device exposes field
-            )
+            attributes["mode"] = "firmware"
+
+            call_waiting_id = state.current_call.call_waiting_id
+            if call_waiting_id != -1:
+                attributes["call_waiting_id"] = call_waiting_id
+
+            attributes["on_hold"] = state.call_waiting_on_hold
 
             # Add toggle statistics if available
             if hasattr(state, "call_waiting_toggles"):

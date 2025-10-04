@@ -37,6 +37,11 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:phone-in-talk",
     ),
     SensorEntityDescription(
+        key="current_call_name",
+        name="Current Caller Name",
+        icon="mdi:account-voice",
+    ),
+    SensorEntityDescription(
         key="current_dialing_number",
         name="Current Dialing Number",
         icon="mdi:phone-dial",
@@ -184,6 +189,8 @@ class TsuryPhoneSensor(
             return self._format_app_state(state.app_state)
         elif self.entity_description.key == "current_call_number":
             return state.current_call.number if state.current_call.number else None
+        elif self.entity_description.key == "current_call_name":
+            return state.current_call.name if state.current_call.name else None
         elif self.entity_description.key == "current_dialing_number":
             return (
                 state.current_dialing_number if state.current_dialing_number else None
@@ -239,6 +246,17 @@ class TsuryPhoneSensor(
 
         elif self.entity_description.key == "current_call_number":
             if state.current_call.number:
+                attributes["is_incoming"] = state.current_call.is_incoming
+                attributes["call_start_ts"] = state.current_call.start_time
+                attributes["call_type"] = state.current_call.call_type or (
+                    "incoming" if state.current_call.is_incoming else "outgoing"
+                )
+                if state.current_call.name:
+                    attributes["name"] = state.current_call.name
+
+        elif self.entity_description.key == "current_call_name":
+            if state.current_call.name:
+                attributes["number"] = state.current_call.number
                 attributes["is_incoming"] = state.current_call.is_incoming
                 attributes["call_start_ts"] = state.current_call.start_time
                 attributes["call_type"] = state.current_call.call_type or (

@@ -46,6 +46,7 @@ class CallInfo:
     call_id: int = -1
     call_waiting_id: int = -1
     call_type: str = ""
+    name: str = ""
 
 
 @dataclass
@@ -182,6 +183,7 @@ class CallHistoryEntry:
     duration_ms: int | None = None  # Firmware durationMs field
     reason: str | None = None
     synthetic: bool = False  # True if start was synthesized from end-only
+    name: str = ""
 
     def __post_init__(self) -> None:
         """Set received timestamp if not provided."""
@@ -227,6 +229,7 @@ class CallHistoryEntry:
             "duration_ms": self.duration_ms,
             "reason": self.reason,
             "synthetic": self.synthetic,
+            "name": self.name,
         }
 
     @classmethod
@@ -244,6 +247,7 @@ class CallHistoryEntry:
             duration_ms=data.get("duration_ms"),
             reason=data.get("reason"),
             synthetic=data.get("synthetic", False),
+            name=data.get("name", ""),
         )
 
 
@@ -273,6 +277,7 @@ class TsuryPhoneState:
     maintenance_mode: bool = False
     hook_off: bool = False
     call_waiting_available: bool = False
+    call_waiting_on_hold: bool = False
 
     # Device stats
     stats: DeviceStats = field(default_factory=DeviceStats)

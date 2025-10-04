@@ -368,6 +368,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self.data.current_call.start_time = call_start_ts
         self.data.current_call.call_start_ts = call_start_ts
         self.data.current_call.duration_ms = None
+        caller_name = str(
+            event.data.get("currentCallName")
+            or event.data.get("callerName")
+            or ""
+        )
+        self.data.current_call.name = caller_name
 
         # Start call duration timer
         self._start_call_timer()
@@ -383,6 +389,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             received_ts=event.received_at,
             seq=event.seq,
             call_start_ts=call_start_ts,
+            name=caller_name,
         )
 
         # Store provisional entry (will be finalized on call end)
@@ -408,6 +415,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if duration_ms is None and self._call_start_monotonic > 0:
             duration_ms = int((time.monotonic() - self._call_start_monotonic) * 1000)
 
+        caller_name = str(
+            event.data.get("currentCallName")
+            or event.data.get("callerName")
+            or self.data.current_call.name
+            or ""
+        )
+
         # Clear transient flags so HA reflects idle state without delay
         self.data.ringing = False
         self.data.current_dialing_number = ""
@@ -432,6 +446,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             call_start_ts=call_start_ts,
             duration_ms=duration_ms,
             call_type=call_type,
+            name=caller_name,
         )
 
         # Finalize call history entry
@@ -440,6 +455,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             # Update existing provisional entry
             entry = pending_call["entry"]
             entry.duration_s = duration_s
+            entry.name = caller_name or entry.name
             self.data.add_call_history_entry(entry)
         else:
             # Synthesize call start (R45 - handle end-only scenario)
@@ -454,6 +470,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 received_ts=event.received_at,
                 seq=event.seq,
                 synthetic=True,
+                name=caller_name,
             )
             self.data.add_call_history_entry(history_entry)
 
@@ -464,6 +481,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         """Handle blocked call event."""
         number = event.data.get("number", "")
 
+        caller_name = str(
+            event.data.get("currentCallName")
+            or event.data.get("callerName")
+            or ""
+        )
+
         # Add to call history immediately (blocked calls are complete events)
         history_entry = CallHistoryEntry(
             call_type="blocked",
@@ -473,6 +496,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             ts_device=event.ts,
             received_ts=event.received_at,
             seq=event.seq,
+            name=caller_name,
         )
 
         self.data.add_call_history_entry(history_entry)
@@ -487,6 +511,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             call_start_ts=event.ts,
             duration_ms=None,
             call_type="incoming_blocked",
+            name=caller_name,
         )
 
     def _update_last_call_info(
@@ -497,6 +522,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         call_start_ts: int | None = None,
         duration_ms: int | None = None,
         call_type: str | None = None,
+        name: str | None = None,
     ) -> None:
         """Update last call metadata before clearing current call state."""
         if not number:
@@ -535,6 +561,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 if self.data.last_call.is_incoming
                 else "outgoing_answered"
             )
+
+        if name is None:
+            name = self.data.current_call.name or self.data.last_call.name
+
+        if name is not None:
+            self.data.last_call.name = name or ""
 
     def _reset_current_call_state(self, *, number: str | None = None) -> None:
         """Clear current call-related state and associated helpers."""
@@ -664,6 +696,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if current_call_number:
             self.data.current_call.number = current_call_number
 
+        if "currentCallName" in event.data:
+            self.data.current_call.name = str(event.data.get("currentCallName") or "")
+
         # Update dialing number if provided
         current_dialing_number = event.data.get("currentDialingNumber", "")
         if current_dialing_number:
@@ -719,6 +754,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         if self.data.current_call.is_incoming
                         else "outgoing_answered"
                     ),
+                    name=self.data.current_call.name,
                 )
             if (
                 self.data.current_call.number
@@ -758,6 +794,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         current_number = event.data.get("currentCallNumber", "")
         if current_number:
             self.data.current_call.number = current_number
+
+            if "currentCallName" in event.data:
+                self.data.current_call.name = str(
+                    event.data.get("currentCallName") or ""
+                )
 
             if "dndActive" in event.data:
                 self.data.dnd_active = self._coerce_bool(
@@ -823,6 +864,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 call_start_ts=None,
                 duration_ms=None,
                 call_type=call_type or None,
+                name=str(
+                    last_call_data.get("name")
+                    or last_call_data.get("currentCallName")
+                    or ""
+                ),
             )
 
     def _handle_status_update(self, event: TsuryPhoneEvent) -> None:
@@ -1071,11 +1117,45 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             call_number = data.get("currentCallNumber", "")
             if call_number:
                 self.data.current_call.number = call_number
+            if "currentCallName" in data:
+                self.data.current_call.name = str(
+                    data.get("currentCallName") or ""
+                )
             if "isIncomingCall" in data:
                 self.data.current_call.is_incoming = self._coerce_bool(
                     data["isIncomingCall"],
                     "snapshot.isIncomingCall",
                     default=self.data.current_call.is_incoming,
+                )
+
+            if "callWaitingId" in data:
+                try:
+                    call_waiting_id = int(data["callWaitingId"])
+                except (TypeError, ValueError):
+                    call_waiting_id = -1
+
+                self.data.current_call.call_waiting_id = call_waiting_id
+                self.data.call_waiting_available = call_waiting_id != -1
+
+                if call_waiting_id == -1:
+                    self.data.call_waiting_on_hold = False
+
+            if "callWaitingAvailable" in data:
+                available = self._coerce_bool(
+                    data["callWaitingAvailable"],
+                    "snapshot.callWaitingAvailable",
+                    default=self.data.call_waiting_available,
+                )
+                self.data.call_waiting_available = available
+                if not available:
+                    self.data.current_call.call_waiting_id = -1
+                    self.data.call_waiting_on_hold = False
+
+            if "callWaitingOnHold" in data:
+                self.data.call_waiting_on_hold = self._coerce_bool(
+                    data["callWaitingOnHold"],
+                    "snapshot.callWaitingOnHold",
+                    default=self.data.call_waiting_on_hold,
                 )
             if data.get("callStartTs"):
                 self.data.current_call.start_ts = data.get("callStartTs")
@@ -1335,6 +1415,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if "currentCallNumber" in event.data and event.data["currentCallNumber"]:
             self.data.current_call.number = event.data["currentCallNumber"]
 
+        if "currentCallName" in event.data:
+            self.data.current_call.name = str(event.data.get("currentCallName") or "")
+
         # Extract dialing number if present
         if "currentDialingNumber" in event.data:
             self.data.current_dialing_number = event.data["currentDialingNumber"]
@@ -1417,8 +1500,37 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract call waiting info if available (firmware debt R61)
         if "callWaitingId" in event.data:
-            # This would indicate firmware now exposes call waiting
-            self.data.call_waiting_available = event.data["callWaitingId"] != -1
+            try:
+                call_waiting_id = int(event.data["callWaitingId"])
+            except (TypeError, ValueError):
+                call_waiting_id = None
+
+            if call_waiting_id is None:
+                call_waiting_id = -1
+
+            self.data.current_call.call_waiting_id = call_waiting_id
+            self.data.call_waiting_available = call_waiting_id != -1
+
+            if call_waiting_id == -1:
+                self.data.call_waiting_on_hold = False
+
+        if "callWaitingAvailable" in event.data:
+            available = self._coerce_bool(
+                event.data["callWaitingAvailable"],
+                "event.context.callWaitingAvailable",
+                default=self.data.call_waiting_available,
+            )
+            self.data.call_waiting_available = available
+            if not available:
+                self.data.current_call.call_waiting_id = -1
+                self.data.call_waiting_on_hold = False
+
+        if "callWaitingOnHold" in event.data:
+            self.data.call_waiting_on_hold = self._coerce_bool(
+                event.data["callWaitingOnHold"],
+                "event.context.callWaitingOnHold",
+                default=self.data.call_waiting_on_hold,
+            )
 
     def _detect_unanswered_outgoing(self, event: TsuryPhoneEvent) -> None:
         """Detect and record unanswered outgoing calls."""
@@ -1924,6 +2036,36 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     default=self.data.hook_off,
                 )
 
+            if "callWaitingId" in phone_data:
+                try:
+                    call_waiting_id = int(phone_data["callWaitingId"])
+                except (TypeError, ValueError):
+                    call_waiting_id = -1
+
+                self.data.current_call.call_waiting_id = call_waiting_id
+                self.data.call_waiting_available = call_waiting_id != -1
+
+                if call_waiting_id == -1:
+                    self.data.call_waiting_on_hold = False
+
+            if "callWaitingAvailable" in phone_data:
+                available = self._coerce_bool(
+                    phone_data["callWaitingAvailable"],
+                    "config.phone.callWaitingAvailable",
+                    default=self.data.call_waiting_available,
+                )
+                self.data.call_waiting_available = available
+                if not available:
+                    self.data.current_call.call_waiting_id = -1
+                    self.data.call_waiting_on_hold = False
+
+            if "callWaitingOnHold" in phone_data:
+                self.data.call_waiting_on_hold = self._coerce_bool(
+                    phone_data["callWaitingOnHold"],
+                    "config.phone.callWaitingOnHold",
+                    default=self.data.call_waiting_on_hold,
+                )
+
         # Extract global fields that may appear outside phone section
         audio_section = (
             device_data.get("audioConfig")
@@ -2026,6 +2168,36 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 device_data.get("isHookOff"),
                 "config.device.isHookOff",
                 default=self.data.hook_off,
+            )
+
+        if "callWaitingId" in device_data:
+            try:
+                call_waiting_id = int(device_data["callWaitingId"])
+            except (TypeError, ValueError):
+                call_waiting_id = -1
+
+            self.data.current_call.call_waiting_id = call_waiting_id
+            self.data.call_waiting_available = call_waiting_id != -1
+
+            if call_waiting_id == -1:
+                self.data.call_waiting_on_hold = False
+
+        if "callWaitingAvailable" in device_data:
+            available = self._coerce_bool(
+                device_data["callWaitingAvailable"],
+                "config.device.callWaitingAvailable",
+                default=self.data.call_waiting_available,
+            )
+            self.data.call_waiting_available = available
+            if not available:
+                self.data.current_call.call_waiting_id = -1
+                self.data.call_waiting_on_hold = False
+
+        if "callWaitingOnHold" in device_data:
+            self.data.call_waiting_on_hold = self._coerce_bool(
+                device_data["callWaitingOnHold"],
+                "config.device.callWaitingOnHold",
+                default=self.data.call_waiting_on_hold,
             )
 
         # Validate tracked selections after bulk update

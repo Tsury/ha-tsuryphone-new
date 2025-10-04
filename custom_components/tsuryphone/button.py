@@ -779,6 +779,17 @@ class TsuryPhoneButton(
         elif self.entity_description.key in ["refetch", "refresh_snapshot"]:
             return self.coordinator.last_update_success and state.connected
 
+        elif self.entity_description.key == "dial_digit_send":
+            if not (self.coordinator.last_update_success and state.connected):
+                return False
+
+            buffer = self._get_buffer_snapshot("dial_digit")
+            digit = buffer.get("digit", "").strip()
+            if not digit:
+                return False
+
+            return state.app_state == AppState.IDLE
+
         # Phase P4 features
         elif self.entity_description.key == "dial_selected":
             # Available if we have a selection and quick dial entries exist
