@@ -28,6 +28,7 @@ from .const import (
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .models import TsuryPhoneState
+from .dialing import normalize_phone_number
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -197,6 +198,20 @@ class TsuryPhoneButton(
 
         buffer = getattr(self.coordinator, f"{buffer_name}_input", None) or {}
         return {key: (value or "").strip() for key, value in buffer.items()}
+
+    def _normalize_number_input(self, value: str, *, field: str) -> str:
+        """Normalize a number using the coordinator's dialing context."""
+
+        candidate = (value or "").strip()
+        if not candidate:
+            raise HomeAssistantError(f"{field} cannot be empty")
+
+        state: TsuryPhoneState = self.coordinator.data
+        default_code = state.default_dialing_code if state and state.default_dialing_code else ""
+        normalized = normalize_phone_number(candidate, default_code)
+        if not normalized:
+            raise HomeAssistantError(f"{field} must contain at least one digit")
+        return normalized
 
     def _clear_buffer(
         self, buffer_name: str, fields: Iterable[str] | None = None
@@ -395,8 +410,10 @@ class TsuryPhoneButton(
                 "Quick dial input missing required field(s): " + ", ".join(missing)
             )
 
+        normalized_number = self._normalize_number_input(number, field="Quick dial number")
+
         try:
-            await self.coordinator.api_client.add_quick_dial(code, number, name)
+            await self.coordinator.api_client.add_quick_dial(code, normalized_number, name)
             self.coordinator.selected_quick_dial_code = code
             self._clear_buffer("quick_dial")
             await self.coordinator.async_request_refresh()
@@ -429,9 +446,11 @@ class TsuryPhoneButton(
         if not number:
             raise HomeAssistantError("Enter a number to block")
 
+        normalized_number = self._normalize_number_input(number, field="Blocked number")
+
         try:
-            await self.coordinator.api_client.add_blocked_number(number, reason)
-            self.coordinator.selected_blocked_number = number
+            await self.coordinator.api_client.add_blocked_number(normalized_number, reason)
+            self.coordinator.selected_blocked_number = normalized_number
             self._clear_buffer("blocked")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
@@ -462,9 +481,11 @@ class TsuryPhoneButton(
         if not number:
             raise HomeAssistantError("Enter a priority number to add")
 
+        normalized_number = self._normalize_number_input(number, field="Priority number")
+
         try:
-            await self.coordinator.api_client.add_priority_caller(number)
-            self.coordinator.selected_priority_number = number
+            await self.coordinator.api_client.add_priority_caller(normalized_number)
+            self.coordinator.selected_priority_number = normalized_number
             self._clear_buffer("priority")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
