@@ -756,10 +756,11 @@ class TsuryPhoneButton(
                 return False
 
             if self.entity_description.key == "answer":
+                if state.is_call_active:
+                    return False
+
                 return bool(
                     state.is_incoming_call
-                    or state.is_call_active
-                    or state.is_dialing
                     or state.ringing
                 )
             if self.entity_description.key == "hangup":

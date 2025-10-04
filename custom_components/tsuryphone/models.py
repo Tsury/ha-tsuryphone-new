@@ -11,6 +11,7 @@ from datetime import datetime
 from homeassistant.util import dt as dt_util
 
 from .const import AppState, EventCategory, INTEGRATION_EVENT_SCHEMA_VERSION
+from .dialing import DialingContext
 
 
 class CallDirection(str, Enum):
@@ -56,11 +57,14 @@ class QuickDialEntry:
     code: str
     number: str
     name: str = ""
+    normalized_number: str = ""
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
         if not self.code or not self.number:
             raise ValueError("Code and number are required for quick dial entry")
+        if self.normalized_number is None:
+            self.normalized_number = ""
 
 
 @dataclass
@@ -69,11 +73,14 @@ class BlockedNumberEntry:
 
     number: str
     reason: str = ""
+    normalized_number: str = ""
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
         if not self.number:
             raise ValueError("Number is required for blocked number entry")
+        if self.normalized_number is None:
+            self.normalized_number = ""
 
 
 @dataclass
@@ -104,10 +111,13 @@ class PriorityCallerEntry:
     """Priority caller entry (currently only number)."""
 
     number: str
+    normalized_number: str = ""
 
     def __post_init__(self) -> None:
         if not self.number:
             raise ValueError("Number is required for priority caller entry")
+        if self.normalized_number is None:
+            self.normalized_number = ""
 
 
 @dataclass
@@ -286,6 +296,8 @@ class TsuryPhoneState:
     audio_config: AudioConfig = field(default_factory=AudioConfig)
     dnd_config: DNDConfig = field(default_factory=DNDConfig)
     ring_pattern: str = ""
+    default_dialing_code: str = ""
+    default_dialing_prefix: str = ""
 
     # Lists (managed via services and options)
     quick_dials: list[QuickDialEntry] = field(default_factory=list)
@@ -374,6 +386,16 @@ class TsuryPhoneState:
             if entry.code == code:
                 return entry
         return None
+
+    @property
+    def dialing_context(self) -> DialingContext:
+        """Return the dialing context for helper utilities."""
+        return DialingContext(
+            default_code=self.default_dialing_code or "",
+            default_prefix=self.default_dialing_prefix or (
+                f"+{self.default_dialing_code}" if self.default_dialing_code else ""
+            ),
+        )
 
 
 @dataclass

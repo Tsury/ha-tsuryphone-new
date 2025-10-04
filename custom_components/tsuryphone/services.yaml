@@ -197,6 +197,21 @@ set_audio:
           min: 1
           max: 7
 
+set_dialing_config:
+  name: Set default dialing code
+  description: Update the default international dialing code used when normalizing numbers.
+  target:
+    device:
+      integration: tsuryphone
+  fields:
+    default_code:
+      name: Default dialing code
+      description: Digits-only default dialing code applied to local numbers (no leading zeros).
+      required: true
+      example: "972"
+      selector:
+        text:
+
 get_call_history:
   name: Get call history
   description: Retrieve call history entries from the integration cache.

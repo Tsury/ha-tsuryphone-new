@@ -20,12 +20,14 @@ from . import get_device_info
 from .const import (
     DOMAIN,
     MAX_CODE_LENGTH,
+    MAX_DIALING_CODE_LENGTH,
     MAX_NAME_LENGTH,
     MAX_NUMBER_LENGTH,
     MAX_REASON_LENGTH,
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .api_client import TsuryPhoneAPIError
+from .dialing import sanitize_default_dialing_code
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -36,9 +38,21 @@ class TsuryPhoneTextDescription(TextEntityDescription):
     field_name: str
     placeholder: str | None = None
     max_length: int | None = None
+    apply_dialing_code: bool = False
 
 
 TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
+    TsuryPhoneTextDescription(
+        key="dialing_default_code",
+        name="Dialing - Default Code",
+        icon="mdi:phone-in-talk",
+        entity_category=EntityCategory.CONFIG,
+        max_length=MAX_DIALING_CODE_LENGTH,
+        buffer_name="dialing",
+        field_name="default_code",
+        placeholder="972",
+        apply_dialing_code=True,
+    ),
     TsuryPhoneTextDescription(
         key="dial_digit",
         name="Call - Dial Digit",
@@ -218,6 +232,7 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         self.entity_description = description
         self._device_info = device_info
         self._is_dnd_field = description.buffer_name == "dnd_schedule"
+        self._is_dialing_code = description.apply_dialing_code
 
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
         self._attr_device_info = get_device_info(device_info)
@@ -228,6 +243,9 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
     @property
     def native_value(self) -> str:
         """Return the current buffered value."""
+        if self._is_dialing_code:
+            return self.coordinator.data.default_dialing_code or ""
+
         if self._is_dnd_field:
             dnd_config = self.coordinator.data.dnd_config
             value = getattr(dnd_config, self.entity_description.field_name, None)
@@ -251,6 +269,10 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         """Update the buffered value and expose it to dependent buttons."""
         if self._is_dnd_field:
             await self._async_set_dnd_field(value)
+            return
+
+        if self._is_dialing_code:
+            await self._async_set_dialing_code(value)
             return
 
         buffer = getattr(
@@ -281,6 +303,11 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         attrs: dict[str, str] = {}
         if self.entity_description.placeholder:
             attrs["placeholder"] = self.entity_description.placeholder
+        if self._is_dialing_code:
+            attrs["default_prefix"] = (
+                self.coordinator.data.default_dialing_prefix or ""
+            )
+            return attrs
         attrs["buffer"] = self.entity_description.buffer_name
         attrs["field"] = self.entity_description.field_name
         return attrs
@@ -343,5 +370,36 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
 
         # Update coordinator state optimistically
         setattr(dnd_config, field_name, number)
+        self.coordinator.async_update_listeners()
+        self.async_write_ha_state()
+
+    async def _async_set_dialing_code(self, value: str) -> None:
+        """Apply default dialing code changes immediately when edited."""
+
+        sanitized = sanitize_default_dialing_code(value)
+        if not sanitized:
+            raise HomeAssistantError(
+                "Enter digits for the default dialing code"
+            )
+
+        if len(sanitized) > MAX_DIALING_CODE_LENGTH:
+            raise HomeAssistantError(
+                f"Default dialing code must be {MAX_DIALING_CODE_LENGTH} digits or fewer"
+            )
+
+        state = self.coordinator.data
+        if state.default_dialing_code == sanitized:
+            self.async_write_ha_state()
+            return
+
+        try:
+            await self.coordinator.api_client.set_dialing_config(sanitized)
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(
+                f"Failed to update default dialing code: {err}"
+            ) from err
+
+        # Update coordinator cache and notify listeners
+        self.coordinator._update_default_dialing_metadata(code=sanitized)
         self.coordinator.async_update_listeners()
         self.async_write_ha_state()

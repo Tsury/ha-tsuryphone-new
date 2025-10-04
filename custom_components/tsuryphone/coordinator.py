@@ -15,6 +15,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .api_client import TsuryPhoneAPIClient, TsuryPhoneAPIError
+from .dialing import normalize_phone_number, sanitize_default_dialing_code
 from .websocket import TsuryPhoneWebSocketClient
 from .storage_cache import TsuryPhoneStorageCache
 from .resilience import TsuryPhoneResilience
@@ -919,6 +920,57 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 if key:
                     self._apply_config_change(key, new_value)
 
+    def _update_default_dialing_metadata(
+        self,
+        *,
+        code: Any | None = None,
+        prefix: Any | None = None,
+    ) -> None:
+        """Update cached dialing metadata and refresh normalized entries if needed."""
+
+        state = self._ensure_state()
+
+        current_code = state.default_dialing_code or ""
+        if code is not None:
+            sanitized_code = sanitize_default_dialing_code(str(code))
+        else:
+            sanitized_code = current_code
+
+        current_prefix = state.default_dialing_prefix or ""
+        if prefix is not None:
+            sanitized_prefix = str(prefix or "").strip()
+        else:
+            sanitized_prefix = current_prefix
+
+        if sanitized_code:
+            if not sanitized_prefix or not sanitized_prefix.startswith("+"):
+                sanitized_prefix = f"+{sanitized_code}"
+        else:
+            sanitized_prefix = ""
+
+        code_changed = sanitized_code != current_code
+        prefix_changed = sanitized_prefix != current_prefix
+
+        if not code_changed and not prefix_changed:
+            return
+
+        state.default_dialing_code = sanitized_code
+        state.default_dialing_prefix = sanitized_prefix
+
+        if code_changed:
+            for entry in state.quick_dials:
+                entry.normalized_number = normalize_phone_number(
+                    entry.number, sanitized_code
+                )
+            for entry in state.blocked_numbers:
+                entry.normalized_number = normalize_phone_number(
+                    entry.number, sanitized_code
+                )
+            for entry in state.priority_callers:
+                entry.normalized_number = normalize_phone_number(
+                    entry.number, sanitized_code
+                )
+
     def _apply_config_change(self, key: str, value: Any) -> None:
         """Apply a single configuration change."""
         _LOGGER.debug("Applying config change: %s = %s", key, value)
@@ -961,16 +1013,30 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         default=self.data.dnd_active,
                     )
                     self.data.dnd_active = forced or self.data.dnd_active
+        elif key.startswith("dialing."):
+            dial_field = key.split(".", 1)[1]
+            if dial_field == "defaultCode":
+                self._update_default_dialing_metadata(code=value)
+            elif dial_field == "defaultPrefix":
+                self._update_default_dialing_metadata(prefix=value)
+            else:
+                _LOGGER.debug("Unhandled dialing config delta key: %s", key)
         elif key.startswith("quick_dial."):
             # Quick dial list changes
             action = key.split(".", 1)[1]
             if action == "add" and isinstance(value, dict):
                 # Add new quick dial entry
                 try:
+                    normalized = value.get("normalizedNumber")
+                    if not normalized:
+                        normalized = normalize_phone_number(
+                            value.get("number"), self.data.default_dialing_code
+                        )
                     entry = QuickDialEntry(
                         code=value.get("code", ""),
                         number=value.get("number", ""),
                         name=value.get("name", ""),
+                        normalized_number=str(normalized or ""),
                     )
                     # Remove any existing entry with same code
                     self.data.quick_dials = [
@@ -991,8 +1057,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             action = key.split(".", 1)[1]
             if action == "add" and isinstance(value, dict):
                 try:
+                    normalized = value.get("normalizedNumber")
+                    if not normalized:
+                        normalized = normalize_phone_number(
+                            value.get("number"), self.data.default_dialing_code
+                        )
                     entry = BlockedNumberEntry(
-                        number=value.get("number", ""), reason=value.get("reason", "")
+                        number=value.get("number", ""),
+                        reason=value.get("reason", ""),
+                        normalized_number=str(normalized or ""),
                     )
                     # Remove any existing entry with same number
                     self.data.blocked_numbers = [
@@ -1046,7 +1119,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             action = key.split(".", 1)[1]
             if action == "add" and isinstance(value, dict):
                 try:
-                    entry = PriorityCallerEntry(number=value.get("number", ""))
+                    normalized = value.get("normalizedNumber")
+                    if not normalized:
+                        normalized = normalize_phone_number(
+                            value.get("number"), self.data.default_dialing_code
+                        )
+                    entry = PriorityCallerEntry(
+                        number=value.get("number", ""),
+                        normalized_number=str(normalized or ""),
+                    )
                     # Remove existing duplicate
                     self.data.priority_callers = [
                         p
@@ -1410,6 +1491,23 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # - addPhoneStateInfo(): current state context
         # - addCallInfo(): current call details
         # - addSystemInfo(): system metrics
+
+        if isinstance(event.data.get("dialing"), dict):
+            dialing_info = event.data.get("dialing")
+            self._update_default_dialing_metadata(
+                code=dialing_info.get("defaultCode"),
+                prefix=dialing_info.get("defaultPrefix"),
+            )
+
+        if "defaultDialingCode" in event.data:
+            self._update_default_dialing_metadata(
+                code=event.data.get("defaultDialingCode")
+            )
+
+        if "defaultDialingPrefix" in event.data:
+            self._update_default_dialing_metadata(
+                prefix=event.data.get("defaultDialingPrefix")
+            )
 
         # Extract current call number if present (from addCallInfo/addPhoneStateInfo)
         if "currentCallNumber" in event.data and event.data["currentCallNumber"]:
@@ -1850,10 +1948,34 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if not isinstance(config_section, dict):
             config_section = {}
 
+        dialing_sections: tuple[dict[str, Any] | None, ...] = (
+            config_section.get("dialing")
+            if isinstance(config_section.get("dialing"), dict)
+            else None,
+            device_data.get("dialing")
+            if isinstance(device_data.get("dialing"), dict)
+            else None,
+        )
+        for dialing_section in dialing_sections:
+            if dialing_section:
+                self._update_default_dialing_metadata(
+                    code=dialing_section.get("defaultCode"),
+                    prefix=dialing_section.get("defaultPrefix"),
+                )
+
         # Update phone state and related lists
         if "phone" in device_data:
             phone_data = device_data["phone"]
             parsed_state = None
+
+            if isinstance(phone_data, dict) and isinstance(
+                phone_data.get("dialing"), dict
+            ):
+                dialing_info = phone_data.get("dialing", {})
+                self._update_default_dialing_metadata(
+                    code=dialing_info.get("defaultCode"),
+                    prefix=dialing_info.get("defaultPrefix"),
+                )
             if "state" in phone_data:
                 parsed_state = self._parse_app_state_value(
                     phone_data["state"], "device.phone.state"
@@ -1887,10 +2009,29 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             # Priority callers list
             if isinstance(phone_data.get("priorityCallers"), list):
                 pr_list: list[PriorityCallerEntry] = []
+                detail_map: dict[str, str] = {}
+                if isinstance(phone_data.get("priorityCallerDetails"), list):
+                    for detail in phone_data.get("priorityCallerDetails", []):
+                        if not isinstance(detail, dict):
+                            continue
+                        number_value = str(detail.get("number") or "")
+                        normalized_value = str(detail.get("normalizedNumber") or "")
+                        if number_value:
+                            detail_map[number_value] = normalized_value
                 for item in phone_data.get("priorityCallers", []):
                     if isinstance(item, str) and item:
                         try:
-                            pr_list.append(PriorityCallerEntry(number=item))
+                            normalized_value = detail_map.get(item)
+                            if not normalized_value:
+                                normalized_value = normalize_phone_number(
+                                    item, self.data.default_dialing_code
+                                )
+                            pr_list.append(
+                                PriorityCallerEntry(
+                                    number=item,
+                                    normalized_number=str(normalized_value or ""),
+                                )
+                            )
                         except ValueError:
                             pass
                 self.data.priority_callers = pr_list
@@ -1909,22 +2050,31 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     if not isinstance(q, dict):
                         continue
                     try:
+                        code_value = str(
+                            q.get("code")
+                            or q.get("entry")
+                            or q.get("key")
+                            or q.get("id")
+                            or ""
+                        )
+                        number_value = str(
+                            q.get("number")
+                            or q.get("value")
+                            or q.get("phone")
+                            or ""
+                        )
+                        name_value = str(q.get("name") or q.get("label") or "")
+                        normalized_value = q.get("normalizedNumber")
+                        if not normalized_value and number_value:
+                            normalized_value = normalize_phone_number(
+                                number_value, self.data.default_dialing_code
+                            )
                         qd_list.append(
                             QuickDialEntry(
-                                code=str(
-                                    q.get("code")
-                                    or q.get("entry")
-                                    or q.get("key")
-                                    or q.get("id")
-                                    or ""
-                                ),
-                                number=str(
-                                    q.get("number")
-                                    or q.get("value")
-                                    or q.get("phone")
-                                    or ""
-                                ),
-                                name=str(q.get("name") or q.get("label") or ""),
+                                code=code_value,
+                                number=number_value,
+                                name=name_value,
+                                normalized_number=str(normalized_value or ""),
                             )
                         )
                     except Exception:  # noqa: BLE001
@@ -1945,15 +2095,23 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     if not isinstance(b, dict):
                         continue
                     try:
+                        number_value = str(
+                            b.get("number")
+                            or b.get("value")
+                            or b.get("phone")
+                            or ""
+                        )
+                        reason_value = str(b.get("reason") or b.get("note") or "")
+                        normalized_value = b.get("normalizedNumber")
+                        if not normalized_value and number_value:
+                            normalized_value = normalize_phone_number(
+                                number_value, self.data.default_dialing_code
+                            )
                         blocked_list.append(
                             BlockedNumberEntry(
-                                number=str(
-                                    b.get("number")
-                                    or b.get("value")
-                                    or b.get("phone")
-                                    or ""
-                                ),
-                                reason=str(b.get("reason") or b.get("note") or ""),
+                                number=number_value,
+                                reason=reason_value,
+                                normalized_number=str(normalized_value or ""),
                             )
                         )
                     except Exception:  # noqa: BLE001

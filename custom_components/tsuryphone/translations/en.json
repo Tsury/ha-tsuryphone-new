@@ -443,6 +443,17 @@
         }
       }
     },
+    "set_dialing_config": {
+      "name": "Set default dialing code",
+      "description": "Update the default international dialing code used when normalizing numbers.",
+      "fields": {
+        "default_code": {
+          "name": "Default dialing code",
+          "description": "Digits-only default dialing code applied to local numbers (no leading zeros).",
+          "example": "972"
+        }
+      }
+    },
     "set_dnd": {
       "name": "Set Do Not Disturb",
       "description": "Configure Do Not Disturb settings on the TsuryPhone device.",

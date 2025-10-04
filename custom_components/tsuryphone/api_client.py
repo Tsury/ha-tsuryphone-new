@@ -26,6 +26,7 @@ from .const import (
     API_CONFIG_MAINTENANCE,
     API_CONFIG_AUDIO,
     API_CONFIG_RING_PATTERN,
+    API_CONFIG_DIALING,
     API_CALL_DIAL_QUICK_DIAL,
     API_CONFIG_QUICK_DIAL_ADD,
     API_CONFIG_QUICK_DIAL_REMOVE,
@@ -44,6 +45,8 @@ from .const import (
         API_CALL_DIAL_DIGIT,
         ERROR_CODE_MISSING_DIGIT,
         ERROR_CODE_INVALID_DIGIT,
+        ERROR_CODE_MISSING_DEFAULT_CODE,
+        ERROR_CODE_INVALID_DEFAULT_CODE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -239,6 +242,23 @@ class TsuryPhoneAPIClient:
         """Set ring pattern."""
         return await self._request(
             "POST", API_CONFIG_RING_PATTERN, {"pattern": pattern}
+        )
+
+    async def set_dialing_config(self, default_code: str) -> dict[str, Any]:
+        """Set the default dialing code for the device."""
+        if not default_code:
+            raise TsuryPhoneAPIError(
+                "default_code is required", ERROR_CODE_MISSING_DEFAULT_CODE
+            )
+
+        if not default_code.isdigit():
+            raise TsuryPhoneAPIError(
+                "default_code must contain digits only",
+                ERROR_CODE_INVALID_DEFAULT_CODE,
+            )
+
+        return await self._request(
+            "POST", API_CONFIG_DIALING, {"defaultCode": default_code}
         )
 
     # Quick dial management
