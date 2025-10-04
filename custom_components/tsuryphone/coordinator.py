@@ -696,6 +696,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         current_call_number = event.data.get("currentCallNumber", "")
         if current_call_number:
             self.data.current_call.number = current_call_number
+        elif new_state == AppState.DIALING and not self.data.current_call.number:
+            dial_buffer = (
+                event.data.get("currentDialingNumber")
+                or self.data.current_dialing_number
+                or ""
+            )
+            if dial_buffer:
+                self.data.current_call.number = dial_buffer
 
         if "currentCallName" in event.data:
             self.data.current_call.name = str(event.data.get("currentCallName") or "")
@@ -712,6 +720,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 "event.isIncomingCall",
                 default=self.data.current_call.is_incoming,
             )
+
+        if new_state in (AppState.INCOMING_CALL, AppState.INCOMING_CALL_RING):
+            self.data.current_call.is_incoming = True
+        elif new_state == AppState.DIALING:
+            self.data.current_call.is_incoming = False
 
         # Update derived states
         if "isRinging" in event.data:
