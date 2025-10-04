@@ -701,8 +701,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.current_call.name = str(event.data.get("currentCallName") or "")
 
         # Update dialing number if provided
-        current_dialing_number = event.data.get("currentDialingNumber", "")
-        if current_dialing_number:
+        if "currentDialingNumber" in event.data:
+            current_dialing_number = event.data.get("currentDialingNumber") or ""
             self.data.current_dialing_number = current_dialing_number
 
         # Handle incoming call direction
@@ -769,7 +769,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _handle_dialing_update(self, event: TsuryPhoneEvent) -> None:
         """Handle dialing number update."""
-        self.data.current_dialing_number = event.data.get("currentDialingNumber", "")
+        self.data.current_dialing_number = event.data.get("currentDialingNumber") or ""
 
     def _handle_ring_state(self, event: TsuryPhoneEvent) -> None:
         """Handle ring state change."""
@@ -1518,7 +1518,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract dialing number if present
         if "currentDialingNumber" in event.data:
-            self.data.current_dialing_number = event.data["currentDialingNumber"]
+            self.data.current_dialing_number = event.data.get("currentDialingNumber") or ""
 
         # Extract state information if present
         parsed_state = None
