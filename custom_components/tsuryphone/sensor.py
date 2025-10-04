@@ -47,8 +47,8 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:phone-dial",
     ),
     SensorEntityDescription(
-        key="incoming_call_type",
-        name="Incoming Call Type",
+        key="current_call_type",
+        name="Current Call Type",
         icon="mdi:phone-incoming",
     ),
     SensorEntityDescription(
@@ -200,7 +200,7 @@ class TsuryPhoneSensor(
             return (
                 state.current_dialing_number if state.current_dialing_number else None
             )
-        elif self.entity_description.key == "incoming_call_type":
+        elif self.entity_description.key == "current_call_type":
             direction = state.current_call_direction
             return direction if direction else None
         elif self.entity_description.key == "call_duration":
@@ -270,7 +270,7 @@ class TsuryPhoneSensor(
                 attributes["call_type"] = state.current_call.call_type or (
                     "incoming" if state.current_call.is_incoming else "outgoing"
                 )
-        elif self.entity_description.key == "incoming_call_type":
+        elif self.entity_description.key == "current_call_type":
             direction = state.current_call_direction
             if direction:
                 attributes["direction"] = direction

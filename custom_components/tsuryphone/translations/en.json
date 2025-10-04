@@ -76,8 +76,8 @@
       "current_dialing_number": {
         "name": "Current Dialing Number"
       },
-      "incoming_call_type": {
-        "name": "Incoming Call Type"
+      "current_call_type": {
+        "name": "Current Call Type"
       },
       "call_duration": {
         "name": "Call Duration"

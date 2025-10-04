@@ -100,18 +100,10 @@ def numbers_equivalent(lhs: str | None, rhs: str | None, default_dialing_code: s
     norm_lhs = normalize_phone_number(lhs, default_dialing_code)
     norm_rhs = normalize_phone_number(rhs, default_dialing_code)
 
-    if norm_lhs and norm_rhs:
-        if norm_lhs.lower() == norm_rhs.lower():
-            return True
-        if strip_to_digits(norm_lhs) == strip_to_digits(norm_rhs) and strip_to_digits(norm_lhs):
-            return True
+    if not norm_lhs or not norm_rhs:
+        return False
 
-    raw_digits_lhs = strip_to_digits(lhs or "")
-    raw_digits_rhs = strip_to_digits(rhs or "")
-    if raw_digits_lhs and raw_digits_lhs == raw_digits_rhs:
-        return True
-
-    return False
+    return norm_lhs.lower() == norm_rhs.lower()
 
 
 @dataclass(frozen=True, slots=True)
