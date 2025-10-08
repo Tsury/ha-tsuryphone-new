@@ -79,7 +79,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # WebSocket client
         self._websocket_client: TsuryPhoneWebSocketClient | None = None
         self._websocket_enabled = True
-    self._websocket_connection_seen = False
+        self._websocket_connection_seen = False
 
         # Call duration timer
         self._call_timer_task: asyncio.Task | None = None
