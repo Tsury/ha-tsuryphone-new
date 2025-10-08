@@ -314,9 +314,7 @@ def _normalize_number_for_service(
     context = _get_dialing_context(coordinator)
     normalized = context.normalize(candidate)
     if not normalized:
-        raise ServiceValidationError(
-            f"{field_name} must contain at least one digit"
-        )
+        raise ServiceValidationError(f"{field_name} must contain at least one digit")
 
     return normalized
 
@@ -609,9 +607,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         try:
             await coordinator.api_client.dial_digit(digit)
         except TsuryPhoneAPIError as err:
-            raise HomeAssistantError(
-                f"Failed to send digit {digit}: {err}"
-            ) from err
+            raise HomeAssistantError(f"Failed to send digit {digit}: {err}") from err
 
     async def async_answer(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
@@ -678,9 +674,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         try:
             await coordinator.api_client.factory_reset_device()
         except TsuryPhoneAPIError as err:
-            raise HomeAssistantError(
-                f"Failed to factory reset device: {err}"
-            ) from err
+            raise HomeAssistantError(f"Failed to factory reset device: {err}") from err
 
     async def async_set_dnd(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
@@ -1111,8 +1105,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 name = entry.get("name")
 
                 if not code:
-                    results["failed"].append({"code": code or "", "error": "Missing code"})
-                    _LOGGER.warning("Skipping quick dial entry with missing code: %s", entry)
+                    results["failed"].append(
+                        {"code": code or "", "error": "Missing code"}
+                    )
+                    _LOGGER.warning(
+                        "Skipping quick dial entry with missing code: %s", entry
+                    )
                     continue
 
                 try:
@@ -1132,9 +1130,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     _LOGGER.debug("Added quick dial entry: %s", code)
                 except TsuryPhoneAPIError as err:
                     results["failed"].append({"code": code, "error": str(err)})
-                    _LOGGER.warning(
-                        "Failed to add quick dial entry %s: %s", code, err
-                    )
+                    _LOGGER.warning("Failed to add quick dial entry %s: %s", code, err)
 
             await coordinator.async_request_refresh()
             return results
@@ -1186,7 +1182,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                         coordinator, raw_number, field_name="number"
                     )
                 except ServiceValidationError as err:
-                    results["failed"].append({"number": raw_number or "", "error": str(err)})
+                    results["failed"].append(
+                        {"number": raw_number or "", "error": str(err)}
+                    )
                     _LOGGER.warning(
                         "Failed to normalize blocked number %s: %s", raw_number, err
                     )
@@ -1198,9 +1196,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     _LOGGER.debug("Added blocked number: %s", number)
                 except TsuryPhoneAPIError as err:
                     results["failed"].append({"number": number, "error": str(err)})
-                    _LOGGER.warning(
-                        "Failed to add blocked number %s: %s", number, err
-                    )
+                    _LOGGER.warning("Failed to add blocked number %s: %s", number, err)
 
             await coordinator.async_request_refresh()
             return results

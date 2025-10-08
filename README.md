@@ -39,34 +39,34 @@ Adjustable later via the integration Options (retention, verbosity, etc.).
 
 ## Entities (Overview)
 
-| Category          | Examples                                                                                                                                   |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Binary Sensors    | Ringing, In Call, Handset Off Hook, Do Not Disturb, Maintenance Mode, Call Waiting Available                                               |
+| Category          | Examples                                                                                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Binary Sensors    | Ringing, In Call, Handset Off Hook, Do Not Disturb, Maintenance Mode, Call Waiting Available                                                               |
 | Sensors           | Phone State, Current Call Number, Call Duration, Last Call Number, Last Call Type, Signal Strength, Memory, Call Counters, Quick Dial Count, Blocked Count |
-| Buttons           | Answer, Hang Up, Ring Device, Reset Device, Factory Reset Device, Refresh Data, Toggle Call Waiting                                        |
-| Numbers / Selects | Audio levels, ring pattern selection (when exposed)                                                                                        |
-| Switch / Others   | (Subject to future expansion)                                                                                                              |
+| Buttons           | Answer, Hang Up, Ring Device, Reset Device, Factory Reset Device, Refresh Data, Toggle Call Waiting                                                        |
+| Numbers / Selects | Audio levels, ring pattern selection (when exposed)                                                                                                        |
+| Switch / Others   | (Subject to future expansion)                                                                                                                              |
 
 Less frequently needed / diagnostic entities default to disabled in the registry—enable only if required.
 
 ## Core Services (Common)
 
-| Service                            | Purpose                         | Key Fields                                              |
-| ---------------------------------- | ------------------------------- | ------------------------------------------------------- |
-| `tsuryphone.dial`                  | Dial a number                   | `device_id`, `number`                                   |
-| `tsuryphone.answer`                | Answer ringing call             | `device_id`                                             |
-| `tsuryphone.hangup`                | Hang up active call             | `device_id`                                             |
-| `tsuryphone.ring_device`           | Ring locally (optional pattern) | `device_id`, `pattern?`                                 |
-| `tsuryphone.set_dnd`               | Update DND config               | `device_id`, fields (force, scheduled, start/end times) |
-| `tsuryphone.set_audio`             | Adjust audio levels             | `device_id`, volume/gain fields                         |
-| `tsuryphone.set_ring_pattern`      | Set custom pattern              | `device_id`, `pattern`                                  |
-| `tsuryphone.quick_dial_add/remove` | Manage quick dial entry         | `device_id`, `code`, `number`, `name?`                  |
-| `tsuryphone.blocked_add/remove`    | Manage blocked number           | `device_id`, `number`, `reason?`                        |
-| `tsuryphone.priority_add/remove`   | Manage priority caller          | `device_id`, `number`                                   |
-| `tsuryphone.set_maintenance_mode`  | Toggle maintenance mode         | `device_id`, `enabled`                                  |
-| `tsuryphone.dial_quick_dial`       | Dial quick dial code            | `device_id`, `code`                                     |
-| `tsuryphone.refetch_all`           | Force device full refetch       | `device_id`                                             |
-| `tsuryphone.reset_device`          | Reboot device                   | `device_id`                                             |
+| Service                            | Purpose                           | Key Fields                                              |
+| ---------------------------------- | --------------------------------- | ------------------------------------------------------- |
+| `tsuryphone.dial`                  | Dial a number                     | `device_id`, `number`                                   |
+| `tsuryphone.answer`                | Answer ringing call               | `device_id`                                             |
+| `tsuryphone.hangup`                | Hang up active call               | `device_id`                                             |
+| `tsuryphone.ring_device`           | Ring locally (optional pattern)   | `device_id`, `pattern?`                                 |
+| `tsuryphone.set_dnd`               | Update DND config                 | `device_id`, fields (force, scheduled, start/end times) |
+| `tsuryphone.set_audio`             | Adjust audio levels               | `device_id`, volume/gain fields                         |
+| `tsuryphone.set_ring_pattern`      | Set custom pattern                | `device_id`, `pattern`                                  |
+| `tsuryphone.quick_dial_add/remove` | Manage quick dial entry           | `device_id`, `code`, `number`, `name?`                  |
+| `tsuryphone.blocked_add/remove`    | Manage blocked number             | `device_id`, `number`, `reason?`                        |
+| `tsuryphone.priority_add/remove`   | Manage priority caller            | `device_id`, `number`                                   |
+| `tsuryphone.set_maintenance_mode`  | Toggle maintenance mode           | `device_id`, `enabled`                                  |
+| `tsuryphone.dial_quick_dial`       | Dial quick dial code              | `device_id`, `code`                                     |
+| `tsuryphone.refetch_all`           | Force device full refetch         | `device_id`                                             |
+| `tsuryphone.reset_device`          | Reboot device                     | `device_id`                                             |
 | `tsuryphone.factory_reset_device`  | Wipe config, stats, Wi-Fi, reboot | `device_id`                                             |
 
 Additional advanced / diagnostic services are listed in the appendix.

@@ -108,4 +108,3 @@ def get_webhook_helper(hass: HomeAssistant, device_id: str) -> WebhookHelper | N
         if coordinator.device_info.device_id == device_id:
             return WebhookHelper(coordinator)
     return None
-

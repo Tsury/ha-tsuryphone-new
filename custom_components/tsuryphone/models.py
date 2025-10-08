@@ -401,9 +401,8 @@ class TsuryPhoneState:
         """Return the dialing context for helper utilities."""
         return DialingContext(
             default_code=self.default_dialing_code or "",
-            default_prefix=self.default_dialing_prefix or (
-                f"+{self.default_dialing_code}" if self.default_dialing_code else ""
-            ),
+            default_prefix=self.default_dialing_prefix
+            or (f"+{self.default_dialing_code}" if self.default_dialing_code else ""),
         )
 
 

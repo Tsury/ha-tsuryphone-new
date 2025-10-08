@@ -25,13 +25,28 @@ def _strip_formatting(value: str) -> str:
 def _strip_leading_zeros(digits: str) -> str:
     """Remove leading zeros while keeping at least one digit when available."""
     stripped = digits.lstrip("0")
-    return stripped if stripped else (digits if digits.count("0") == len(digits) else "")
+    return (
+        stripped if stripped else (digits if digits.count("0") == len(digits) else "")
+    )
 
 
 def _ensure_plus_prefix(digits: str) -> str:
     if not digits:
         return ""
     return digits if digits.startswith("+") else f"+{digits}"
+
+
+def _localize_with_default(digits: str, sanitized_code: str) -> str | None:
+    """Try to convert international digits into local format using the default code."""
+
+    if not sanitized_code or not digits.startswith(sanitized_code):
+        return None
+
+    remainder = digits[len(sanitized_code) :]
+    if not remainder:
+        return None
+
+    return remainder if remainder.startswith("0") else f"0{remainder}"
 
 
 def strip_to_digits(value: str) -> str:
@@ -50,7 +65,9 @@ def sanitize_default_dialing_code(value: str | None) -> str:
     return sanitized
 
 
-def normalize_phone_number(raw_number: str | None, default_dialing_code: str | None) -> str:
+def normalize_phone_number(
+    raw_number: str | None, default_dialing_code: str | None
+) -> str:
     """Normalize a phone number using firmware-compatible semantics."""
     if raw_number is None:
         return ""
@@ -63,36 +80,39 @@ def normalize_phone_number(raw_number: str | None, default_dialing_code: str | N
     if not cleaned:
         return ""
 
-    has_plus = cleaned.startswith("+")
-    digits = cleaned[1:] if has_plus else cleaned
-
-    if not digits:
+    digits_only = strip_to_digits(cleaned)
+    if not digits_only:
         return ""
 
-    if has_plus:
-        return _ensure_plus_prefix(digits)
-
-    if digits.startswith("00") and len(digits) > 2:
-        international = _strip_leading_zeros(digits[2:])
-        if international:
-            return _ensure_plus_prefix(international)
+    has_plus = cleaned.startswith("+")
 
     sanitized_code = sanitize_default_dialing_code(default_dialing_code or "")
 
-    if sanitized_code:
-        if digits.startswith(sanitized_code):
-            return _ensure_plus_prefix(digits)
-        if digits[0] == "0" and len(digits) >= 7:
-            local = _strip_leading_zeros(digits[1:])
-            if local:
-                return _ensure_plus_prefix(f"{sanitized_code}{local}")
-        if len(digits) >= 8:
-            return _ensure_plus_prefix(f"{sanitized_code}{digits}")
+    if has_plus:
+        localized = _localize_with_default(digits_only, sanitized_code)
+        return localized if localized else digits_only
 
-    return digits
+    if digits_only.startswith("00") and len(digits_only) > 2:
+        stripped = digits_only[2:]
+        localized = _localize_with_default(stripped, sanitized_code)
+        return localized if localized else digits_only
+
+    localized = _localize_with_default(digits_only, sanitized_code)
+    if localized:
+        return localized
+
+    if digits_only.startswith("0"):
+        return digits_only
+
+    if sanitized_code and len(digits_only) >= 7:
+        return f"0{digits_only}"
+
+    return digits_only
 
 
-def numbers_equivalent(lhs: str | None, rhs: str | None, default_dialing_code: str | None) -> bool:
+def numbers_equivalent(
+    lhs: str | None, rhs: str | None, default_dialing_code: str | None
+) -> bool:
     """Return True when *lhs* and *rhs* represent the same phone number."""
     if lhs == rhs:
         return True

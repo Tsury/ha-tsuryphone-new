@@ -207,7 +207,9 @@ class TsuryPhoneButton(
             raise HomeAssistantError(f"{field} cannot be empty")
 
         state: TsuryPhoneState = self.coordinator.data
-        default_code = state.default_dialing_code if state and state.default_dialing_code else ""
+        default_code = (
+            state.default_dialing_code if state and state.default_dialing_code else ""
+        )
         normalized = normalize_phone_number(candidate, default_code)
         if not normalized:
             raise HomeAssistantError(f"{field} must contain at least one digit")
@@ -410,10 +412,14 @@ class TsuryPhoneButton(
                 "Quick dial input missing required field(s): " + ", ".join(missing)
             )
 
-        normalized_number = self._normalize_number_input(number, field="Quick dial number")
+        normalized_number = self._normalize_number_input(
+            number, field="Quick dial number"
+        )
 
         try:
-            await self.coordinator.api_client.add_quick_dial(code, normalized_number, name)
+            await self.coordinator.api_client.add_quick_dial(
+                code, normalized_number, name
+            )
             self.coordinator.selected_quick_dial_code = code
             self._clear_buffer("quick_dial")
             await self.coordinator.async_request_refresh()
@@ -449,7 +455,9 @@ class TsuryPhoneButton(
         normalized_number = self._normalize_number_input(number, field="Blocked number")
 
         try:
-            await self.coordinator.api_client.add_blocked_number(normalized_number, reason)
+            await self.coordinator.api_client.add_blocked_number(
+                normalized_number, reason
+            )
             self.coordinator.selected_blocked_number = normalized_number
             self._clear_buffer("blocked")
             await self.coordinator.async_request_refresh()
@@ -481,7 +489,9 @@ class TsuryPhoneButton(
         if not number:
             raise HomeAssistantError("Enter a priority number to add")
 
-        normalized_number = self._normalize_number_input(number, field="Priority number")
+        normalized_number = self._normalize_number_input(
+            number, field="Priority number"
+        )
 
         try:
             await self.coordinator.api_client.add_priority_caller(normalized_number)
@@ -501,9 +511,7 @@ class TsuryPhoneButton(
             raise HomeAssistantError("Select a priority number to remove")
 
         try:
-            await self.coordinator.api_client.remove_priority_caller(
-                selected_number
-            )
+            await self.coordinator.api_client.remove_priority_caller(selected_number)
             self.coordinator.selected_priority_number = None
             self._clear_buffer("priority")
             await self.coordinator.async_request_refresh()
@@ -675,9 +683,7 @@ class TsuryPhoneButton(
             attributes["required_fields"] = ["code", "number"]
             if not has_required:
                 missing = [
-                    field
-                    for field in ("code", "number")
-                    if not buffer.get(field)
+                    field for field in ("code", "number") if not buffer.get(field)
                 ]
                 if missing:
                     attributes["missing_fields"] = missing
@@ -717,7 +723,9 @@ class TsuryPhoneButton(
             attributes["buffer"] = {"number": buffer.get("number", "")}
 
         elif self.entity_description.key == "priority_remove":
-            selected_number = getattr(self.coordinator, "selected_priority_number", None)
+            selected_number = getattr(
+                self.coordinator, "selected_priority_number", None
+            )
             attributes["can_execute"] = bool(selected_number and state.connected)
             attributes["selected_number"] = selected_number
 
@@ -727,9 +735,7 @@ class TsuryPhoneButton(
             attributes["required_fields"] = ["code", "webhook_id"]
             if not has_required:
                 missing = [
-                    field
-                    for field in ("code", "webhook_id")
-                    if not buffer.get(field)
+                    field for field in ("code", "webhook_id") if not buffer.get(field)
                 ]
                 if missing:
                     attributes["missing_fields"] = missing
@@ -780,10 +786,7 @@ class TsuryPhoneButton(
                 if state.is_call_active:
                     return False
 
-                return bool(
-                    state.is_incoming_call
-                    or state.ringing
-                )
+                return bool(state.is_incoming_call or state.ringing)
             if self.entity_description.key == "hangup":
                 return bool(
                     state.is_call_active

@@ -42,11 +42,11 @@ from .const import (
     ERROR_CODE_NO_INCOMING_CALL,
     ERROR_CODE_NO_ACTIVE_CALL,
     INTEGRATION_EVENT_SCHEMA_VERSION,
-        API_CALL_DIAL_DIGIT,
-        ERROR_CODE_MISSING_DIGIT,
-        ERROR_CODE_INVALID_DIGIT,
-        ERROR_CODE_MISSING_DEFAULT_CODE,
-        ERROR_CODE_INVALID_DEFAULT_CODE,
+    API_CALL_DIAL_DIGIT,
+    ERROR_CODE_MISSING_DIGIT,
+    ERROR_CODE_INVALID_DIGIT,
+    ERROR_CODE_MISSING_DEFAULT_CODE,
+    ERROR_CODE_INVALID_DEFAULT_CODE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -181,9 +181,7 @@ class TsuryPhoneAPIClient:
     async def dial_digit(self, digit: str) -> dict[str, Any]:
         """Send a single dial digit to the device."""
         if digit is None or digit == "":
-            raise TsuryPhoneAPIError(
-                "Digit is required", ERROR_CODE_MISSING_DIGIT
-            )
+            raise TsuryPhoneAPIError("Digit is required", ERROR_CODE_MISSING_DIGIT)
 
         if len(digit) != 1 or digit < "0" or digit > "9":
             raise TsuryPhoneAPIError(

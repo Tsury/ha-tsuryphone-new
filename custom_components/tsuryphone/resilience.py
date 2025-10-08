@@ -69,6 +69,32 @@ class TsuryPhoneResilience:
         """Register a callback to be called during recovery."""
         self._recovery_callbacks.append(callback)
 
+    def reset_sequence_tracking(
+        self,
+        *,
+        reason: str | None = None,
+        increment_reconnections: bool = False,
+    ) -> None:
+        """Reset sequence trackers after a deliberate WebSocket reconnect."""
+
+        if reason:
+            _LOGGER.debug("Resetting sequence tracking (%s)", reason)
+        else:
+            _LOGGER.debug("Resetting sequence tracking")
+
+        self._last_sequence = 0
+        self._sequence_history.clear()
+        self._sequence_overflow_detected = False
+        self._reboot_confirmed = False
+        self._pre_reboot_state = None
+
+        if self._reboot_detection_task and not self._reboot_detection_task.done():
+            self._reboot_detection_task.cancel()
+            self._reboot_detection_task = None
+
+        if increment_reconnections:
+            self.stats.websocket_reconnections += 1
+
     async def handle_event_sequence(self, event: TsuryPhoneEvent) -> bool:
         """Handle event sequence validation and overflow detection.
         

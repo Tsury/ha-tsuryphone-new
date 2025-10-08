@@ -1,4 +1,5 @@
 """The TsuryPhone integration."""
+
 from __future__ import annotations
 
 import logging
@@ -114,7 +115,9 @@ async def _ensure_device_ha_url(
 
     current_url = _normalize_url(current_url)
     if current_url == desired_url:
-        _LOGGER.debug("Device already configured with Home Assistant URL %s", desired_url)
+        _LOGGER.debug(
+            "Device already configured with Home Assistant URL %s", desired_url
+        )
         return
 
     try:
@@ -145,7 +148,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         config_response = await api_client.get_tsuryphone_config()
         device_data = config_response.get("data", {})
         device_id = device_data.get("deviceId")
-        
+
         if not device_id:
             _LOGGER.error("Device did not return a device ID")
             raise ConfigEntryNotReady("Device missing device ID")
@@ -172,35 +175,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Create and initialize coordinator
     coordinator = TsuryPhoneDataUpdateCoordinator(hass, api_client, device_info)
-    
+
     # Perform first refresh to populate initial state
     await coordinator.async_config_entry_first_refresh()
-    
+
     # Store coordinator in runtime data for platform access
     entry.runtime_data = coordinator
-    
+
     # Phase P5: Set up notifications
-    coordinator._notification_manager = await async_setup_notifications(hass, coordinator)
-    
+    coordinator._notification_manager = await async_setup_notifications(
+        hass, coordinator
+    )
+
     # Phase P7: Set up storage cache
     storage_cache = TsuryPhoneStorageCache(hass, device_info.device_id)
     await storage_cache.async_initialize()
-    
+
     # Apply retention settings from options
     options_advanced = entry.options.get("advanced", {})
     if "call_history_retention_days" in options_advanced:
         storage_cache.update_retention_settings(
             call_history_retention_days=options_advanced["call_history_retention_days"]
         )
-    
+
     coordinator._storage_cache = storage_cache
-    
+
     # Load cached call history if available
     try:
         cached_call_history = await storage_cache.async_load_call_history()
         if cached_call_history:
             coordinator.data.call_history = cached_call_history
-            _LOGGER.debug("Loaded %d cached call history entries", len(cached_call_history))
+            _LOGGER.debug(
+                "Loaded %d cached call history entries", len(cached_call_history)
+            )
     except Exception as err:
         _LOGGER.error("Failed to load cached call history: %s", err)
 
@@ -242,7 +249,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Unload services if this is the last config entry
         remaining_entries = [
-            e for e in hass.config_entries.async_entries(DOMAIN)
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
             if e.entry_id != entry.entry_id
         ]
         if not remaining_entries:

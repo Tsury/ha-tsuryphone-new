@@ -304,9 +304,7 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         if self.entity_description.placeholder:
             attrs["placeholder"] = self.entity_description.placeholder
         if self._is_dialing_code:
-            attrs["default_prefix"] = (
-                self.coordinator.data.default_dialing_prefix or ""
-            )
+            attrs["default_prefix"] = self.coordinator.data.default_dialing_prefix or ""
             return attrs
         attrs["buffer"] = self.entity_description.buffer_name
         attrs["field"] = self.entity_description.field_name
@@ -378,9 +376,7 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
 
         sanitized = sanitize_default_dialing_code(value)
         if not sanitized:
-            raise HomeAssistantError(
-                "Enter digits for the default dialing code"
-            )
+            raise HomeAssistantError("Enter digits for the default dialing code")
 
         if len(sanitized) > MAX_DIALING_CODE_LENGTH:
             raise HomeAssistantError(

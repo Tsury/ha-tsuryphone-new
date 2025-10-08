@@ -79,6 +79,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # WebSocket client
         self._websocket_client: TsuryPhoneWebSocketClient | None = None
         self._websocket_enabled = True
+    self._websocket_connection_seen = False
 
         # Call duration timer
         self._call_timer_task: asyncio.Task | None = None
@@ -231,6 +232,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.hass,
             websocket_url,
             self._handle_websocket_event,
+            self._handle_websocket_state_change,
         )
 
         # Phase P8: Register resilience callbacks
@@ -264,6 +266,37 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Fallback to direct processing if resilience not available
         self._process_event_directly(event)
+
+    def _handle_websocket_state_change(
+        self, state: str, stats: dict[str, Any]
+    ) -> None:
+        """React to WebSocket connection state changes."""
+
+        if state == "connected":
+            reason = (
+                "websocket initial connect"
+                if not self._websocket_connection_seen
+                else "websocket reconnect"
+            )
+            if self._resilience:
+                self._resilience.reset_sequence_tracking(
+                    reason=reason,
+                    increment_reconnections=self._websocket_connection_seen,
+                )
+
+            self._websocket_connection_seen = True
+            self._last_websocket_disconnect = 0
+            self._ensure_state().connected = True
+            _LOGGER.debug(
+                "WebSocket connection state: %s (seq=%s)",
+                state,
+                stats.get("last_seq"),
+            )
+            return
+
+        if state == "disconnected":
+            self._last_websocket_disconnect = time.time()
+            _LOGGER.debug("WebSocket disconnected (stats: %s)", stats)
 
     async def _process_event_with_resilience(self, event: TsuryPhoneEvent) -> None:
         """Process event through resilience manager."""
@@ -370,9 +403,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self.data.current_call.call_start_ts = call_start_ts
         self.data.current_call.duration_ms = None
         caller_name = str(
-            event.data.get("currentCallName")
-            or event.data.get("callerName")
-            or ""
+            event.data.get("currentCallName") or event.data.get("callerName") or ""
         )
         self.data.current_call.name = caller_name
 
@@ -483,9 +514,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         number = event.data.get("number", "")
 
         caller_name = str(
-            event.data.get("currentCallName")
-            or event.data.get("callerName")
-            or ""
+            event.data.get("currentCallName") or event.data.get("callerName") or ""
         )
 
         # Add to call history immediately (blocked calls are complete events)
@@ -1212,9 +1241,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if call_number:
                 self.data.current_call.number = call_number
             if "currentCallName" in data:
-                self.data.current_call.name = str(
-                    data.get("currentCallName") or ""
-                )
+                self.data.current_call.name = str(data.get("currentCallName") or "")
             if "isIncomingCall" in data:
                 self.data.current_call.is_incoming = self._coerce_bool(
                     data["isIncomingCall"],
@@ -1531,7 +1558,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract dialing number if present
         if "currentDialingNumber" in event.data:
-            self.data.current_dialing_number = event.data.get("currentDialingNumber") or ""
+            self.data.current_dialing_number = (
+                event.data.get("currentDialingNumber") or ""
+            )
 
         # Extract state information if present
         parsed_state = None
@@ -1962,12 +1991,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             config_section = {}
 
         dialing_sections: tuple[dict[str, Any] | None, ...] = (
-            config_section.get("dialing")
-            if isinstance(config_section.get("dialing"), dict)
-            else None,
-            device_data.get("dialing")
-            if isinstance(device_data.get("dialing"), dict)
-            else None,
+            (
+                config_section.get("dialing")
+                if isinstance(config_section.get("dialing"), dict)
+                else None
+            ),
+            (
+                device_data.get("dialing")
+                if isinstance(device_data.get("dialing"), dict)
+                else None
+            ),
         )
         for dialing_section in dialing_sections:
             if dialing_section:
@@ -2071,10 +2104,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                             or ""
                         )
                         number_value = str(
-                            q.get("number")
-                            or q.get("value")
-                            or q.get("phone")
-                            or ""
+                            q.get("number") or q.get("value") or q.get("phone") or ""
                         )
                         name_value = str(q.get("name") or q.get("label") or "")
                         normalized_value = q.get("normalizedNumber")
@@ -2109,10 +2139,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         continue
                     try:
                         number_value = str(
-                            b.get("number")
-                            or b.get("value")
-                            or b.get("phone")
-                            or ""
+                            b.get("number") or b.get("value") or b.get("phone") or ""
                         )
                         reason_value = str(b.get("reason") or b.get("note") or "")
                         normalized_value = b.get("normalizedNumber")

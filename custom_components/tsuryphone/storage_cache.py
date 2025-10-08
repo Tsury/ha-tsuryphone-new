@@ -1,4 +1,5 @@
 """Storage cache for TsuryPhone integration persistent data."""
+
 from __future__ import annotations
 
 import json
@@ -38,7 +39,7 @@ class TsuryPhoneStorageCache:
         """Initialize storage cache."""
         self.hass = hass
         self.device_id = device_id
-        
+
         # Create store instances for different data types
         self._call_history_store = Store(
             hass,
@@ -55,12 +56,12 @@ class TsuryPhoneStorageCache:
             STORAGE_VERSION_CONFIG_BACKUP,
             f"{DOMAIN}_{device_id}_{STORAGE_KEY_CONFIG_BACKUP}",
         )
-        
+
         # Cache settings
         self.call_history_retention_days = DEFAULT_CALL_HISTORY_RETENTION_DAYS
         self.state_backup_retention_days = DEFAULT_STATE_BACKUP_RETENTION_DAYS
         self.max_call_history_entries = DEFAULT_MAX_CALL_HISTORY_ENTRIES
-        
+
         # In-memory cache
         self._call_history_cache: list[CallHistoryEntry] = []
         self._device_state_cache: dict[str, Any] = {}
@@ -109,7 +110,10 @@ class TsuryPhoneStorageCache:
                     CallHistoryEntry.from_dict(entry)
                     for entry in call_history_data.get("entries", [])
                 ]
-                _LOGGER.debug("Loaded %d call history entries from cache", len(self._call_history_cache))
+                _LOGGER.debug(
+                    "Loaded %d call history entries from cache",
+                    len(self._call_history_cache),
+                )
 
             # Load device state backup
             device_state_data = await self._device_state_store.async_load()
@@ -123,7 +127,9 @@ class TsuryPhoneStorageCache:
             _LOGGER.error("Failed to load storage cache: %s", err)
             self._cache_loaded = True  # Continue without cache
 
-    async def async_save_call_history(self, call_history: list[CallHistoryEntry]) -> None:
+    async def async_save_call_history(
+        self, call_history: list[CallHistoryEntry]
+    ) -> None:
         """Save call history to persistent storage."""
         if not self._cache_loaded:
             await self._load_cache()
@@ -131,19 +137,21 @@ class TsuryPhoneStorageCache:
         try:
             # Update in-memory cache
             self._call_history_cache = call_history.copy()
-            
+
             # Clean up old entries before saving
             cleaned_entries = await self._cleanup_call_history(call_history)
-            
+
             # Convert to serializable format
             data = {
                 "entries": [entry.to_dict() for entry in cleaned_entries],
                 "last_updated": dt_util.utcnow().isoformat(),
                 "device_id": self.device_id,
             }
-            
+
             await self._call_history_store.async_save(data)
-            _LOGGER.debug("Saved %d call history entries to cache", len(cleaned_entries))
+            _LOGGER.debug(
+                "Saved %d call history entries to cache", len(cleaned_entries)
+            )
 
         except Exception as err:
             _LOGGER.error("Failed to save call history to cache: %s", err)
@@ -234,7 +242,9 @@ class TsuryPhoneStorageCache:
             existing_data["backups"].append(backup_entry)
 
             # Clean up old backups
-            cutoff_date = dt_util.utcnow() - timedelta(days=self.state_backup_retention_days)
+            cutoff_date = dt_util.utcnow() - timedelta(
+                days=self.state_backup_retention_days
+            )
             filtered_backups: list[dict[str, Any]] = []
             for backup in existing_data["backups"]:
                 parsed_timestamp = self._parse_timestamp(backup.get("timestamp"))
@@ -270,7 +280,9 @@ class TsuryPhoneStorageCache:
             return max(backups, key=lambda b: b["timestamp"])
         return None
 
-    async def _cleanup_call_history(self, entries: list[CallHistoryEntry]) -> list[CallHistoryEntry]:
+    async def _cleanup_call_history(
+        self, entries: list[CallHistoryEntry]
+    ) -> list[CallHistoryEntry]:
         """Clean up call history entries based on retention policies."""
         if not entries:
             return entries
@@ -289,7 +301,9 @@ class TsuryPhoneStorageCache:
 
         # Apply retention policies
         cleaned_entries = []
-        cutoff_date = dt_util.utcnow() - timedelta(days=self.call_history_retention_days)
+        cutoff_date = dt_util.utcnow() - timedelta(
+            days=self.call_history_retention_days
+        )
 
         for entry in sorted_entries:
             # Skip entries that are too old
@@ -308,7 +322,9 @@ class TsuryPhoneStorageCache:
 
             cleaned_entries.append(entry)
 
-        _LOGGER.debug("Cleaned call history: %d -> %d entries", len(entries), len(cleaned_entries))
+        _LOGGER.debug(
+            "Cleaned call history: %d -> %d entries", len(entries), len(cleaned_entries)
+        )
         return cleaned_entries
 
     async def async_cleanup_storage(self) -> dict[str, int]:
@@ -323,9 +339,11 @@ class TsuryPhoneStorageCache:
             # Clean up call history
             if self._call_history_cache:
                 original_count = len(self._call_history_cache)
-                cleaned_entries = await self._cleanup_call_history(self._call_history_cache)
+                cleaned_entries = await self._cleanup_call_history(
+                    self._call_history_cache
+                )
                 stats["call_history_removed"] = original_count - len(cleaned_entries)
-                
+
                 if stats["call_history_removed"] > 0:
                     await self.async_save_call_history(cleaned_entries)
 
@@ -334,19 +352,25 @@ class TsuryPhoneStorageCache:
                 existing_data = await self._config_backup_store.async_load()
                 if existing_data and "backups" in existing_data:
                     original_count = len(existing_data["backups"])
-                    cutoff_date = dt_util.utcnow() - timedelta(days=self.state_backup_retention_days)
+                    cutoff_date = dt_util.utcnow() - timedelta(
+                        days=self.state_backup_retention_days
+                    )
                     filtered_backups = []
                     for backup in existing_data["backups"]:
-                        parsed_timestamp = self._parse_timestamp(backup.get("timestamp"))
+                        parsed_timestamp = self._parse_timestamp(
+                            backup.get("timestamp")
+                        )
                         if parsed_timestamp and parsed_timestamp > cutoff_date:
                             filtered_backups.append(backup)
                     existing_data["backups"] = filtered_backups
-                    
-                    stats["config_backups_removed"] = original_count - len(existing_data["backups"])
-                    
+
+                    stats["config_backups_removed"] = original_count - len(
+                        existing_data["backups"]
+                    )
+
                     if stats["config_backups_removed"] > 0:
                         await self._config_backup_store.async_save(existing_data)
-                        
+
             except Exception as err:
                 _LOGGER.error("Failed to clean up config backups: %s", err)
                 stats["storage_errors"] += 1
@@ -377,22 +401,23 @@ class TsuryPhoneStorageCache:
             try:
                 config_backups = await self.async_load_config_backups()
                 stats["config_backups_count"] = len(config_backups)
-                
+
                 if config_backups:
                     stats["latest_config_backup"] = max(
-                        config_backups,
-                        key=lambda b: b["timestamp"]
+                        config_backups, key=lambda b: b["timestamp"]
                     )["timestamp"]
                 else:
                     stats["latest_config_backup"] = None
-                    
+
             except Exception as err:
                 stats["config_backup_error"] = str(err)
 
             # Calculate storage usage (approximate)
             if self._call_history_cache:
                 avg_entry_size = 200  # Approximate bytes per call history entry
-                stats["estimated_call_history_size_bytes"] = len(self._call_history_cache) * avg_entry_size
+                stats["estimated_call_history_size_bytes"] = (
+                    len(self._call_history_cache) * avg_entry_size
+                )
             else:
                 stats["estimated_call_history_size_bytes"] = 0
 
@@ -406,10 +431,10 @@ class TsuryPhoneStorageCache:
         """Update retention settings."""
         if "call_history_retention_days" in settings:
             self.call_history_retention_days = settings["call_history_retention_days"]
-        
+
         if "state_backup_retention_days" in settings:
             self.state_backup_retention_days = settings["state_backup_retention_days"]
-        
+
         if "max_call_history_entries" in settings:
             self.max_call_history_entries = settings["max_call_history_entries"]
 
@@ -421,11 +446,11 @@ class TsuryPhoneStorageCache:
             await self._call_history_store.async_remove()
             await self._device_state_store.async_remove()
             await self._config_backup_store.async_remove()
-            
+
             # Clear in-memory cache
             self._call_history_cache.clear()
             self._device_state_cache.clear()
-            
+
             _LOGGER.warning("Cleared all storage data for device %s", self.device_id)
 
         except Exception as err:
@@ -457,19 +482,20 @@ class TsuryPhoneStorageCache:
             # Import call history
             if "call_history" in data:
                 call_history = [
-                    CallHistoryEntry.from_dict(entry)
-                    for entry in data["call_history"]
+                    CallHistoryEntry.from_dict(entry) for entry in data["call_history"]
                 ]
                 await self.async_save_call_history(call_history)
 
             # Import device state
             if "device_state" in data:
                 self._device_state_cache = data["device_state"]
-                await self._device_state_store.async_save({
-                    "state": data["device_state"],
-                    "last_updated": dt_util.utcnow().isoformat(),
-                    "device_id": self.device_id,
-                })
+                await self._device_state_store.async_save(
+                    {
+                        "state": data["device_state"],
+                        "last_updated": dt_util.utcnow().isoformat(),
+                        "device_id": self.device_id,
+                    }
+                )
 
             _LOGGER.info("Successfully imported data for device %s", self.device_id)
             return True

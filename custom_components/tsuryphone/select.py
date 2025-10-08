@@ -266,7 +266,9 @@ class TsuryPhoneSelect(
         if not code:
             raise HomeAssistantError(f"Unknown quick dial option: {option}")
 
-        if state.quick_dials and code not in [entry.code for entry in state.quick_dials]:
+        if state.quick_dials and code not in [
+            entry.code for entry in state.quick_dials
+        ]:
             raise HomeAssistantError(
                 f"Quick dial code '{code}' not found in current list"
             )
@@ -289,7 +291,9 @@ class TsuryPhoneSelect(
             return ["None"]
 
         options = ["None"]
-        options.extend(self._format_blocked_option(entry) for entry in state.blocked_numbers)
+        options.extend(
+            self._format_blocked_option(entry) for entry in state.blocked_numbers
+        )
         return options
 
     def _get_current_blocked_option(self, state: TsuryPhoneState) -> str:
@@ -474,7 +478,9 @@ class TsuryPhoneSelect(
                     entry.number for entry in state.priority_callers
                 ]
             if self.coordinator.selected_priority_number:
-                attributes["selected_number"] = self.coordinator.selected_priority_number
+                attributes["selected_number"] = (
+                    self.coordinator.selected_priority_number
+                )
         elif self.entity_description.key == "webhook_action":
             attributes["total_webhooks"] = len(state.webhooks)
             if state.webhooks:
