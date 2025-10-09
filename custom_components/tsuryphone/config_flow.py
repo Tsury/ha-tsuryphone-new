@@ -60,6 +60,7 @@ class TsuryPhoneConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize config flow."""
         self.discovery_info: dict[str, Any] = {}
+        self._pattern_label_map: dict[str, str] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -383,7 +384,16 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         """Handle ring pattern settings."""
         if user_input is not None:
             try:
-                pattern_mode = user_input["pattern_mode"]
+                if not self._pattern_label_map:
+                    self._pattern_label_map, _ = self._build_ring_pattern_options(
+                        self.coordinator.data.ring_pattern
+                    )
+
+                selected_label = user_input["pattern_mode"]
+                pattern_mode = self._pattern_label_map.get(
+                    selected_label,
+                    "Custom" if selected_label.startswith("Custom") else selected_label,
+                )
 
                 if pattern_mode == "Custom":
                     pattern = (user_input.get("custom_pattern") or "").strip()
@@ -482,28 +492,19 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         current_pattern = self.coordinator.data.ring_pattern
 
         # Determine current mode
-        current_mode = "Default"
-        for preset_name, preset_pattern in RING_PATTERN_PRESETS.items():
-            if preset_pattern == current_pattern:
-                current_mode = preset_name
-                break
-        else:
-            if current_pattern:
-                current_mode = "Custom"
-
-        pattern_options = {
-            RING_PATTERN_PRESET_LABELS[name]: name
-            for name in RING_PATTERN_PRESETS
-        }
-        pattern_options["Custom"] = "Custom"
+        pattern_options, default_label = self._build_ring_pattern_options(
+            current_pattern
+        )
+        self._pattern_label_map = pattern_options
 
         return vol.Schema(
             {
-                vol.Required("pattern_mode", default=current_mode): vol.In(
-                    pattern_options
+                vol.Required("pattern_mode", default=default_label): vol.In(
+                    list(pattern_options.keys())
                 ),
                 vol.Optional(
-                    "custom_pattern", default=current_pattern or ""
+                    "custom_pattern",
+                    default=current_pattern if default_label.startswith("Custom") else "",
                 ): cv.string,
             }
         )
@@ -511,6 +512,35 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
     def _validate_ring_pattern(self, pattern: str) -> bool:
         """Validate ring pattern format."""
         return is_valid_ring_pattern(pattern)
+
+    def _build_ring_pattern_options(
+        self, current_pattern: str | None
+    ) -> tuple[dict[str, str], str]:
+        """Build labeled ring pattern options and return default label."""
+
+        sorted_presets = sorted(RING_PATTERN_PRESETS.items(), key=lambda item: item[0])
+        option_map: dict[str, str] = {
+            RING_PATTERN_PRESET_LABELS[name]: name for name, _ in sorted_presets
+        }
+
+        preset_match = next(
+            (name for name, pattern in RING_PATTERN_PRESETS.items() if pattern == current_pattern),
+            None,
+        )
+
+        custom_label = "Custom"
+        if current_pattern and not preset_match:
+            custom_label = f"Custom ({current_pattern})"
+
+        option_map[custom_label] = "Custom"
+
+        default_key = preset_match or ("Default" if not current_pattern else "Custom")
+        default_label = next(
+            (label for label, name in option_map.items() if name == default_key),
+            custom_label,
+        )
+
+        return option_map, default_label
 
     async def async_step_quick_dial_manager(
         self, user_input: dict[str, Any] | None = None

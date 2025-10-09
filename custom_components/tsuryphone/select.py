@@ -15,7 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from . import get_device_info, TsuryPhoneConfigEntry
 from .api_client import TsuryPhoneAPIError
-from .const import DOMAIN, RING_PATTERN_PRESETS
+from .const import DOMAIN, RING_PATTERN_PRESETS, RING_PATTERN_PRESET_LABELS
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .models import QuickDialEntry, TsuryPhoneState
 from .validation import is_valid_ring_pattern
@@ -88,6 +88,7 @@ class TsuryPhoneSelect(
         self.entity_description = description
         self._device_info = device_info
         self._quick_dial_option_map: dict[str, str | None] = {}
+        self._ring_pattern_option_map: dict[str, str] = {}
 
         # Generate unique ID
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
@@ -148,52 +149,47 @@ class TsuryPhoneSelect(
 
     def _get_ring_pattern_options(self) -> list[str]:
         """Get ring pattern options."""
-        options = list(RING_PATTERN_PRESETS.keys())
-
-        # Add custom option if current pattern doesn't match any preset
-        current_pattern = self.coordinator.data.ring_pattern
-        if current_pattern and not any(
-            RING_PATTERN_PRESETS[preset] == current_pattern
-            for preset in RING_PATTERN_PRESETS
-            if RING_PATTERN_PRESETS[preset]  # Skip empty default
-        ):
-            options.append("custom")
-        elif not current_pattern:
-            # No current pattern set, but custom might be available
-            if "custom" not in options:
-                options.append("custom")
-
-        return options
+        option_map = self._build_ring_pattern_option_map()
+        return list(option_map.keys())
 
     def _get_current_ring_pattern_option(self, state: TsuryPhoneState) -> str | None:
         """Get current ring pattern option."""
         current_pattern = state.ring_pattern
 
-        # Match against presets
-        for preset_name, preset_pattern in RING_PATTERN_PRESETS.items():
-            if preset_pattern == current_pattern:
-                return preset_name
+        option_map = self._ring_pattern_option_map or self._build_ring_pattern_option_map()
+        reverse_map = {value: label for label, value in option_map.items()}
 
-        # If no match and we have a pattern, it's custom
+        preset_match = next(
+            (name for name, pattern in RING_PATTERN_PRESETS.items() if pattern == current_pattern),
+            None,
+        )
+
+        if preset_match and preset_match in reverse_map:
+            return reverse_map[preset_match]
+
         if current_pattern:
-            return "custom"
+            return next(
+                (label for label, value in option_map.items() if value == "Custom"),
+                "Custom",
+            )
 
-        # Default to default preset
-        return "default"
+        return reverse_map.get("Default", next(iter(option_map)))
 
     async def _select_ring_pattern(self, option: str) -> None:
         """Select ring pattern option."""
-        if option == "custom":
+        option_map = self._ring_pattern_option_map or self._build_ring_pattern_option_map()
+        preset_name = option_map.get(option)
+
+        if not preset_name:
+            raise HomeAssistantError(f"Unknown ring pattern selection: {option}")
+
+        if preset_name == "Custom":
             # Don't change pattern, just signal custom mode
             # User will need to set pattern via service or options
             _LOGGER.debug("Selected custom ring pattern mode")
             return
 
-        # Get pattern for preset
-        if option not in RING_PATTERN_PRESETS:
-            raise HomeAssistantError(f"Unknown ring pattern preset: {option}")
-
-        pattern = RING_PATTERN_PRESETS[option]
+        pattern = RING_PATTERN_PRESETS[preset_name]
 
         await self.coordinator.api_client.set_ring_pattern(pattern)
 
@@ -218,7 +214,12 @@ class TsuryPhoneSelect(
         """Build and cache option->code mapping for quick dial select."""
         option_map: dict[str, str | None] = {"None": None}
 
-        for entry in state.quick_dials or []:
+        quick_dials = sorted(
+            state.quick_dials or [],
+            key=lambda entry: ((entry.name or "").casefold(), (entry.code or "").casefold()),
+        )
+
+        for entry in quick_dials:
             label = self._format_quick_dial_option(entry)
             option_map[label] = entry.code
 
@@ -292,7 +293,11 @@ class TsuryPhoneSelect(
 
         options = ["None"]
         options.extend(
-            self._format_blocked_option(entry) for entry in state.blocked_numbers
+            label
+            for label in sorted(
+                (self._format_blocked_option(entry) for entry in state.blocked_numbers),
+                key=str.casefold,
+            )
         )
         return options
 
@@ -333,7 +338,13 @@ class TsuryPhoneSelect(
             return ["None"]
 
         options = ["None"]
-        options.extend(entry.number for entry in state.priority_callers)
+        options.extend(
+            number
+            for number in sorted(
+                (entry.number for entry in state.priority_callers),
+                key=str.casefold,
+            )
+        )
         return options
 
     def _get_current_priority_option(self, state: TsuryPhoneState) -> str:
@@ -379,8 +390,38 @@ class TsuryPhoneSelect(
             return ["None"]
 
         options = ["None"]
-        options.extend(self._format_webhook_option(entry) for entry in state.webhooks)
+        options.extend(
+            label
+            for label in sorted(
+                (self._format_webhook_option(entry) for entry in state.webhooks),
+                key=str.casefold,
+            )
+        )
         return options
+
+    def _build_ring_pattern_option_map(self) -> dict[str, str]:
+        """Build labeled ring pattern options for the select entity."""
+
+        option_map: dict[str, str] = {
+            RING_PATTERN_PRESET_LABELS[name]: name
+            for name in sorted(RING_PATTERN_PRESETS.keys(), key=str.casefold)
+        }
+
+        current_pattern = self.coordinator.data.ring_pattern
+        preset_match = next(
+            (name for name, pattern in RING_PATTERN_PRESETS.items() if pattern == current_pattern),
+            None,
+        )
+
+        if current_pattern and not preset_match:
+            custom_label = f"Custom ({current_pattern})"
+        else:
+            custom_label = "Custom"
+
+        option_map[custom_label] = "Custom"
+
+        self._ring_pattern_option_map = option_map
+        return option_map
 
     def _get_current_webhook_option(self, state: TsuryPhoneState) -> str:
         """Get the currently selected webhook option."""
