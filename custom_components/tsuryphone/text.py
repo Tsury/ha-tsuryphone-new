@@ -23,11 +23,13 @@ from .const import (
     MAX_DIALING_CODE_LENGTH,
     MAX_NAME_LENGTH,
     MAX_NUMBER_LENGTH,
+    MAX_PATTERN_LENGTH,
     MAX_REASON_LENGTH,
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .api_client import TsuryPhoneAPIError
 from .dialing import sanitize_default_dialing_code
+from .validation import is_valid_ring_pattern
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -39,9 +41,21 @@ class TsuryPhoneTextDescription(TextEntityDescription):
     placeholder: str | None = None
     max_length: int | None = None
     apply_dialing_code: bool = False
+    apply_ring_pattern: bool = False
 
 
 TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
+    TsuryPhoneTextDescription(
+        key="ring_pattern_custom",
+        name="Ring Pattern - Custom",
+        icon="mdi:pencil",
+        entity_category=EntityCategory.CONFIG,
+        max_length=MAX_PATTERN_LENGTH,
+        buffer_name="ring_pattern",
+        field_name="pattern",
+        placeholder="500,500,0,500",
+        apply_ring_pattern=True,
+    ),
     TsuryPhoneTextDescription(
         key="dialing_default_code",
         name="Dialing - Default Code",
@@ -233,6 +247,7 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         self._device_info = device_info
         self._is_dnd_field = description.buffer_name == "dnd_schedule"
         self._is_dialing_code = description.apply_dialing_code
+        self._is_ring_pattern = description.apply_ring_pattern
 
         self._attr_unique_id = f"{device_info.device_id}_{description.key}"
         self._attr_device_info = get_device_info(device_info)
@@ -245,6 +260,9 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         """Return the current buffered value."""
         if self._is_dialing_code:
             return self.coordinator.data.default_dialing_code or ""
+
+        if self._is_ring_pattern:
+            return self.coordinator.data.ring_pattern or ""
 
         if self._is_dnd_field:
             dnd_config = self.coordinator.data.dnd_config
@@ -273,6 +291,10 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
 
         if self._is_dialing_code:
             await self._async_set_dialing_code(value)
+            return
+
+        if self._is_ring_pattern:
+            await self._async_set_ring_pattern(value)
             return
 
         buffer = getattr(
@@ -305,6 +327,9 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
             attrs["placeholder"] = self.entity_description.placeholder
         if self._is_dialing_code:
             attrs["default_prefix"] = self.coordinator.data.default_dialing_prefix or ""
+            return attrs
+        if self._is_ring_pattern:
+            attrs["hint"] = "Use commas for segments, add xN repeats, 0 for muted gaps"
             return attrs
         attrs["buffer"] = self.entity_description.buffer_name
         attrs["field"] = self.entity_description.field_name
@@ -398,4 +423,25 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         # Update coordinator cache and notify listeners
         self.coordinator._update_default_dialing_metadata(code=sanitized)
         self.coordinator.async_update_listeners()
+
+    async def _async_set_ring_pattern(self, value: str) -> None:
+        """Apply a ring pattern directly from the text entity."""
+
+        normalized = value.strip()
+
+        if normalized and not is_valid_ring_pattern(normalized):
+            raise HomeAssistantError(
+                "Enter durations in milliseconds separated by commas. Use xN for repeats and 0 for muted segments."
+            )
+
+        pattern = normalized  # Empty string keeps device default
+
+        try:
+            await self.coordinator.api_client.set_ring_pattern(pattern)
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(f"Failed to update ring pattern: {err}") from err
+
+        self.coordinator.data.ring_pattern = pattern
+        self.coordinator.async_update_listeners()
+        self.async_write_ha_state()
         self.async_write_ha_state()

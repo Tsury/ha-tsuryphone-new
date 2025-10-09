@@ -404,7 +404,7 @@ class TsuryPhoneSelect(
 
         option_map: dict[str, str] = {
             RING_PATTERN_PRESET_LABELS[name]: name
-            for name in sorted(RING_PATTERN_PRESETS.keys(), key=str.casefold)
+            for name in RING_PATTERN_PRESETS
         }
 
         current_pattern = self.coordinator.data.ring_pattern

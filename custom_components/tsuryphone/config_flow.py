@@ -518,9 +518,8 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
     ) -> tuple[dict[str, str], str]:
         """Build labeled ring pattern options and return default label."""
 
-        sorted_presets = sorted(RING_PATTERN_PRESETS.items(), key=lambda item: item[0])
         option_map: dict[str, str] = {
-            RING_PATTERN_PRESET_LABELS[name]: name for name, _ in sorted_presets
+            RING_PATTERN_PRESET_LABELS[name]: name for name in RING_PATTERN_PRESETS
         }
 
         preset_match = next(
