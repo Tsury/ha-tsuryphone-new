@@ -121,15 +121,20 @@ class DiagnosticEvent(StrEnum):
 
 # Ring pattern presets (from design document)
 RING_PATTERN_PRESETS: Final = {
-    "default": "",  # Device native
-    "pulse_short": "300,300x2",
-    "classic": "500,500,500",
-    "long_gap": "800,400,800",
-    "triple": "300,300,300",
-    "stagger": "500,250,500",
-    "alarm": "200,200x5",
-    "slow": "1000",
-    "burst": "150,150x3",
+    "Default": "",  # Device native
+    "Pulse Short": "300,300x2",
+    "Classic": "500,500,500",
+    "Long Gap": "800,400,800",
+    "Triple": "300,300,300",
+    "Stagger": "500,250,500",
+    "Alarm": "200,200x5",
+    "Slow": "1000",
+    "Burst": "150,150x3",
+}
+
+RING_PATTERN_PRESET_LABELS: Final = {
+    name: f"{name} ({pattern})" if pattern else f"{name} (device default)"
+    for name, pattern in RING_PATTERN_PRESETS.items()
 }
 
 # Home Assistant event names
