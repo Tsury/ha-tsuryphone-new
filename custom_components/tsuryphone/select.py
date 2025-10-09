@@ -205,8 +205,8 @@ class TsuryPhoneSelect(
             base = f"{entry.name} ({entry.code})"
         else:
             base = entry.code
-
-        return f"{base} – {entry.number}" if entry.number else base
+        display_number = entry.display_number or entry.number
+        return f"{base} – {display_number}" if display_number else base
 
     def _build_quick_dial_option_map(
         self, state: TsuryPhoneState
@@ -282,7 +282,12 @@ class TsuryPhoneSelect(
 
     def _format_blocked_option(self, entry) -> str:
         """Format blocked number option label."""
-        return f"{entry.number} ({entry.reason})" if entry.reason else entry.number
+        display_number = entry.display_number or entry.number
+        return (
+            f"{display_number} ({entry.reason})"
+            if entry.reason
+            else display_number
+        )
 
     def _get_blocked_number_options(self) -> list[str]:
         """Get blocked number options."""
@@ -341,7 +346,10 @@ class TsuryPhoneSelect(
         options.extend(
             number
             for number in sorted(
-                (entry.number for entry in state.priority_callers),
+                (
+                    entry.display_number or entry.number
+                    for entry in state.priority_callers
+                ),
                 key=str.casefold,
             )
         )
@@ -352,7 +360,7 @@ class TsuryPhoneSelect(
         if self.coordinator.selected_priority_number and state.priority_callers:
             for entry in state.priority_callers:
                 if entry.number == self.coordinator.selected_priority_number:
-                    return entry.number
+                    return entry.display_number or entry.number
         return "None"
 
     async def _select_priority_number(self, option: str) -> None:
@@ -366,13 +374,15 @@ class TsuryPhoneSelect(
             return
 
         state: TsuryPhoneState = self.coordinator.data
-        if any(entry.number == option for entry in state.priority_callers):
-            previous = self.coordinator.selected_priority_number
-            self.coordinator.selected_priority_number = option
-            if previous != option:
-                self.coordinator.async_update_listeners()
-            _LOGGER.debug("Selected priority number: %s", option)
-            return
+        for entry in state.priority_callers:
+            candidate = entry.display_number or entry.number
+            if candidate == option:
+                previous = self.coordinator.selected_priority_number
+                self.coordinator.selected_priority_number = entry.number
+                if previous != entry.number:
+                    self.coordinator.async_update_listeners()
+                _LOGGER.debug("Selected priority number: %s", entry.number)
+                return
 
         raise HomeAssistantError(f"Priority number '{option}' not found")
 

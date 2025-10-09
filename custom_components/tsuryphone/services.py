@@ -170,7 +170,7 @@ QUICK_DIAL_ADD_SCHEMA = _service_schema(
     {
         vol.Required("code"): cv.string,
         vol.Required("number"): cv.string,
-        vol.Optional("name"): cv.string,
+        vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
     }
 )
 
@@ -183,7 +183,7 @@ QUICK_DIAL_REMOVE_SCHEMA = _service_schema(
 BLOCKED_ADD_SCHEMA = _service_schema(
     {
         vol.Required("number"): cv.string,
-        vol.Optional("reason"): cv.string,
+        vol.Required("reason"): vol.All(cv.string, vol.Length(min=1)),
     }
 )
 
@@ -304,6 +304,7 @@ def _normalize_number_for_service(
     raw_value: Any,
     *,
     field_name: str = "number",
+    remember: bool = False,
 ) -> str:
     """Normalize outbound phone numbers for service calls."""
 
@@ -316,7 +317,16 @@ def _normalize_number_for_service(
     if not normalized:
         raise ServiceValidationError(f"{field_name} must contain at least one digit")
 
-    return normalized
+    device_value = context.canonicalize(candidate)
+    if not device_value:
+        raise ServiceValidationError(
+            f"{field_name} could not be converted to a canonical phone number"
+        )
+
+    if remember:
+        coordinator.remember_number_display_hint(candidate)
+
+    return device_value
 
 
 def _extract_ids(value: Any) -> set[str]:
@@ -810,9 +820,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coordinator = context.coordinator
         code = call.data["code"]
         number = _normalize_number_for_service(
-            coordinator, call.data["number"], field_name="number"
+            coordinator,
+            call.data["number"],
+            field_name="number",
+            remember=True,
         )
-        name = call.data.get("name")
+        name = call.data["name"].strip()
+        if not name:
+            raise ServiceValidationError("name cannot be empty")
 
         try:
             await coordinator.api_client.add_quick_dial(code, number, name)
@@ -853,9 +868,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
         number = _normalize_number_for_service(
-            coordinator, call.data["number"], field_name="number"
+            coordinator,
+            call.data["number"],
+            field_name="number",
+            remember=True,
         )
-        reason = call.data.get("reason", "")
+        reason = call.data["reason"].strip()
+        if not reason:
+            raise ServiceValidationError("reason cannot be empty")
 
         try:
             await coordinator.api_client.add_blocked_number(number, reason)
@@ -933,7 +953,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
         number = _normalize_number_for_service(
-            coordinator, call.data["number"], field_name="number"
+            coordinator,
+            call.data["number"],
+            field_name="number",
+            remember=True,
         )
 
         try:
@@ -1113,9 +1136,21 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     )
                     continue
 
+                if not name or not str(name).strip():
+                    results["failed"].append(
+                        {"code": code, "error": "Missing quick dial name"}
+                    )
+                    _LOGGER.warning(
+                        "Skipping quick dial entry without name: %s", entry
+                    )
+                    continue
+
                 try:
                     number = _normalize_number_for_service(
-                        coordinator, raw_number, field_name="number"
+                        coordinator,
+                        raw_number,
+                        field_name="number",
+                        remember=True,
                     )
                 except ServiceValidationError as err:
                     results["failed"].append({"code": code, "error": str(err)})
@@ -1177,9 +1212,21 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 raw_number = entry.get("number")
                 reason = entry.get("reason") or entry.get("name")
 
+                if not reason or not str(reason).strip():
+                    results["failed"].append(
+                        {"number": raw_number or "", "error": "Missing reason"}
+                    )
+                    _LOGGER.warning(
+                        "Skipping blocked number without reason: %s", entry
+                    )
+                    continue
+
                 try:
                     number = _normalize_number_for_service(
-                        coordinator, raw_number, field_name="number"
+                        coordinator,
+                        raw_number,
+                        field_name="number",
+                        remember=True,
                     )
                 except ServiceValidationError as err:
                     results["failed"].append(
@@ -1189,6 +1236,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                         "Failed to normalize blocked number %s: %s", raw_number, err
                     )
                     continue
+
+                reason = str(reason).strip()
 
                 try:
                     await coordinator.api_client.add_blocked_number(number, reason)

@@ -110,6 +110,96 @@ def normalize_phone_number(
     return digits_only
 
 
+def canonicalize_phone_number_for_device(
+    raw_number: str | None, default_dialing_code: str | None
+) -> str:
+    """Return a device-friendly canonical phone number (E.164 when possible)."""
+
+    if raw_number is None:
+        return ""
+
+    trimmed = str(raw_number).strip()
+    if not trimmed:
+        return ""
+
+    cleaned = _strip_formatting(trimmed)
+    if not cleaned:
+        return ""
+
+    digits_only = strip_to_digits(cleaned)
+    if not digits_only:
+        return ""
+
+    sanitized_code = sanitize_default_dialing_code(default_dialing_code or "")
+
+    if cleaned.startswith("+"):
+        return f"+{digits_only}"
+
+    if digits_only.startswith("00") and len(digits_only) > 2:
+        return f"+{digits_only[2:]}"
+
+    if sanitized_code:
+        localized = normalize_phone_number(trimmed, sanitized_code)
+        if not localized:
+            return ""
+        local_digits = strip_to_digits(localized)
+        if not local_digits:
+            return ""
+        if local_digits.startswith("0"):
+            local_digits = local_digits[1:]
+        if not local_digits:
+            fallback = strip_to_digits(trimmed)
+            local_digits = fallback.lstrip("0") or fallback
+        return f"+{sanitized_code}{local_digits}"
+
+    return digits_only
+
+
+def format_phone_number_for_display(
+    raw_number: str | None, default_dialing_code: str | None
+) -> str:
+    """Format *raw_number* for UI display, localizing when possible."""
+
+    if raw_number is None:
+        return ""
+
+    trimmed = str(raw_number).strip()
+    if not trimmed:
+        return ""
+
+    sanitized_code = sanitize_default_dialing_code(default_dialing_code or "")
+    cleaned = _strip_formatting(trimmed)
+    digits_only = strip_to_digits(cleaned)
+
+    if cleaned.startswith("+") and digits_only:
+        if sanitized_code and digits_only.startswith(sanitized_code):
+            remainder = digits_only[len(sanitized_code) :]
+            if remainder.startswith("0"):
+                return remainder
+            if remainder:
+                return f"0{remainder}"
+        return f"+{digits_only}"
+
+    if digits_only.startswith("00") and sanitized_code:
+        remainder = digits_only[2:]
+        if remainder.startswith(sanitized_code):
+            remainder = remainder[len(sanitized_code) :]
+            if remainder.startswith("0"):
+                return remainder
+            if remainder:
+                return f"0{remainder}"
+            return trimmed
+
+    if sanitized_code and digits_only.startswith(sanitized_code):
+        remainder = digits_only[len(sanitized_code) :]
+        if remainder.startswith("0"):
+            return remainder
+        if remainder:
+            return f"0{remainder}"
+
+    return trimmed
+
+
 def numbers_equivalent(
     lhs: str | None, rhs: str | None, default_dialing_code: str | None
 ) -> bool:
@@ -142,3 +232,13 @@ class DialingContext:
 
     def sanitize_code(self, value: str | None) -> str:
         return sanitize_default_dialing_code(value)
+
+    def canonicalize(self, number: str | None) -> str:
+        """Return a device-friendly canonical value (E.164 when possible)."""
+
+        return canonicalize_phone_number_for_device(number, self.default_code)
+
+    def format_for_display(self, number: str | None) -> str:
+        """Return a display-friendly representation for UI use."""
+
+        return format_phone_number_for_display(number, self.default_code)

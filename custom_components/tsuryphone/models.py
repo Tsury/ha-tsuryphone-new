@@ -58,6 +58,7 @@ class QuickDialEntry:
     number: str
     name: str = ""
     normalized_number: str = ""
+    display_number: str = ""
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
@@ -65,6 +66,8 @@ class QuickDialEntry:
             raise ValueError("Code and number are required for quick dial entry")
         if self.normalized_number is None:
             self.normalized_number = ""
+        if not self.display_number:
+            self.display_number = self.number
 
 
 @dataclass
@@ -74,6 +77,7 @@ class BlockedNumberEntry:
     number: str
     reason: str = ""
     normalized_number: str = ""
+    display_number: str = ""
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
@@ -81,6 +85,8 @@ class BlockedNumberEntry:
             raise ValueError("Number is required for blocked number entry")
         if self.normalized_number is None:
             self.normalized_number = ""
+        if not self.display_number:
+            self.display_number = self.number
 
 
 @dataclass
@@ -112,12 +118,15 @@ class PriorityCallerEntry:
 
     number: str
     normalized_number: str = ""
+    display_number: str = ""
 
     def __post_init__(self) -> None:
         if not self.number:
             raise ValueError("Number is required for priority caller entry")
         if self.normalized_number is None:
             self.normalized_number = ""
+        if not self.display_number:
+            self.display_number = self.number
 
 
 @dataclass

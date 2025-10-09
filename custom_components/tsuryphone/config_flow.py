@@ -513,6 +513,28 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         """Validate ring pattern format."""
         return is_valid_ring_pattern(pattern)
 
+    def _canonicalize_number(self, value: str, field: str) -> str:
+        """Convert user input into the device's canonical phone number format."""
+
+        if not self.coordinator:
+            raise ValueError("Coordinator not available")
+
+        context = self.coordinator.data.dialing_context
+        candidate = (value or "").strip()
+        if not candidate:
+            raise ValueError(f"{field} cannot be empty")
+
+        normalized = context.normalize(candidate)
+        if not normalized:
+            raise ValueError(f"{field} must contain at least one digit")
+
+        device_value = context.canonicalize(candidate)
+        if not device_value:
+            raise ValueError(f"{field} could not be canonicalized")
+
+        self.coordinator.remember_number_display_hint(candidate)
+        return device_value
+
     def _build_ring_pattern_options(
         self, current_pattern: str | None
     ) -> tuple[dict[str, str], str]:
@@ -577,8 +599,8 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             try:
                 code = user_input["code"]
-                number = user_input["number"]
-                name = user_input.get("name")
+                number = self._canonicalize_number(user_input["number"], "number")
+                name = user_input["name"]
 
                 await self.coordinator.api_client.add_quick_dial(code, number, name)
                 await self.coordinator.async_request_refresh()
@@ -663,10 +685,10 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         """Add a blocked number."""
         if user_input is not None:
             try:
-                number = user_input["number"]
-                name = user_input.get("name")
+                number = self._canonicalize_number(user_input["number"], "number")
+                reason = user_input["reason"]
 
-                await self.coordinator.api_client.add_blocked_number(number, name)
+                await self.coordinator.api_client.add_blocked_number(number, reason)
                 await self.coordinator.async_request_refresh()
 
                 return self.async_create_entry(title="", data={})
@@ -690,7 +712,7 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
             {
                 vol.Required("code"): cv.string,
                 vol.Required("number"): cv.string,
-                vol.Optional("name"): cv.string,
+                vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
             }
         )
 
@@ -710,7 +732,7 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         return vol.Schema(
             {
                 vol.Required("number"): cv.string,
-                vol.Optional("name"): cv.string,
+                vol.Required("reason"): vol.All(cv.string, vol.Length(min=1)),
             }
         )
 
