@@ -31,6 +31,7 @@ from .const import (
     CONF_REFETCH_INTERVAL_MINUTES,
     AUDIO_MIN_LEVEL,
     AUDIO_MAX_LEVEL,
+    RING_PATTERN_PRESET_LABELS,
     RING_PATTERN_PRESETS,
 )
 from .validation import is_valid_ring_pattern
@@ -384,8 +385,15 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
             try:
                 pattern_mode = user_input["pattern_mode"]
 
-                if pattern_mode == "custom":
-                    pattern = user_input["custom_pattern"]
+                if pattern_mode == "Custom":
+                    pattern = (user_input.get("custom_pattern") or "").strip()
+
+                    if not pattern:
+                        return self.async_show_form(
+                            step_id="ring_pattern_settings",
+                            data_schema=self._get_ring_pattern_schema(),
+                            errors={"custom_pattern": "pattern_required"},
+                        )
                 else:
                     pattern = RING_PATTERN_PRESETS.get(pattern_mode, "")
 
@@ -474,19 +482,25 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         current_pattern = self.coordinator.data.ring_pattern
 
         # Determine current mode
-        current_mode = "default"
+        current_mode = "Default"
         for preset_name, preset_pattern in RING_PATTERN_PRESETS.items():
             if preset_pattern == current_pattern:
                 current_mode = preset_name
                 break
         else:
             if current_pattern:
-                current_mode = "custom"
+                current_mode = "Custom"
+
+        pattern_options = {
+            RING_PATTERN_PRESET_LABELS[name]: name
+            for name in RING_PATTERN_PRESETS
+        }
+        pattern_options["Custom"] = "Custom"
 
         return vol.Schema(
             {
                 vol.Required("pattern_mode", default=current_mode): vol.In(
-                    ["default", "short", "long", "urgent", "gentle", "custom"]
+                    pattern_options
                 ),
                 vol.Optional(
                     "custom_pattern", default=current_pattern or ""

@@ -39,7 +39,20 @@
           "polling_fallback_seconds": "Polling Interval (seconds, when WebSocket unavailable)",
           "refetch_interval_minutes": "Device Refresh Interval (minutes)"
         }
+      },
+      "ring_pattern_settings": {
+        "title": "Ring Pattern",
+        "description": "Choose a preset or enter your own timing pattern. Use 0 durations to insert muted gaps.",
+        "data": {
+          "pattern_mode": "Ring pattern preset",
+          "custom_pattern": "Custom pattern (use 0 for muted gaps)"
+        }
       }
+    },
+    "error": {
+      "ring_pattern_failed": "Failed to update ring pattern: {error}",
+      "invalid_pattern": "Custom pattern must use millisecond durations separated by commas. Append xN to repeat a duration and use 0 for muted segments.",
+      "pattern_required": "Enter a pattern when using custom mode."
     }
   },
   "entity": {
