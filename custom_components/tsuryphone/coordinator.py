@@ -2052,6 +2052,44 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if parsed_prev is not None:
                 self.data.previous_app_state = parsed_prev
 
+            if "dndActive" in phone_data:
+                self.data.dnd_active = self._coerce_bool(
+                    phone_data["dndActive"],
+                    "config.phone.dndActive",
+                    default=self.data.dnd_active,
+                )
+
+            if "isRinging" in phone_data:
+                self.data.ringing = self._coerce_bool(
+                    phone_data["isRinging"],
+                    "config.phone.isRinging",
+                    default=self.data.ringing,
+                )
+            elif parsed_state is not None:
+                self.data.ringing = parsed_state == AppState.INCOMING_CALL_RING
+
+            if "currentCallNumber" in phone_data:
+                self.data.current_call.number = str(
+                    phone_data.get("currentCallNumber") or ""
+                )
+
+            if "currentCallName" in phone_data:
+                self.data.current_call.name = str(
+                    phone_data.get("currentCallName") or ""
+                )
+
+            if "currentDialingNumber" in phone_data:
+                self.data.current_dialing_number = str(
+                    phone_data.get("currentDialingNumber") or ""
+                )
+
+            if "isIncomingCall" in phone_data:
+                self.data.current_call.is_incoming = self._coerce_bool(
+                    phone_data["isIncomingCall"],
+                    "config.phone.isIncomingCall",
+                    default=self.data.current_call.is_incoming,
+                )
+
             # Priority callers list
             if isinstance(phone_data.get("priorityCallers"), list):
                 pr_list: list[PriorityCallerEntry] = []
@@ -2338,6 +2376,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 device_data.get("currentCallIsPriority"),
                 "config.device.currentCallIsPriority",
                 default=self.data.current_call_is_priority,
+            )
+
+        if "dndActive" in device_data:
+            self.data.dnd_active = self._coerce_bool(
+                device_data["dndActive"],
+                "config.device.dndActive",
+                default=self.data.dnd_active,
             )
 
         if "isMaintenanceMode" in device_data:
