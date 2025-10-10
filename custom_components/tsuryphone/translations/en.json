@@ -83,23 +83,17 @@
       "app_state": {
         "name": "Phone State"
       },
-      "current_call_number": {
-        "name": "Current Call Number"
-      },
       "current_dialing_number": {
         "name": "Current Dialing Number"
       },
-      "current_call_type": {
-        "name": "Current Call Type"
+      "current_call_summary": {
+        "name": "Current Call"
       },
       "call_duration": {
         "name": "Call Duration"
       },
-      "last_call_number": {
-        "name": "Last Call Number"
-      },
-      "last_call_type": {
-        "name": "Last Call Type"
+      "last_call_summary": {
+        "name": "Last Call"
       },
       "uptime": {
         "name": "Uptime"

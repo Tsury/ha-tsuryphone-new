@@ -40,6 +40,7 @@ class CallInfo:
     """Information about an active or recent call."""
 
     number: str = ""
+    name: str = ""
     is_incoming: bool = False
     start_time: int = 0  # milliseconds since device boot
     call_start_ts: int = 0  # Device timestamp from firmware (callStartTs)
@@ -47,7 +48,12 @@ class CallInfo:
     call_id: int = -1
     call_waiting_id: int = -1
     call_type: str = ""
-    name: str = ""
+    active: bool = False
+    available: bool = False
+    direction: str = ""
+    priority: bool = False
+    result: str = ""
+    duration_seconds: int | None = None
 
 
 @dataclass
@@ -327,6 +333,8 @@ class TsuryPhoneState:
     @property
     def is_call_active(self) -> bool:
         """True if device is in an active call."""
+        if self.current_call.active:
+            return True
         return self.app_state == AppState.IN_CALL
 
     @property
@@ -370,6 +378,8 @@ class TsuryPhoneState:
     @property
     def current_call_direction(self) -> str | None:
         """Return the direction of the current call or dialing session."""
+        if self.current_call.direction:
+            return self.current_call.direction
         if self.app_state in (AppState.INCOMING_CALL, AppState.INCOMING_CALL_RING):
             return "incoming"
         if self.app_state in (AppState.DIALING, AppState.IN_CALL):

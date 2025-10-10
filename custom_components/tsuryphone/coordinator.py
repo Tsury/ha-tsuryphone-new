@@ -176,6 +176,196 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         return bool(value)
 
+    def _coerce_int(self, value: Any) -> int | None:
+        """Convert value to int when possible."""
+        if value is None:
+            return None
+        try:
+            converted = int(float(value))
+        except (TypeError, ValueError):
+            return None
+        return converted
+
+    def _compose_call_type(self, direction: str | None, result: str | None) -> str:
+        """Compose a normalized call_type string from direction/result."""
+        direction_norm = (direction or "").strip().lower()
+        result_norm = (result or "").strip().lower()
+
+        if not direction_norm and not result_norm:
+            return ""
+
+        if result_norm == "answered" and direction_norm:
+            return f"{direction_norm}_answered"
+
+        if result_norm in {"blocked", "missed", "unanswered"} and direction_norm:
+            return f"{direction_norm}_{result_norm}"
+
+        return result_norm or direction_norm
+
+    def _derive_result_from_call_type(self, call_type: str | None) -> str:
+        """Infer a call result label from legacy call_type strings."""
+        if not call_type:
+            return ""
+
+        normalized = str(call_type).strip().lower()
+        if normalized.endswith("blocked"):
+            return "blocked"
+        if normalized.endswith("missed") or normalized.endswith("unanswered"):
+            return "missed"
+        return "answered"
+
+    def _update_call_snapshots_from_payload(self, payload: dict[str, Any]) -> None:
+        """Update current/last call snapshots from structured payloads."""
+
+        if not payload:
+            return
+
+        current_payload = payload.get("currentCall")
+        if isinstance(current_payload, dict):
+            self._apply_current_call_snapshot(current_payload)
+
+        last_payload = payload.get("lastCall")
+        if isinstance(last_payload, dict):
+            self._apply_last_call_snapshot(last_payload)
+
+    def _apply_current_call_snapshot(self, snapshot: dict[str, Any]) -> None:
+        """Apply structured current-call snapshot to coordinator state."""
+
+        current = self.data.current_call
+        previous_active = current.active
+
+        active = self._coerce_bool(
+            snapshot.get("active"),
+            "currentCall.active",
+            default=current.active,
+        )
+
+        number = str(snapshot.get("number") or "")
+        name = str(snapshot.get("name") or "")
+
+        direction_raw = snapshot.get("direction")
+        direction = direction_raw.strip().lower() if isinstance(direction_raw, str) else ""
+
+        priority = self._coerce_bool(
+            snapshot.get("priority"),
+            "currentCall.priority",
+            default=False,
+        )
+
+        duration_seconds = self._coerce_int(snapshot.get("duration"))
+        if duration_seconds is not None and duration_seconds < 0:
+            duration_seconds = None
+
+        current.active = active
+        current.available = False
+
+        if active:
+            if number or not current.number:
+                current.number = number
+            if name or not current.name:
+                current.name = name
+            if active:
+                current.direction = direction
+                if direction:
+                    current.is_incoming = direction == "incoming"
+            current.priority = priority
+            current.duration_seconds = duration_seconds
+            current.duration_ms = (
+                duration_seconds * 1000 if duration_seconds is not None else None
+            )
+            current.result = ""
+            current.call_type = current.direction if current.direction else ""
+            self.data.current_call_is_priority = priority
+        else:
+            if current.number:
+                current.number = ""
+            current.name = ""
+            current.direction = ""
+            current.is_incoming = False
+            current.priority = False
+            current.duration_seconds = None
+            current.duration_ms = None
+            current.result = ""
+            current.call_type = ""
+            current.call_start_ts = 0
+            current.start_time = 0
+            self.data.current_call_is_priority = False
+            self.data.current_dialing_number = ""
+
+        if active and not previous_active:
+            self._start_call_timer()
+        elif not active and previous_active:
+            self._stop_call_timer()
+
+    def _apply_last_call_snapshot(self, snapshot: dict[str, Any]) -> None:
+        """Apply structured last-call snapshot to coordinator state."""
+
+        last = self.data.last_call
+
+        available_raw = snapshot.get("available")
+        available = (
+            self._coerce_bool(available_raw, "lastCall.available", default=None)
+            if available_raw is not None
+            else None
+        )
+
+        number = str(snapshot.get("number") or "")
+        name = str(snapshot.get("name") or "")
+
+        direction_raw = snapshot.get("direction")
+        direction = direction_raw.strip().lower() if isinstance(direction_raw, str) else ""
+
+        result_raw = snapshot.get("result")
+        result = result_raw.strip().lower() if isinstance(result_raw, str) else ""
+
+        priority = self._coerce_bool(
+            snapshot.get("priority"),
+            "lastCall.priority",
+            default=False,
+        )
+
+        duration_seconds = self._coerce_int(snapshot.get("duration"))
+        if duration_seconds is not None and duration_seconds < 0:
+            duration_seconds = None
+
+        if available is None:
+            available = bool(number or result or direction or name)
+
+        last.available = available
+
+        if not available:
+            last.number = ""
+            last.name = ""
+            last.direction = ""
+            last.is_incoming = False
+            last.priority = False
+            last.duration_seconds = None
+            last.duration_ms = None
+            last.result = ""
+            last.call_type = ""
+            return
+
+        last.number = number
+        last.name = name
+        last.direction = direction
+        if direction:
+            last.is_incoming = direction == "incoming"
+        last.priority = priority
+        last.duration_seconds = duration_seconds
+        last.duration_ms = (
+            duration_seconds * 1000 if duration_seconds is not None else None
+        )
+        previous_type = last.call_type
+        resolved_result = result or self._derive_result_from_call_type(previous_type)
+        last.result = resolved_result
+        last.call_type = self._compose_call_type(direction, resolved_result)
+        if not last.call_type:
+            if direction:
+                last.call_type = direction
+            elif resolved_result:
+                last.call_type = resolved_result
+
+
     async def _async_setup(self) -> None:
         """Set up the coordinator."""
         # Phase P8: Initialize resilience manager
@@ -353,6 +543,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self._handle_diagnostic_event(event)
         else:
             _LOGGER.debug("Unknown event category: %s", event.category)
+
+        # Update structured call snapshots if present in payload
+        self._update_call_snapshots_from_payload(event.data)
 
         # Fire Home Assistant event
         self._fire_ha_event(event)
@@ -605,6 +798,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if name is not None:
             self.data.last_call.name = name or ""
+
+        self.data.last_call.available = True
+        self.data.last_call.direction = (
+            "incoming" if self.data.last_call.is_incoming else "outgoing"
+        )
+        self.data.last_call.priority = self.data.current_call_is_priority
+        if duration_ms is not None:
+            self.data.last_call.duration_seconds = max(duration_ms // 1000, 0)
+        else:
+            self.data.last_call.duration_seconds = None
+        derived_result = self._derive_result_from_call_type(
+            self.data.last_call.call_type
+        )
+        self.data.last_call.result = derived_result
 
     def _reset_current_call_state(self, *, number: str | None = None) -> None:
         """Clear current call-related state and associated helpers."""
@@ -906,21 +1113,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             )
 
         if last_call_data:
-            number = str(last_call_data.get("number", ""))
-            call_type = str(last_call_data.get("type", ""))
-            is_incoming = self._infer_is_incoming_from_call_type(call_type)
-            self._update_last_call_info(
-                number,
-                is_incoming=is_incoming,
-                call_start_ts=None,
-                duration_ms=None,
-                call_type=call_type or None,
-                name=str(
-                    last_call_data.get("name")
-                    or last_call_data.get("currentCallName")
-                    or ""
-                ),
-            )
+            self._apply_last_call_snapshot(last_call_data)
 
     def _handle_status_update(self, event: TsuryPhoneEvent) -> None:
         """Handle system status update."""
@@ -1324,6 +1517,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             config_section = data.get("config") or {}
             if not isinstance(config_section, dict):
                 config_section = {}
+
+            # Apply structured call snapshots when present in API payloads
+            self._update_call_snapshots_from_payload(data)
+            if phone_section:
+                self._update_call_snapshots_from_payload(phone_section)
 
             quick_dial_source = (
                 phone_section.get("quickDial")
@@ -2025,6 +2223,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     current_duration = int(
                         time.monotonic() - self._call_start_monotonic
                     )
+                    self.data.current_call.duration_seconds = current_duration
+                    self.data.current_call.duration_ms = current_duration * 1000
                     # Duration will be read by call duration sensor
                     self.async_set_updated_data(self.data)
         except asyncio.CancelledError:
