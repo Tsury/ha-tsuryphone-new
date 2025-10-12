@@ -40,20 +40,19 @@ class CallInfo:
     """Information about an active or recent call."""
 
     number: str = ""
-    name: str = ""
+    normalized_number: str = ""
     is_incoming: bool = False
+    direction: str = ""
+    result: str = ""
+    is_priority: bool = False
+    duration_seconds: int | None = None
     start_time: int = 0  # milliseconds since device boot
     call_start_ts: int = 0  # Device timestamp from firmware (callStartTs)
     duration_ms: int | None = None
     call_id: int = -1
     call_waiting_id: int = -1
     call_type: str = ""
-    active: bool = False
-    available: bool = False
-    direction: str = ""
-    priority: bool = False
-    result: str = ""
-    duration_seconds: int | None = None
+    name: str = ""
 
 
 @dataclass
@@ -333,8 +332,6 @@ class TsuryPhoneState:
     @property
     def is_call_active(self) -> bool:
         """True if device is in an active call."""
-        if self.current_call.active:
-            return True
         return self.app_state == AppState.IN_CALL
 
     @property

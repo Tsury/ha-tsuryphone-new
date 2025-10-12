@@ -32,14 +32,24 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:phone-check",
     ),
     SensorEntityDescription(
+        key="current_call_number",
+        name="Current Call Number",
+        icon="mdi:phone-in-talk",
+    ),
+    SensorEntityDescription(
+        key="current_call_name",
+        name="Current Caller Name",
+        icon="mdi:account-voice",
+    ),
+    SensorEntityDescription(
         key="current_dialing_number",
         name="Current Dialing Number",
         icon="mdi:phone-dial",
     ),
     SensorEntityDescription(
-        key="current_call_summary",
-        name="Current Call",
-        icon="mdi:phone-in-talk",
+        key="current_call_direction",
+        name="Current Call Direction",
+        icon="mdi:phone-incoming",
     ),
     SensorEntityDescription(
         key="call_duration",
@@ -50,8 +60,13 @@ SENSOR_DESCRIPTIONS = (
         state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(
-        key="last_call_summary",
-        name="Last Call",
+        key="last_call_number",
+        name="Last Call Number",
+        icon="mdi:phone-log",
+    ),
+    SensorEntityDescription(
+        key="last_call_result",
+        name="Last Call Result",
         icon="mdi:phone-log",
     ),
     SensorEntityDescription(
@@ -177,26 +192,25 @@ class TsuryPhoneSensor(
 
         if self.entity_description.key == "app_state":
             return self._format_app_state(state.app_state)
+        elif self.entity_description.key == "current_call_number":
+            return state.current_call.number if state.current_call.number else None
+        elif self.entity_description.key == "current_call_name":
+            return state.current_call.name if state.current_call.name else None
         elif self.entity_description.key == "current_dialing_number":
             return (
                 state.current_dialing_number if state.current_dialing_number else None
             )
-        elif self.entity_description.key == "current_call_summary":
-            if state.current_call.active:
-                return (
-                    state.current_call.name
-                    or state.current_call.number
-                    or "active"
-                )
-            return "idle"
+        elif self.entity_description.key == "current_call_direction":
+            direction = state.current_call.direction or state.current_call_direction
+            return direction if direction else None
         elif self.entity_description.key == "call_duration":
             if state.is_call_active:
                 return self.coordinator.current_call_duration_seconds
             return 0
-        elif self.entity_description.key == "last_call_summary":
-            if state.last_call.available:
-                return state.last_call.result or state.last_call.call_type or "unknown"
-            return None
+        elif self.entity_description.key == "last_call_number":
+            return state.last_call.number if state.last_call.number else None
+        elif self.entity_description.key == "last_call_result":
+            return state.last_call.result if state.last_call.result else None
         elif self.entity_description.key == "uptime":
             return state.stats.uptime_seconds
         elif self.entity_description.key == "rssi":
@@ -238,44 +252,107 @@ class TsuryPhoneSensor(
             )
             attributes["previous_state_code"] = state.previous_app_state.value
 
-        elif self.entity_description.key == "current_call_summary":
-            attributes["active"] = state.current_call.active
-            attributes["is_incoming"] = state.current_call.is_incoming
+        elif self.entity_description.key == "current_call_number":
+            if state.current_call.number:
+                attributes["is_incoming"] = state.current_call.is_incoming
+                attributes["call_start_ts"] = state.current_call.start_time
+                attributes["direction"] = (
+                    state.current_call.direction
+                    or ("incoming" if state.current_call.is_incoming else "outgoing")
+                )
+                if state.current_call.result:
+                    attributes["result"] = state.current_call.result
+                if state.current_call.duration_seconds is not None:
+                    attributes["duration_seconds"] = state.current_call.duration_seconds
+                if state.current_call.duration_ms is not None:
+                    attributes["duration_ms"] = state.current_call.duration_ms
+                if state.current_call.normalized_number:
+                    attributes["normalized_number"] = state.current_call.normalized_number
+                if state.current_call.is_priority:
+                    attributes["is_priority"] = True
+                if state.current_call.name:
+                    attributes["name"] = state.current_call.name
+
+        elif self.entity_description.key == "current_call_name":
+            if state.current_call.name:
+                attributes["number"] = state.current_call.number
+                attributes["is_incoming"] = state.current_call.is_incoming
+                attributes["call_start_ts"] = state.current_call.start_time
+                attributes["direction"] = (
+                    state.current_call.direction
+                    or ("incoming" if state.current_call.is_incoming else "outgoing")
+                )
+                if state.current_call.result:
+                    attributes["result"] = state.current_call.result
+                if state.current_call.duration_seconds is not None:
+                    attributes["duration_seconds"] = state.current_call.duration_seconds
+                if state.current_call.duration_ms is not None:
+                    attributes["duration_ms"] = state.current_call.duration_ms
+                if state.current_call.normalized_number:
+                    attributes["normalized_number"] = state.current_call.normalized_number
+                if state.current_call.is_priority:
+                    attributes["is_priority"] = True
+
+        elif self.entity_description.key == "current_call_direction":
             direction = state.current_call.direction or state.current_call_direction
             if direction:
                 attributes["direction"] = direction
+            attributes["app_state"] = self._format_app_state(state.app_state)
             if state.current_call.number:
                 attributes["number"] = state.current_call.number
             if state.current_call.name:
                 attributes["name"] = state.current_call.name
-            attributes["priority"] = state.current_call.priority
+            if state.current_call.result:
+                attributes["result"] = state.current_call.result
+            if state.current_call.is_priority:
+                attributes["is_priority"] = True
             if state.current_call.duration_seconds is not None:
                 attributes["duration_seconds"] = state.current_call.duration_seconds
             if state.current_call.duration_ms is not None:
                 attributes["duration_ms"] = state.current_call.duration_ms
-            if state.is_call_active:
-                attributes["app_state"] = self._format_app_state(state.app_state)
+            if state.current_call.normalized_number:
+                attributes["normalized_number"] = state.current_call.normalized_number
 
-        elif self.entity_description.key == "last_call_summary":
-            attributes["available"] = state.last_call.available
-            if state.last_call.available:
+        elif self.entity_description.key == "last_call_number":
+            if state.last_call.number:
                 attributes["is_incoming"] = state.last_call.is_incoming
-                if state.last_call.number:
-                    attributes["number"] = state.last_call.number
-                if state.last_call.name:
-                    attributes["name"] = state.last_call.name
-                if state.last_call.direction:
-                    attributes["direction"] = state.last_call.direction
+                attributes["call_start_ts"] = state.last_call.start_time
+                attributes["direction"] = (
+                    state.last_call.direction
+                    or ("incoming" if state.last_call.is_incoming else "outgoing")
+                )
                 if state.last_call.result:
                     attributes["result"] = state.last_call.result
-                if state.last_call.call_type:
-                    attributes["call_type"] = state.last_call.call_type
-                attributes["priority"] = state.last_call.priority
                 if state.last_call.duration_seconds is not None:
                     attributes["duration_seconds"] = state.last_call.duration_seconds
                 if state.last_call.duration_ms is not None:
                     attributes["duration_ms"] = state.last_call.duration_ms
+                if state.last_call.normalized_number:
+                    attributes["normalized_number"] = state.last_call.normalized_number
+                if state.last_call.is_priority:
+                    attributes["is_priority"] = True
 
+        elif self.entity_description.key == "last_call_result":
+            if state.last_call.result:
+                attributes["result"] = state.last_call.result
+            if state.last_call.number:
+                attributes["number"] = state.last_call.number
+            attributes["is_incoming"] = state.last_call.is_incoming
+            attributes["direction"] = (
+                state.last_call.direction
+                or ("incoming" if state.last_call.is_incoming else "outgoing")
+            )
+            attributes["call_start_ts"] = state.last_call.start_time
+            if state.last_call.duration_seconds is not None:
+                attributes["duration_seconds"] = state.last_call.duration_seconds
+            if state.last_call.duration_ms is not None:
+                attributes["duration_ms"] = state.last_call.duration_ms
+            if state.last_call.is_priority:
+                attributes["is_priority"] = True
+            if state.last_call.normalized_number:
+                attributes["normalized_number"] = state.last_call.normalized_number
+            if state.last_call.name:
+                attributes["name"] = state.last_call.name
 
         elif self.entity_description.key == "call_duration":
             if state.is_call_active:
