@@ -76,15 +76,21 @@
         "name": "Call Waiting Available"
       },
       "current_call_priority": {
-        "name": "Priority Call Active"
+        "name": "Current Call Priority"
       }
     },
     "sensor": {
       "app_state": {
         "name": "Phone State"
       },
+      "current_call_summary": {
+        "name": "Current Call"
+      },
       "current_call_number": {
         "name": "Current Call Number"
+      },
+      "current_call_name": {
+        "name": "Current Caller Name"
       },
       "current_dialing_number": {
         "name": "Current Dialing Number"
@@ -93,13 +99,28 @@
         "name": "Current Call Direction"
       },
       "call_duration": {
-        "name": "Call Duration"
+        "name": "Current Call Duration"
       },
       "last_call_number": {
         "name": "Last Call Number"
       },
+      "last_call_name": {
+        "name": "Last Caller Name"
+      },
+      "last_call_direction": {
+        "name": "Last Call Direction"
+      },
       "last_call_result": {
         "name": "Last Call Result"
+      },
+      "last_call_duration": {
+        "name": "Last Call Duration"
+      },
+      "last_call_priority": {
+        "name": "Last Call Priority"
+      },
+      "last_call_summary": {
+        "name": "Last Call"
       },
       "uptime": {
         "name": "Uptime"
