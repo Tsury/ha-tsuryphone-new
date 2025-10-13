@@ -377,14 +377,7 @@ class TsuryPhoneText(CoordinatorEntity[TsuryPhoneDataUpdateCoordinator], TextEnt
         }
 
         dnd_config = self.coordinator.data.dnd_config
-        payload = {
-            "startHour": dnd_config.start_hour,
-            "startMinute": dnd_config.start_minute,
-            "endHour": dnd_config.end_hour,
-            "endMinute": dnd_config.end_minute,
-        }
-
-        payload[payload_field_map[field_name]] = number
+        payload = {payload_field_map[field_name]: number}
 
         try:
             await self.coordinator.api_client.set_dnd(payload)

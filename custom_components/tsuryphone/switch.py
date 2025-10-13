@@ -121,10 +121,8 @@ class TsuryPhoneSwitch(
 
     async def _set_dnd_force(self, enabled: bool) -> None:
         """Set DND force mode."""
-        # Use partial update - only send the force field
-        dnd_config = {"force": enabled}
-
-        await self.coordinator.api_client.set_dnd(dnd_config)
+        # Firmware now accepts partial DND updates; only send the field we change
+        await self.coordinator.api_client.set_dnd({"force": enabled})
 
         # Update local state optimistically
         self.coordinator.data.dnd_config.force = enabled
@@ -144,7 +142,7 @@ class TsuryPhoneSwitch(
 
     async def _set_dnd_schedule_enabled(self, enabled: bool) -> None:
         """Set DND scheduled mode."""
-
+        # Only update the schedule flag; timers stay untouched unless adjusted elsewhere
         await self.coordinator.api_client.set_dnd({"scheduled": enabled})
 
         # Update local state optimistically
