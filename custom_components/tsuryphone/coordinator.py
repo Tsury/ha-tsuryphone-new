@@ -94,6 +94,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Event processing state
         self._missed_call_detection: dict[str, Any] = {}
         self._pending_call_starts: dict[str, dict[str, Any]] = {}  # Key: call number
+        self._recent_blocked_calls: dict[str, float] = {}
 
         # Timers and intervals
         self._refetch_timer: Any = None
@@ -634,6 +635,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Update blocked call statistics
         self.data.stats.calls_blocked += 1
+
+        # Remember blocked call so missed-call detector does not double-count
+        self._register_recent_blocked_call(number)
 
         # Update last call snapshot
         self._update_last_call_info(
@@ -2134,6 +2138,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if not number:
             return  # Can't record missed call without number
 
+        if self._is_recent_blocked_call(number):
+            return  # Blocked call already handled separately
+
         # Check if this was actually a blocked call
         if any(
             entry.call_type == "blocked" and entry.number == number
@@ -2184,6 +2191,49 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 "timestamp": self._event_timestamp_iso(event),
             },
         )
+
+    def _register_recent_blocked_call(self, number: str) -> None:
+        """Record that a call was explicitly blocked to avoid double counting."""
+        if not number:
+            return
+
+        now = time.monotonic()
+        self._prune_recent_blocked_calls(now)
+
+        normalized = normalize_phone_number(number) or ""
+
+        self._recent_blocked_calls[number] = now
+        if normalized and normalized != number:
+            self._recent_blocked_calls[normalized] = now
+
+    def _is_recent_blocked_call(self, number: str) -> bool:
+        """Check if a number was just recorded as blocked."""
+        if not number:
+            return False
+
+        now = time.monotonic()
+        self._prune_recent_blocked_calls(now)
+
+        normalized = normalize_phone_number(number) or ""
+        if number in self._recent_blocked_calls:
+            return True
+        if normalized and normalized in self._recent_blocked_calls:
+            return True
+        return False
+
+    def _prune_recent_blocked_calls(self, now: float | None = None) -> None:
+        """Expire cached blocked-call markers after a short window."""
+        if now is None:
+            now = time.monotonic()
+
+        expiry_cutoff = now - 60  # keep markers for one minute
+        stale = [
+            number
+            for number, ts in self._recent_blocked_calls.items()
+            if ts < expiry_cutoff
+        ]
+        for number in stale:
+            self._recent_blocked_calls.pop(number, None)
 
     def _fire_ha_event(self, event: TsuryPhoneEvent) -> None:
         """Fire Home Assistant event for device event."""
