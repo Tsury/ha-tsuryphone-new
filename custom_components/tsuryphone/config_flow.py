@@ -686,9 +686,9 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             try:
                 number = self._canonicalize_number(user_input["number"], "number")
-                reason = user_input["reason"]
+                name = user_input["name"]
 
-                await self.coordinator.api_client.add_blocked_number(number, reason)
+                await self.coordinator.api_client.add_blocked_number(number, name)
                 await self.coordinator.async_request_refresh()
 
                 return self.async_create_entry(title="", data={})
@@ -732,7 +732,7 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         return vol.Schema(
             {
                 vol.Required("number"): cv.string,
-                vol.Required("reason"): vol.All(cv.string, vol.Length(min=1)),
+                vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
             }
         )
 

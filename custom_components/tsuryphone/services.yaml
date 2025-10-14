@@ -54,7 +54,7 @@ ring_device:
     pattern:
       name: Ring pattern
       description: Optional ring pattern string.
-      required: false
+  required: true
       example: "300,300,300"
       selector:
         text:
@@ -318,9 +318,9 @@ blocked_add:
       example: "0541234567"
       selector:
         text:
-    reason:
-      name: Reason
-      description: Optional reason to display.
+    name:
+      name: Name
+      description: Name to display for the blocked number.
       required: false
       example: "Telemarketer"
       selector:
@@ -564,7 +564,7 @@ blocked_import:
       name: Entries
       description: List of blocked number entries to import.
       required: true
-      example: '[{"number": "0547654321", "reason": "Spam caller"}]'
+  example: '[{"number": "0547654321", "name": "Spam caller"}]'
       selector:
         object:
     clear_existing:

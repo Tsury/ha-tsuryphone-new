@@ -108,7 +108,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # User input buffers for device management actions (exposed via text entities)
         self.quick_dial_input: dict[str, str] = {"code": "", "number": "", "name": ""}
-        self.blocked_input: dict[str, str] = {"number": "", "reason": ""}
+        self.blocked_input: dict[str, str] = {"number": "", "name": ""}
         self.priority_input: dict[str, str] = {"number": ""}
         self.webhook_input: dict[str, str] = {
             "code": "",
@@ -1481,7 +1481,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     )
                     entry = BlockedNumberEntry(
                         number=value.get("number", ""),
-                        reason=value.get("reason", ""),
+                        name=str(value.get("name", "")),
                         normalized_number=normalized_str,
                         display_number=display_number,
                     )
@@ -1751,7 +1751,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         number = (
                             b.get("number") or b.get("value") or b.get("phone") or ""
                         )
-                        reason = b.get("reason") or b.get("note") or ""
+                        name_value = b.get("name") or ""
                         normalized = normalize_phone_number(
                             number, self.data.default_dialing_code
                         )
@@ -1762,7 +1762,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         blocked_list.append(
                             BlockedNumberEntry(
                                 number=str(number),
-                                reason=str(reason),
+                                name=str(name_value),
                                 normalized_number=normalized_str,
                                 display_number=display_number,
                             )
@@ -2655,7 +2655,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         number_value = str(
                             b.get("number") or b.get("value") or b.get("phone") or ""
                         )
-                        reason_value = str(b.get("reason") or b.get("note") or "")
+                        name_value = str(b.get("name") or "")
                         normalized_value = b.get("normalizedNumber")
                         if not normalized_value and number_value:
                             normalized_value = normalize_phone_number(
@@ -2668,7 +2668,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         blocked_list.append(
                             BlockedNumberEntry(
                                 number=number_value,
-                                reason=reason_value,
+                                name=name_value,
                                 normalized_number=normalized_str,
                                 display_number=display_number,
                             )

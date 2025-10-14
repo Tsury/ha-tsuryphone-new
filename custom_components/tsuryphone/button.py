@@ -456,13 +456,13 @@ class TsuryPhoneButton(
         """Add a blocked number from buffered text inputs."""
         buffer = self._get_buffer_snapshot("blocked")
         number = buffer.get("number", "")
-        reason = buffer.get("reason", "")
+        name = buffer.get("name", "")
 
         if not number:
             raise HomeAssistantError("Enter a number to block")
 
-        if not reason:
-            raise HomeAssistantError("Enter a reason for blocking this number")
+        if not name:
+            raise HomeAssistantError("Enter a name for this blocked number")
 
         device_number = self._prepare_number_input(
             number, field="Blocked number"
@@ -470,7 +470,7 @@ class TsuryPhoneButton(
 
         try:
             await self.coordinator.api_client.add_blocked_number(
-                device_number, reason
+                device_number, name
             )
             self.coordinator.selected_blocked_number = device_number
             self.coordinator.remember_number_display_hint(number)
@@ -716,13 +716,15 @@ class TsuryPhoneButton(
 
         elif self.entity_description.key == "blocked_add":
             buffer = self._get_buffer_snapshot("blocked")
-            has_required = self._buffer_has_values("blocked", ("number",))
+            has_required = self._buffer_has_values("blocked", ("number", "name"))
             attributes["can_execute"] = bool(has_required and state.connected)
             if not has_required:
-                attributes["missing_fields"] = ["number"]
+                attributes["missing_fields"] = [
+                    field for field in ("number", "name") if not buffer.get(field)
+                ]
             attributes["buffer"] = {
                 "number": buffer.get("number", ""),
-                "reason": buffer.get("reason", ""),
+                "name": buffer.get("name", ""),
             }
 
         elif self.entity_description.key == "blocked_remove":

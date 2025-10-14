@@ -122,35 +122,33 @@ def canonicalize_phone_number_for_device(
     if not trimmed:
         return ""
 
-    cleaned = _strip_formatting(trimmed)
-    if not cleaned:
-        return ""
-
-    digits_only = strip_to_digits(cleaned)
-    if not digits_only:
-        return ""
-
     sanitized_code = sanitize_default_dialing_code(default_dialing_code or "")
 
-    if cleaned.startswith("+"):
-        return f"+{digits_only}"
+    normalized = normalize_phone_number(trimmed, sanitized_code)
+    if not normalized:
+        return ""
+
+    if normalized.startswith("+"):
+        return normalized
+
+    digits_only = strip_to_digits(normalized)
+    if not digits_only:
+        return ""
 
     if digits_only.startswith("00") and len(digits_only) > 2:
         return f"+{digits_only[2:]}"
 
     if sanitized_code:
-        localized = normalize_phone_number(trimmed, sanitized_code)
-        if not localized:
-            return ""
-        local_digits = strip_to_digits(localized)
-        if not local_digits:
-            return ""
-        if local_digits.startswith("0"):
-            local_digits = local_digits[1:]
-        if not local_digits:
-            fallback = strip_to_digits(trimmed)
-            local_digits = fallback.lstrip("0") or fallback
-        return f"+{sanitized_code}{local_digits}"
+        if digits_only.startswith(sanitized_code):
+            return f"+{digits_only}"
+
+        if digits_only.startswith("0") and len(digits_only) >= 7:
+            local_digits = _strip_leading_zeros(digits_only[1:])
+            if local_digits:
+                return f"+{sanitized_code}{local_digits}"
+
+        if len(digits_only) >= 8:
+            return f"+{sanitized_code}{digits_only}"
 
     return digits_only
 

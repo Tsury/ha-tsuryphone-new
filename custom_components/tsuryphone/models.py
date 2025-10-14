@@ -80,7 +80,7 @@ class BlockedNumberEntry:
     """Blocked number configuration entry."""
 
     number: str
-    reason: str = ""
+    name: str = ""
     normalized_number: str = ""
     display_number: str = ""
 

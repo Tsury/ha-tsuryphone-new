@@ -278,15 +278,15 @@ class TsuryPhoneAPIClient:
         return await self._request("POST", API_CALL_DIAL_QUICK_DIAL, {"code": code})
 
     # Blocked number management
-    async def add_blocked_number(self, number: str, reason: str = "") -> dict[str, Any]:
+    async def add_blocked_number(self, number: str, name: str = "") -> dict[str, Any]:
         """Add blocked number."""
         if not number:
             raise TsuryPhoneAPIError(
                 "Number cannot be empty", ERROR_CODE_INVALID_NUMBER
             )
         data = {"number": number}
-        if reason:
-            data["reason"] = reason
+        if name:
+            data["name"] = name
 
         return await self._request("POST", API_CONFIG_BLOCKED_ADD, data)
 

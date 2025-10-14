@@ -227,9 +227,9 @@
           "description": "Phone number that should be blocked.",
           "example": "0541234567"
         },
-        "reason": {
-          "name": "Reason",
-          "description": "Optional reason to display.",
+        "name": {
+          "name": "Name",
+          "description": "Name to display for the blocked number.",
           "example": "Telemarketer"
         }
       }
@@ -254,7 +254,7 @@
         "entries": {
           "name": "Entries",
           "description": "List of blocked number entries to import.",
-          "example": "[{\"number\": \"0547654321\", \"reason\": \"Spam caller\"}]"
+          "example": "[{\"number\": \"0547654321\", \"name\": \"Spam caller\"}]"
         }
       }
     },

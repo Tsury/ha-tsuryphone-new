@@ -183,7 +183,7 @@ QUICK_DIAL_REMOVE_SCHEMA = _service_schema(
 BLOCKED_ADD_SCHEMA = _service_schema(
     {
         vol.Required("number"): cv.string,
-        vol.Required("reason"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
     }
 )
 
@@ -873,12 +873,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             field_name="number",
             remember=True,
         )
-        reason = call.data["reason"].strip()
-        if not reason:
-            raise ServiceValidationError("reason cannot be empty")
+        name = call.data["name"].strip()
+        if not name:
+            raise ServiceValidationError("name cannot be empty")
 
         try:
-            await coordinator.api_client.add_blocked_number(number, reason)
+            await coordinator.api_client.add_blocked_number(number, name)
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to add blocked number: {err}") from err
@@ -1210,14 +1210,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
             for entry in entries:
                 raw_number = entry.get("number")
-                reason = entry.get("reason") or entry.get("name")
+                name = entry.get("name")
 
-                if not reason or not str(reason).strip():
+                if not name or not str(name).strip():
                     results["failed"].append(
-                        {"number": raw_number or "", "error": "Missing reason"}
+                        {"number": raw_number or "", "error": "Missing name"}
                     )
                     _LOGGER.warning(
-                        "Skipping blocked number without reason: %s", entry
+                        "Skipping blocked number without name: %s", entry
                     )
                     continue
 
@@ -1237,10 +1237,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     )
                     continue
 
-                reason = str(reason).strip()
+                name = str(name).strip()
 
                 try:
-                    await coordinator.api_client.add_blocked_number(number, reason)
+                    await coordinator.api_client.add_blocked_number(number, name)
                     results["added"].append(number)
                     _LOGGER.debug("Added blocked number: %s", number)
                 except TsuryPhoneAPIError as err:
@@ -1266,7 +1266,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         entries = [
             {
                 "number": entry.number,
-                "reason": entry.reason,
+                "name": entry.name,
                 "normalized_number": entry.normalized_number,
             }
             for entry in state.blocked_numbers

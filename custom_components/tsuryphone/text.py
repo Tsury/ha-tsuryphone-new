@@ -24,7 +24,7 @@ from .const import (
     MAX_NAME_LENGTH,
     MAX_NUMBER_LENGTH,
     MAX_PATTERN_LENGTH,
-    MAX_REASON_LENGTH,
+    MAX_BLOCKED_NAME_LENGTH,
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .api_client import TsuryPhoneAPIError
@@ -88,13 +88,13 @@ TEXT_DESCRIPTIONS: tuple[TsuryPhoneTextDescription, ...] = (
         placeholder="+15559876543",
     ),
     TsuryPhoneTextDescription(
-        key="blocked_reason",
-        name="Blocked - Reason",
+        key="blocked_name",
+        name="Blocked - Name",
         icon="mdi:text",
         entity_category=EntityCategory.CONFIG,
-        max_length=MAX_REASON_LENGTH,
+        max_length=MAX_BLOCKED_NAME_LENGTH,
         buffer_name="blocked",
-        field_name="reason",
+        field_name="name",
         placeholder="Telemarketer",
     ),
     # Priority callers

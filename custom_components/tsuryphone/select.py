@@ -284,8 +284,8 @@ class TsuryPhoneSelect(
         """Format blocked number option label."""
         display_number = entry.display_number or entry.number
         return (
-            f"{display_number} ({entry.reason})"
-            if entry.reason
+            f"{display_number} ({entry.name})"
+            if entry.name
             else display_number
         )
 
@@ -517,7 +517,7 @@ class TsuryPhoneSelect(
             attributes["total_blocked"] = state.blocked_count
             if state.blocked_numbers:
                 attributes["blocked_numbers"] = [
-                    {"number": entry.number, "reason": entry.reason}
+                    {"number": entry.number, "name": entry.name}
                     for entry in state.blocked_numbers
                 ]
             if self.coordinator.selected_blocked_number:
