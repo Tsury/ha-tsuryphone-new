@@ -327,6 +327,8 @@ class TsuryPhoneState:
     # Call history (rolling buffer)
     call_history: list[CallHistoryEntry] = field(default_factory=list)
     call_history_capacity: int = 500
+    call_state_revision: int = 0
+    call_state_updated_at: float = field(default_factory=time.time)
 
     # State derived properties
     @property
@@ -411,6 +413,11 @@ class TsuryPhoneState:
             if entry.code == code:
                 return entry
         return None
+
+    def mark_call_state_changed(self) -> None:
+        """Register that current/last call data has changed."""
+        self.call_state_revision += 1
+        self.call_state_updated_at = time.time()
 
     @property
     def dialing_context(self) -> DialingContext:

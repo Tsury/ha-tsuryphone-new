@@ -95,6 +95,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._missed_call_detection: dict[str, Any] = {}
         self._pending_call_starts: dict[str, dict[str, Any]] = {}  # Key: call number
         self._recent_blocked_calls: dict[str, float] = {}
+        self._call_state_dirty: bool = False
 
         # Timers and intervals
         self._refetch_timer: Any = None
@@ -140,6 +141,28 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if self.data is None:
             self.data = TsuryPhoneState(device_info=self.device_info)
         return self.data
+
+    def _flag_call_state_dirty(self) -> None:
+        """Mark that call-related state has been mutated."""
+        self._call_state_dirty = True
+
+    def _mark_call_state_changed(self) -> None:
+        """Increment the call state revision if supported by the model."""
+        state = self._ensure_state()
+        if hasattr(state, "mark_call_state_changed"):
+            state.mark_call_state_changed()
+        else:  # Fallback for legacy state objects lacking helper.
+            # Late-import time to avoid circulars if models fallback.
+            state.call_state_revision = getattr(state, "call_state_revision", 0) + 1
+            state.call_state_updated_at = time.time()
+
+    @staticmethod
+    def _setattr_if_changed(target: Any, attribute: str, value: Any) -> bool:
+        """Assign attribute on target if value differs, returning True when changed."""
+        if getattr(target, attribute) != value:
+            setattr(target, attribute, value)
+            return True
+        return False
 
     def _coerce_bool(
         self,
@@ -327,6 +350,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def _process_event_directly(self, event: TsuryPhoneEvent) -> None:
         """Process event directly without resilience checks."""
         self._ensure_state()
+        # Reset call-state dirty flag for this event so we only mark revisions when needed
+        self._call_state_dirty = False
         self.data.connected = True
         self.data.last_seen = time.time()
         # Check for reboot detection
@@ -357,8 +382,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Fire Home Assistant event
         self._fire_ha_event(event)
 
+        if self._call_state_dirty:
+            self._mark_call_state_changed()
+
         # Update coordinator data and notify listeners
         self.async_set_updated_data(self.data)
+        # Reset dirty flag after pushing updates
+        self._call_state_dirty = False
 
         # Phase P5: Check and update notifications after event processing
         if self._notification_manager:
@@ -452,16 +482,24 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         previous_state = self.data.app_state
         if previous_state != AppState.IN_CALL:
-            self.data.previous_app_state = previous_state
-            self.data.app_state = AppState.IN_CALL
+            if self._setattr_if_changed(self.data, "previous_app_state", previous_state):
+                self._flag_call_state_dirty()
+            if self._setattr_if_changed(self.data, "app_state", AppState.IN_CALL):
+                self._flag_call_state_dirty()
 
         # Once call starts, ringing/dialing flags should clear immediately
-        self.data.ringing = False
-        self.data.current_dialing_number = ""
+        if self._setattr_if_changed(self.data, "ringing", False):
+            self._flag_call_state_dirty()
+        if self._setattr_if_changed(self.data, "current_dialing_number", ""):
+            self._flag_call_state_dirty()
 
         # Update current call info
-        self._apply_call_info(self.data.current_call, call_info)
-        self.data.current_call_is_priority = call_info.is_priority
+        if self._apply_call_info(self.data.current_call, call_info):
+            self._flag_call_state_dirty()
+        if self._setattr_if_changed(
+            self.data, "current_call_is_priority", bool(call_info.is_priority)
+        ):
+            self._flag_call_state_dirty()
 
         caller_name = call_info.name
 
@@ -571,12 +609,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         is_incoming = call_info.is_incoming
 
         # Clear transient flags so HA reflects idle state without delay
-        self.data.ringing = False
-        self.data.current_dialing_number = ""
-        self.data.current_call_is_priority = False
+        if self._setattr_if_changed(self.data, "ringing", False):
+            self._flag_call_state_dirty()
+        if self._setattr_if_changed(self.data, "current_dialing_number", ""):
+            self._flag_call_state_dirty()
+        if self._setattr_if_changed(self.data, "current_call_is_priority", False):
+            self._flag_call_state_dirty()
 
         # Update last call snapshot
-        self._apply_call_info(self.data.last_call, call_info)
+        if self._apply_call_info(self.data.last_call, call_info):
+            self._flag_call_state_dirty()
 
         # Finalize call history entry
         pending_call = self._pending_call_starts.pop(number, None) if number else None
@@ -607,7 +649,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.add_call_history_entry(history_entry)
 
         # Clear remaining current call state
-        self._reset_current_call_state(number=number)
+        if self._reset_current_call_state(number=number):
+            self._flag_call_state_dirty()
 
     def _handle_call_blocked(self, event: TsuryPhoneEvent) -> None:
         """Handle blocked call event."""
@@ -640,7 +683,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._register_recent_blocked_call(number)
 
         # Update last call snapshot
-        self._update_last_call_info(
+        if self._update_last_call_info(
             number,
             is_incoming=True,
             call_start_ts=event.ts,
@@ -649,6 +692,17 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             name=caller_name,
             result="blocked",
             call_snapshot=call_snapshot,
+        ):
+            self._flag_call_state_dirty()
+
+        normalized_hint = event.data.get("normalizedNumber")
+        if not normalized_hint and isinstance(call_snapshot, dict):
+            normalized_hint = call_snapshot.get("normalizedNumber")
+
+        self._auto_select_blocked_number(
+            raw_number=number,
+            normalized_hint=str(normalized_hint or ""),
+            call_snapshot=call_snapshot if isinstance(call_snapshot, dict) else None,
         )
 
     def _update_last_call_info(
@@ -665,10 +719,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         normalized_number: str | None = None,
         duration_seconds: int | None = None,
         call_snapshot: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> bool:
         """Update last call metadata before clearing current call state."""
+        changed = False
         if not number and not call_snapshot:
-            return
+            return changed
 
         if call_snapshot:
             snapshot_info = self._call_info_from_snapshot(
@@ -684,7 +739,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 result = snapshot_info.result
             if duration_ms is None and snapshot_info.duration_ms is not None:
                 duration_ms = snapshot_info.duration_ms
-            if duration_seconds is None and snapshot_info.duration_seconds is not None:
+            if (
+                duration_seconds is None
+                and snapshot_info.duration_seconds is not None
+            ):
                 duration_seconds = snapshot_info.duration_seconds
             if is_priority is None and snapshot_info.is_priority:
                 is_priority = snapshot_info.is_priority
@@ -695,13 +753,17 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if call_start_ts is None and snapshot_info.call_start_ts:
                 call_start_ts = snapshot_info.call_start_ts
 
-            self._apply_call_info(self.data.last_call, snapshot_info)
+            if self._apply_call_info(self.data.last_call, snapshot_info):
+                changed = True
 
         if normalized_number is not None:
-            self.data.last_call.normalized_number = normalized_number
+            if self._setattr_if_changed(
+                self.data.last_call, "normalized_number", normalized_number
+            ):
+                changed = True
 
         if not number:
-            return
+            return changed
 
         normalized_call_type = self._normalize_call_type(
             call_type,
@@ -721,45 +783,94 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 or 0
             )
 
-        self.data.last_call.number = number
-        if is_incoming is not None:
-            self.data.last_call.is_incoming = bool(is_incoming)
-        self.data.last_call.start_time = call_start_ts
-        self.data.last_call.call_start_ts = call_start_ts
-        self.data.last_call.duration_ms = duration_ms
-        self.data.last_call.duration_seconds = duration_seconds
-        if result is not None:
-            self.data.last_call.result = result
-        if is_priority is not None:
-            self.data.last_call.is_priority = bool(is_priority)
+        if self._setattr_if_changed(self.data.last_call, "number", number):
+            changed = True
+        if is_incoming is not None and self._setattr_if_changed(
+            self.data.last_call, "is_incoming", bool(is_incoming)
+        ):
+            changed = True
+        if self._setattr_if_changed(
+            self.data.last_call, "start_time", call_start_ts
+        ):
+            changed = True
+        if self._setattr_if_changed(
+            self.data.last_call, "call_start_ts", call_start_ts
+        ):
+            changed = True
+        if self._setattr_if_changed(
+            self.data.last_call, "duration_ms", duration_ms
+        ):
+            changed = True
+        if self._setattr_if_changed(
+            self.data.last_call, "duration_seconds", duration_seconds
+        ):
+            changed = True
+        if result is not None and self._setattr_if_changed(
+            self.data.last_call, "result", result
+        ):
+            changed = True
+        if is_priority is not None and self._setattr_if_changed(
+            self.data.last_call, "is_priority", bool(is_priority)
+        ):
+            changed = True
 
         if normalized_call_type:
-            self.data.last_call.call_type = normalized_call_type
+            if self._setattr_if_changed(
+                self.data.last_call, "call_type", normalized_call_type
+            ):
+                changed = True
         elif not self.data.last_call.call_type and is_incoming is not None:
-            self.data.last_call.call_type = (
+            default_type = (
                 "incoming_answered"
-                if self.data.last_call.is_incoming
+                if bool(is_incoming)
                 else "outgoing_answered"
             )
+            if self._setattr_if_changed(
+                self.data.last_call, "call_type", default_type
+            ):
+                changed = True
 
         if not self.data.last_call.direction and self.data.last_call.call_type:
             if self.data.last_call.call_type.startswith("incoming"):
-                self.data.last_call.direction = "incoming"
-                self.data.last_call.is_incoming = True
+                if self._setattr_if_changed(
+                    self.data.last_call, "direction", "incoming"
+                ):
+                    changed = True
+                if self._setattr_if_changed(
+                    self.data.last_call, "is_incoming", True
+                ):
+                    changed = True
             elif self.data.last_call.call_type.startswith("outgoing"):
-                self.data.last_call.direction = "outgoing"
-                self.data.last_call.is_incoming = False
+                if self._setattr_if_changed(
+                    self.data.last_call, "direction", "outgoing"
+                ):
+                    changed = True
+                if self._setattr_if_changed(
+                    self.data.last_call, "is_incoming", False
+                ):
+                    changed = True
         elif not self.data.last_call.direction and is_incoming is not None:
-            self.data.last_call.direction = "incoming" if is_incoming else "outgoing"
+            if self._setattr_if_changed(
+                self.data.last_call,
+                "direction",
+                "incoming" if is_incoming else "outgoing",
+            ):
+                changed = True
 
         if name is None:
             name = self.data.current_call.name or self.data.last_call.name
 
         if name is not None:
-            self.data.last_call.name = name or ""
+            if self._setattr_if_changed(
+                self.data.last_call, "name", name or ""
+            ):
+                changed = True
 
-    def _reset_current_call_state(self, *, number: str | None = None) -> None:
+        return changed
+
+    def _reset_current_call_state(self, *, number: str | None = None) -> bool:
         """Clear current call-related state and associated helpers."""
+        changed = False
         active_number = number or self.data.current_call.number
 
         if active_number:
@@ -767,11 +878,18 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         self._stop_call_timer()
 
-        # Reset transient call state fields
-        self.data.current_call = type(self.data.current_call)()
-        self.data.current_dialing_number = ""
-        self.data.current_call_is_priority = False
-        self.data.ringing = False
+        # Reset transient call state fields without replacing object reference
+        empty_call = type(self.data.current_call)()
+        if self._apply_call_info(self.data.current_call, empty_call):
+            changed = True
+        if self._setattr_if_changed(self.data, "current_dialing_number", ""):
+            changed = True
+        if self._setattr_if_changed(self.data, "current_call_is_priority", False):
+            changed = True
+        if self._setattr_if_changed(self.data, "ringing", False):
+            changed = True
+
+        return changed
 
     def _normalize_call_type(
         self,
@@ -839,22 +957,28 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         return self._normalize_call_type(None, is_incoming, duration_ms)
 
-    def _apply_call_info(self, target: CallInfo, source: CallInfo) -> None:
-        """Copy fields from one CallInfo to another."""
-        target.number = source.number
-        target.normalized_number = source.normalized_number
-        target.is_incoming = source.is_incoming
-        target.direction = source.direction
-        target.result = source.result
-        target.is_priority = source.is_priority
-        target.duration_seconds = source.duration_seconds
-        target.start_time = source.start_time
-        target.call_start_ts = source.call_start_ts
-        target.duration_ms = source.duration_ms
-        target.call_id = source.call_id
-        target.call_waiting_id = source.call_waiting_id
-        target.call_type = source.call_type
-        target.name = source.name
+    def _apply_call_info(self, target: CallInfo, source: CallInfo) -> bool:
+        """Copy fields from one CallInfo to another, tracking if anything changed."""
+        changed = False
+        for field_name in (
+            "number",
+            "normalized_number",
+            "is_incoming",
+            "direction",
+            "result",
+            "is_priority",
+            "duration_seconds",
+            "start_time",
+            "call_start_ts",
+            "duration_ms",
+            "call_id",
+            "call_waiting_id",
+            "call_type",
+            "name",
+        ):
+            if self._setattr_if_changed(target, field_name, getattr(source, field_name)):
+                changed = True
+        return changed
 
     def _call_info_from_snapshot(
         self, snapshot: dict[str, Any] | None, *, context: str
@@ -1028,7 +1152,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Update current call number if provided
         current_call_number = event.data.get("currentCallNumber", "")
         if current_call_number:
-            self.data.current_call.number = current_call_number
+            if self._setattr_if_changed(
+                self.data.current_call, "number", str(current_call_number)
+            ):
+                self._flag_call_state_dirty()
         elif new_state == AppState.DIALING and not self.data.current_call.number:
             dial_buffer = (
                 event.data.get("currentDialingNumber")
@@ -1036,38 +1163,62 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 or ""
             )
             if dial_buffer:
-                self.data.current_call.number = dial_buffer
+                if self._setattr_if_changed(
+                    self.data.current_call, "number", str(dial_buffer)
+                ):
+                    self._flag_call_state_dirty()
 
         if "currentCallName" in event.data:
-            self.data.current_call.name = str(event.data.get("currentCallName") or "")
+            if self._setattr_if_changed(
+                self.data.current_call,
+                "name",
+                str(event.data.get("currentCallName") or ""),
+            ):
+                self._flag_call_state_dirty()
 
         # Update dialing number if provided
         if "currentDialingNumber" in event.data:
             current_dialing_number = event.data.get("currentDialingNumber") or ""
-            self.data.current_dialing_number = current_dialing_number
+            if self._setattr_if_changed(
+                self.data, "current_dialing_number", str(current_dialing_number)
+            ):
+                self._flag_call_state_dirty()
 
         # Handle incoming call direction
         if event.data.get("isIncomingCall") is not None:
-            self.data.current_call.is_incoming = self._coerce_bool(
+            is_incoming_call = self._coerce_bool(
                 event.data["isIncomingCall"],
                 "event.isIncomingCall",
                 default=self.data.current_call.is_incoming,
             )
+            if self._setattr_if_changed(
+                self.data.current_call, "is_incoming", is_incoming_call
+            ):
+                self._flag_call_state_dirty()
 
         if new_state in (AppState.INCOMING_CALL, AppState.INCOMING_CALL_RING):
-            self.data.current_call.is_incoming = True
+            if self._setattr_if_changed(self.data.current_call, "is_incoming", True):
+                self._flag_call_state_dirty()
         elif new_state == AppState.DIALING:
-            self.data.current_call.is_incoming = False
+            if self._setattr_if_changed(
+                self.data.current_call, "is_incoming", False
+            ):
+                self._flag_call_state_dirty()
 
         # Update derived states
         if "isRinging" in event.data:
-            self.data.ringing = self._coerce_bool(
+            is_ringing = self._coerce_bool(
                 event.data["isRinging"],
                 "event.isRinging",
                 default=self.data.ringing,
             )
+            if self._setattr_if_changed(self.data, "ringing", is_ringing):
+                self._flag_call_state_dirty()
         else:
-            self.data.ringing = new_state == AppState.INCOMING_CALL_RING
+            if self._setattr_if_changed(
+                self.data, "ringing", new_state == AppState.INCOMING_CALL_RING
+            ):
+                self._flag_call_state_dirty()
 
         reset_call_state = False
 
@@ -1090,7 +1241,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if new_state == AppState.IDLE:
             if previous_state == AppState.IN_CALL and self.data.current_call.number:
-                self._update_last_call_info(
+                if self._update_last_call_info(
                     self.data.current_call.number,
                     is_incoming=self.data.current_call.is_incoming,
                     call_start_ts=self.data.current_call.call_start_ts
@@ -1102,7 +1253,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         else "outgoing_answered"
                     ),
                     name=self.data.current_call.name,
-                )
+                ):
+                    self._flag_call_state_dirty()
             if (
                 self.data.current_call.number
                 or self.data.current_dialing_number
@@ -1111,7 +1263,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 reset_call_state = True
 
         if reset_call_state:
-            self._reset_current_call_state()
+            if self._reset_current_call_state():
+                self._flag_call_state_dirty()
 
     def _handle_dialing_update(self, event: TsuryPhoneEvent) -> None:
         """Handle dialing number update."""
@@ -1137,6 +1290,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _handle_call_info_update(self, event: TsuryPhoneEvent) -> None:
         """Handle supplementary call info."""
+        call_state_changed = False
         current_snapshot = event.data.get("currentCall")
         if isinstance(current_snapshot, dict):
             current_info = self._call_info_from_snapshot(
@@ -1148,34 +1302,64 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     "event.callInfo.currentCall.isPriority",
                     default=current_info.is_priority,
                 )
-            self._apply_call_info(self.data.current_call, current_info)
-            self.data.current_call_is_priority = current_info.is_priority
+            if self._apply_call_info(self.data.current_call, current_info):
+                call_state_changed = True
+            if self._setattr_if_changed(
+                self.data, "current_call_is_priority", current_info.is_priority
+            ):
+                call_state_changed = True
 
         # Update current call with additional information
         current_number = event.data.get("currentCallNumber", "")
         if current_number:
-            self.data.current_call.number = current_number
+            if self._setattr_if_changed(
+                self.data.current_call, "number", str(current_number)
+            ):
+                call_state_changed = True
 
             if "currentCallName" in event.data:
-                self.data.current_call.name = str(
-                    event.data.get("currentCallName") or ""
-                )
+                if self._setattr_if_changed(
+                    self.data.current_call,
+                    "name",
+                    str(event.data.get("currentCallName") or ""),
+                ):
+                    call_state_changed = True
 
             if "currentCallDirection" in event.data and not self.data.current_call.direction:
                 direction_value = str(event.data.get("currentCallDirection") or "")
                 if direction_value:
-                    self.data.current_call.direction = direction_value.strip().lower()
+                    if self._setattr_if_changed(
+                        self.data.current_call,
+                        "direction",
+                        direction_value.strip().lower(),
+                    ):
+                        call_state_changed = True
 
             if "currentCallResult" in event.data and not self.data.current_call.result:
                 result_value = event.data.get("currentCallResult")
                 if result_value is not None:
-                    self.data.current_call.result = str(result_value).strip().lower()
+                    if self._setattr_if_changed(
+                        self.data.current_call,
+                        "result",
+                        str(result_value).strip().lower(),
+                    ):
+                        call_state_changed = True
 
             if "currentCallDurationSeconds" in event.data:
                 try:
                     duration_seconds = int(event.data.get("currentCallDurationSeconds"))
-                    self.data.current_call.duration_seconds = duration_seconds
-                    self.data.current_call.duration_ms = duration_seconds * 1000
+                    if self._setattr_if_changed(
+                        self.data.current_call,
+                        "duration_seconds",
+                        duration_seconds,
+                    ):
+                        call_state_changed = True
+                    if self._setattr_if_changed(
+                        self.data.current_call,
+                        "duration_ms",
+                        duration_seconds * 1000,
+                    ):
+                        call_state_changed = True
                 except (TypeError, ValueError):
                     pass
 
@@ -1201,7 +1385,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 last_snapshot, context="event.callInfo.lastCall"
             )
             if last_info.number:
-                self._update_last_call_info(
+                if self._update_last_call_info(
                     last_info.number,
                     is_incoming=last_info.is_incoming,
                     call_start_ts=last_info.call_start_ts,
@@ -1213,7 +1397,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     is_priority=last_info.is_priority,
                     normalized_number=last_info.normalized_number,
                     call_snapshot=last_snapshot,
-                )
+                ):
+                    call_state_changed = True
+
+        if call_state_changed:
+            self._flag_call_state_dirty()
 
     def _handle_stats_update(self, event: TsuryPhoneEvent) -> None:
         """Handle statistics update."""
@@ -1259,7 +1447,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             )
             number = last_info.number or str(last_call_data.get("number", ""))
             if number:
-                self._update_last_call_info(
+                if self._update_last_call_info(
                     number,
                     is_incoming=last_info.is_incoming,
                     call_start_ts=last_info.call_start_ts,
@@ -1276,7 +1464,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     is_priority=last_info.is_priority,
                     normalized_number=last_info.normalized_number,
                     call_snapshot=last_call_data,
-                )
+                ):
+                    self._flag_call_state_dirty()
 
     def _handle_status_update(self, event: TsuryPhoneEvent) -> None:
         """Handle system status update."""
@@ -1924,11 +2113,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             _LOGGER.debug("Clearing maintenance mode as part of reboot handling")
             self.data.maintenance_mode = False
 
-        # Cancel any active call timer
-        self._stop_call_timer()
-
-        # Clear transient state
-        self.data.current_dialing_number = ""
+        # Clear transient state and mark changes
+        if self._reset_current_call_state():
+            self._flag_call_state_dirty()
         self._pending_call_starts.clear()
 
         # Schedule refetch (rate limited)
@@ -1944,6 +2131,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # - addPhoneStateInfo(): current state context
         # - addCallInfo(): current call details
         # - addSystemInfo(): system metrics
+
+        call_state_changed = False
 
         if isinstance(event.data.get("dialing"), dict):
             dialing_info = event.data.get("dialing")
@@ -1964,16 +2153,29 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract current call number if present (from addCallInfo/addPhoneStateInfo)
         if "currentCallNumber" in event.data and event.data["currentCallNumber"]:
-            self.data.current_call.number = event.data["currentCallNumber"]
+            if self._setattr_if_changed(
+                self.data.current_call,
+                "number",
+                str(event.data["currentCallNumber"]),
+            ):
+                call_state_changed = True
 
         if "currentCallName" in event.data:
-            self.data.current_call.name = str(event.data.get("currentCallName") or "")
+            if self._setattr_if_changed(
+                self.data.current_call,
+                "name",
+                str(event.data.get("currentCallName") or ""),
+            ):
+                call_state_changed = True
 
         # Extract dialing number if present
         if "currentDialingNumber" in event.data:
-            self.data.current_dialing_number = (
-                event.data.get("currentDialingNumber") or ""
-            )
+            if self._setattr_if_changed(
+                self.data,
+                "current_dialing_number",
+                str(event.data.get("currentDialingNumber") or ""),
+            ):
+                call_state_changed = True
 
         # Extract state information if present
         parsed_state = None
@@ -2038,18 +2240,26 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Extract call info if present
         if "isIncomingCall" in event.data:
-            self.data.current_call.is_incoming = self._coerce_bool(
+            is_incoming_call = self._coerce_bool(
                 event.data["isIncomingCall"],
                 "event.context.isIncomingCall",
                 default=self.data.current_call.is_incoming,
             )
+            if self._setattr_if_changed(
+                self.data.current_call, "is_incoming", is_incoming_call
+            ):
+                call_state_changed = True
 
         if "currentCallIsPriority" in event.data:
-            self.data.current_call_is_priority = self._coerce_bool(
+            is_priority = self._coerce_bool(
                 event.data["currentCallIsPriority"],
                 "event.context.currentCallIsPriority",
                 default=self.data.current_call_is_priority,
             )
+            if self._setattr_if_changed(
+                self.data, "current_call_is_priority", is_priority
+            ):
+                call_state_changed = True
 
         # Extract call waiting info if available (firmware debt R61)
         if "callWaitingId" in event.data:
@@ -2061,11 +2271,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if call_waiting_id is None:
                 call_waiting_id = -1
 
-            self.data.current_call.call_waiting_id = call_waiting_id
-            self.data.call_waiting_available = call_waiting_id != -1
+            if self._setattr_if_changed(
+                self.data.current_call, "call_waiting_id", call_waiting_id
+            ):
+                call_state_changed = True
+            if self._setattr_if_changed(
+                self.data, "call_waiting_available", call_waiting_id != -1
+            ):
+                call_state_changed = True
 
             if call_waiting_id == -1:
-                self.data.call_waiting_on_hold = False
+                if self._setattr_if_changed(
+                    self.data, "call_waiting_on_hold", False
+                ):
+                    call_state_changed = True
 
         if "callWaitingAvailable" in event.data:
             available = self._coerce_bool(
@@ -2073,17 +2292,31 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 "event.context.callWaitingAvailable",
                 default=self.data.call_waiting_available,
             )
-            self.data.call_waiting_available = available
+            if self._setattr_if_changed(
+                self.data, "call_waiting_available", available
+            ):
+                call_state_changed = True
             if not available:
-                self.data.current_call.call_waiting_id = -1
-                self.data.call_waiting_on_hold = False
+                if self._setattr_if_changed(
+                    self.data.current_call, "call_waiting_id", -1
+                ):
+                    call_state_changed = True
+                if self._setattr_if_changed(
+                    self.data, "call_waiting_on_hold", False
+                ):
+                    call_state_changed = True
 
         if "callWaitingOnHold" in event.data:
-            self.data.call_waiting_on_hold = self._coerce_bool(
+            on_hold = self._coerce_bool(
                 event.data["callWaitingOnHold"],
                 "event.context.callWaitingOnHold",
                 default=self.data.call_waiting_on_hold,
             )
+            if self._setattr_if_changed(self.data, "call_waiting_on_hold", on_hold):
+                call_state_changed = True
+
+        if call_state_changed:
+            self._flag_call_state_dirty()
 
     def _detect_unanswered_outgoing(self, event: TsuryPhoneEvent) -> None:
         """Detect and record unanswered outgoing calls."""
@@ -2120,13 +2353,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         self.data.add_call_history_entry(history_entry)
 
-        self._update_last_call_info(
+        if self._update_last_call_info(
             number,
             is_incoming=False,
             call_start_ts=event.ts,
             duration_ms=None,
             call_type="outgoing_unanswered",
-        )
+        ):
+            self._flag_call_state_dirty()
 
     def _detect_missed_call(self, event: TsuryPhoneEvent) -> None:
         """Detect and record missed calls."""
@@ -2161,13 +2395,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         self.data.add_call_history_entry(history_entry)
 
-        self._update_last_call_info(
+        if self._update_last_call_info(
             number,
             is_incoming=True,
             call_start_ts=event.ts,
             duration_ms=None,
             call_type="incoming_missed",
-        )
+        ):
+            self._flag_call_state_dirty()
 
         # Fire missed call event
         self.hass.bus.async_fire(
@@ -2200,7 +2435,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         now = time.monotonic()
         self._prune_recent_blocked_calls(now)
 
-        normalized = normalize_phone_number(number) or ""
+        state = self._ensure_state()
+        normalized = normalize_phone_number(number, state.default_dialing_code) or ""
 
         self._recent_blocked_calls[number] = now
         if normalized and normalized != number:
@@ -2214,12 +2450,78 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         now = time.monotonic()
         self._prune_recent_blocked_calls(now)
 
-        normalized = normalize_phone_number(number) or ""
+        state = self._ensure_state()
+        normalized = normalize_phone_number(number, state.default_dialing_code) or ""
         if number in self._recent_blocked_calls:
             return True
         if normalized and normalized in self._recent_blocked_calls:
             return True
         return False
+
+    def _auto_select_blocked_number(
+        self,
+        *,
+        raw_number: str,
+        normalized_hint: str | None,
+        call_snapshot: dict[str, Any] | None,
+    ) -> None:
+        """Highlight the matching blocked number entry after a blocked call."""
+        state = self._ensure_state()
+        if not state.blocked_numbers:
+            return
+
+        default_code = state.default_dialing_code
+
+        raw_candidates: set[str] = set()
+        if raw_number:
+            raw_candidates.add(raw_number)
+
+        normalized_candidates: set[str] = set()
+        if normalized_hint:
+            normalized_candidates.add(str(normalized_hint))
+
+        if call_snapshot:
+            snapshot_number = call_snapshot.get("number")
+            if snapshot_number:
+                raw_candidates.add(str(snapshot_number))
+            snapshot_normalized = call_snapshot.get("normalizedNumber")
+            if snapshot_normalized:
+                normalized_candidates.add(str(snapshot_normalized))
+
+        if default_code:
+            normalized_from_raw = {
+                normalize_phone_number(candidate, default_code) or ""
+                for candidate in raw_candidates
+            }
+        else:
+            normalized_from_raw = {
+                normalize_phone_number(candidate, None) or ""
+                for candidate in raw_candidates
+            }
+        normalized_candidates.update(value for value in normalized_from_raw if value)
+
+        matched_entry: BlockedNumberEntry | None = None
+
+        for entry in state.blocked_numbers:
+            if entry.number in raw_candidates:
+                matched_entry = entry
+                break
+
+            entry_normalized = entry.normalized_number
+            if not entry_normalized:
+                entry_normalized = normalize_phone_number(entry.number, default_code)
+
+            if entry_normalized and entry_normalized in normalized_candidates:
+                matched_entry = entry
+                break
+
+        if not matched_entry:
+            return
+
+        previous = self.selected_blocked_number
+        self.selected_blocked_number = matched_entry.number
+        if previous != matched_entry.number:
+            self.async_update_listeners()
 
     def _prune_recent_blocked_calls(self, now: float | None = None) -> None:
         """Expire cached blocked-call markers after a short window."""
@@ -2449,6 +2751,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Implementation would be similar to config delta handling but for full state
         _LOGGER.debug("Updating state from device data")
 
+        call_state_changed = False
+
         config_section = device_data.get("config") or {}
         if not isinstance(config_section, dict):
             config_section = {}
@@ -2523,43 +2827,67 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 )
 
             if "isRinging" in phone_data:
-                self.data.ringing = self._coerce_bool(
+                ringing_value = self._coerce_bool(
                     phone_data["isRinging"],
                     "config.phone.isRinging",
                     default=self.data.ringing,
                 )
+                if self._setattr_if_changed(self.data, "ringing", ringing_value):
+                    call_state_changed = True
             elif parsed_state is not None:
-                self.data.ringing = parsed_state == AppState.INCOMING_CALL_RING
+                if self._setattr_if_changed(
+                    self.data, "ringing", parsed_state == AppState.INCOMING_CALL_RING
+                ):
+                    call_state_changed = True
 
             if "currentCallNumber" in phone_data:
-                self.data.current_call.number = str(
-                    phone_data.get("currentCallNumber") or ""
-                )
+                if self._setattr_if_changed(
+                    self.data.current_call,
+                    "number",
+                    str(phone_data.get("currentCallNumber") or ""),
+                ):
+                    call_state_changed = True
 
             if "currentCallName" in phone_data:
-                self.data.current_call.name = str(
-                    phone_data.get("currentCallName") or ""
-                )
+                if self._setattr_if_changed(
+                    self.data.current_call,
+                    "name",
+                    str(phone_data.get("currentCallName") or ""),
+                ):
+                    call_state_changed = True
 
             current_call_snapshot = phone_data.get("currentCall")
             if isinstance(current_call_snapshot, dict):
                 current_info = self._call_info_from_snapshot(
                     current_call_snapshot, context="device.phone.currentCall"
                 )
-                self._apply_call_info(self.data.current_call, current_info)
-                self.data.current_call_is_priority = current_info.is_priority
+                if self._apply_call_info(self.data.current_call, current_info):
+                    call_state_changed = True
+                if self._setattr_if_changed(
+                    self.data,
+                    "current_call_is_priority",
+                    current_info.is_priority,
+                ):
+                    call_state_changed = True
 
             if "currentDialingNumber" in phone_data:
-                self.data.current_dialing_number = str(
-                    phone_data.get("currentDialingNumber") or ""
-                )
+                if self._setattr_if_changed(
+                    self.data,
+                    "current_dialing_number",
+                    str(phone_data.get("currentDialingNumber") or ""),
+                ):
+                    call_state_changed = True
 
             if "isIncomingCall" in phone_data:
-                self.data.current_call.is_incoming = self._coerce_bool(
+                incoming_value = self._coerce_bool(
                     phone_data["isIncomingCall"],
                     "config.phone.isIncomingCall",
                     default=self.data.current_call.is_incoming,
                 )
+                if self._setattr_if_changed(
+                    self.data.current_call, "is_incoming", incoming_value
+                ):
+                    call_state_changed = True
 
             # Priority callers list
             if isinstance(phone_data.get("priorityCallers"), list):
@@ -2725,11 +3053,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
             # Current call priority flag if exposed in full phone state context
             if "currentCallIsPriority" in phone_data:
-                self.data.current_call_is_priority = self._coerce_bool(
+                priority_value = self._coerce_bool(
                     phone_data.get("currentCallIsPriority"),
                     "config.phone.currentCallIsPriority",
                     default=self.data.current_call_is_priority,
                 )
+                if self._setattr_if_changed(
+                    self.data, "current_call_is_priority", priority_value
+                ):
+                    call_state_changed = True
 
             if "isMaintenanceMode" in phone_data:
                 self.data.maintenance_mode = self._coerce_bool(
@@ -2759,11 +3091,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 except (TypeError, ValueError):
                     call_waiting_id = -1
 
-                self.data.current_call.call_waiting_id = call_waiting_id
-                self.data.call_waiting_available = call_waiting_id != -1
+                if self._setattr_if_changed(
+                    self.data.current_call, "call_waiting_id", call_waiting_id
+                ):
+                    call_state_changed = True
+                if self._setattr_if_changed(
+                    self.data, "call_waiting_available", call_waiting_id != -1
+                ):
+                    call_state_changed = True
 
                 if call_waiting_id == -1:
-                    self.data.call_waiting_on_hold = False
+                    if self._setattr_if_changed(
+                        self.data, "call_waiting_on_hold", False
+                    ):
+                        call_state_changed = True
 
             if "callWaitingAvailable" in phone_data:
                 available = self._coerce_bool(
@@ -2771,17 +3112,30 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     "config.phone.callWaitingAvailable",
                     default=self.data.call_waiting_available,
                 )
-                self.data.call_waiting_available = available
+                if self._setattr_if_changed(
+                    self.data, "call_waiting_available", available
+                ):
+                    call_state_changed = True
                 if not available:
-                    self.data.current_call.call_waiting_id = -1
-                    self.data.call_waiting_on_hold = False
+                    if self._setattr_if_changed(
+                        self.data.current_call, "call_waiting_id", -1
+                    ):
+                        call_state_changed = True
+                    if self._setattr_if_changed(
+                        self.data, "call_waiting_on_hold", False
+                    ):
+                        call_state_changed = True
 
             if "callWaitingOnHold" in phone_data:
-                self.data.call_waiting_on_hold = self._coerce_bool(
+                on_hold_value = self._coerce_bool(
                     phone_data["callWaitingOnHold"],
                     "config.phone.callWaitingOnHold",
                     default=self.data.call_waiting_on_hold,
                 )
+                if self._setattr_if_changed(
+                    self.data, "call_waiting_on_hold", on_hold_value
+                ):
+                    call_state_changed = True
 
             last_call_snapshot = phone_data.get("lastCall")
             if isinstance(last_call_snapshot, dict):
@@ -2790,7 +3144,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 )
                 number = last_info.number or self.data.last_call.number
                 if number:
-                    self._update_last_call_info(
+                    if self._update_last_call_info(
                         number,
                         is_incoming=last_info.is_incoming,
                         call_start_ts=last_info.call_start_ts,
@@ -2802,7 +3156,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         is_priority=last_info.is_priority,
                         normalized_number=last_info.normalized_number,
                         call_snapshot=last_call_snapshot,
-                    )
+                    ):
+                        call_state_changed = True
 
         # Some firmware builds expose current/last call snapshots at top level
         top_level_current = device_data.get("currentCall")
@@ -2810,9 +3165,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             current_info = self._call_info_from_snapshot(
                 top_level_current, context="device.currentCall"
             )
-            self._apply_call_info(self.data.current_call, current_info)
-            if current_info.is_priority:
-                self.data.current_call_is_priority = True
+            if self._apply_call_info(self.data.current_call, current_info):
+                call_state_changed = True
+            if current_info.is_priority and self._setattr_if_changed(
+                self.data, "current_call_is_priority", True
+            ):
+                call_state_changed = True
 
         top_level_last = device_data.get("lastCall")
         if isinstance(top_level_last, dict):
@@ -2821,7 +3179,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             )
             number = last_info.number or self.data.last_call.number
             if number:
-                self._update_last_call_info(
+                if self._update_last_call_info(
                     number,
                     is_incoming=last_info.is_incoming,
                     call_start_ts=last_info.call_start_ts,
@@ -2833,7 +3191,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     is_priority=last_info.is_priority,
                     normalized_number=last_info.normalized_number,
                     call_snapshot=top_level_last,
-                )
+                ):
+                    call_state_changed = True
 
         # Extract global fields that may appear outside phone section
         audio_section = (
@@ -2905,11 +3264,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
 
         if "currentCallIsPriority" in device_data:
-            self.data.current_call_is_priority = self._coerce_bool(
+            device_priority = self._coerce_bool(
                 device_data.get("currentCallIsPriority"),
                 "config.device.currentCallIsPriority",
                 default=self.data.current_call_is_priority,
             )
+            if self._setattr_if_changed(
+                self.data, "current_call_is_priority", device_priority
+            ):
+                call_state_changed = True
 
         if "dndActive" in device_data:
             self.data.dnd_active = self._coerce_bool(
@@ -2952,11 +3315,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             except (TypeError, ValueError):
                 call_waiting_id = -1
 
-            self.data.current_call.call_waiting_id = call_waiting_id
-            self.data.call_waiting_available = call_waiting_id != -1
+            if self._setattr_if_changed(
+                self.data.current_call, "call_waiting_id", call_waiting_id
+            ):
+                call_state_changed = True
+            if self._setattr_if_changed(
+                self.data, "call_waiting_available", call_waiting_id != -1
+            ):
+                call_state_changed = True
 
             if call_waiting_id == -1:
-                self.data.call_waiting_on_hold = False
+                if self._setattr_if_changed(
+                    self.data, "call_waiting_on_hold", False
+                ):
+                    call_state_changed = True
 
         if "callWaitingAvailable" in device_data:
             available = self._coerce_bool(
@@ -2964,23 +3336,39 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 "config.device.callWaitingAvailable",
                 default=self.data.call_waiting_available,
             )
-            self.data.call_waiting_available = available
+            if self._setattr_if_changed(
+                self.data, "call_waiting_available", available
+            ):
+                call_state_changed = True
             if not available:
-                self.data.current_call.call_waiting_id = -1
-                self.data.call_waiting_on_hold = False
+                if self._setattr_if_changed(
+                    self.data.current_call, "call_waiting_id", -1
+                ):
+                    call_state_changed = True
+                if self._setattr_if_changed(
+                    self.data, "call_waiting_on_hold", False
+                ):
+                    call_state_changed = True
 
         if "callWaitingOnHold" in device_data:
-            self.data.call_waiting_on_hold = self._coerce_bool(
+            on_hold_value = self._coerce_bool(
                 device_data["callWaitingOnHold"],
                 "config.device.callWaitingOnHold",
                 default=self.data.call_waiting_on_hold,
             )
+            if self._setattr_if_changed(
+                self.data, "call_waiting_on_hold", on_hold_value
+            ):
+                call_state_changed = True
 
         # Validate tracked selections after bulk update
         self._ensure_quick_dial_selection()
         self._ensure_blocked_selection()
         self._ensure_priority_selection()
         self._ensure_webhook_selection()
+
+        if call_state_changed:
+            self._flag_call_state_dirty()
 
     def _parse_app_state_value(self, value: Any, source: str) -> AppState | None:
         """Normalize various state encodings to AppState."""
