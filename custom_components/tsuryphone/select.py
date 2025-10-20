@@ -156,11 +156,17 @@ class TsuryPhoneSelect(
         """Get current ring pattern option."""
         current_pattern = state.ring_pattern
 
-        option_map = self._ring_pattern_option_map or self._build_ring_pattern_option_map()
+        option_map = (
+            self._ring_pattern_option_map or self._build_ring_pattern_option_map()
+        )
         reverse_map = {value: label for label, value in option_map.items()}
 
         preset_match = next(
-            (name for name, pattern in RING_PATTERN_PRESETS.items() if pattern == current_pattern),
+            (
+                name
+                for name, pattern in RING_PATTERN_PRESETS.items()
+                if pattern == current_pattern
+            ),
             None,
         )
 
@@ -177,7 +183,9 @@ class TsuryPhoneSelect(
 
     async def _select_ring_pattern(self, option: str) -> None:
         """Select ring pattern option."""
-        option_map = self._ring_pattern_option_map or self._build_ring_pattern_option_map()
+        option_map = (
+            self._ring_pattern_option_map or self._build_ring_pattern_option_map()
+        )
         preset_name = option_map.get(option)
 
         if not preset_name:
@@ -216,7 +224,10 @@ class TsuryPhoneSelect(
 
         quick_dials = sorted(
             state.quick_dials or [],
-            key=lambda entry: ((entry.name or "").casefold(), (entry.code or "").casefold()),
+            key=lambda entry: (
+                (entry.name or "").casefold(),
+                (entry.code or "").casefold(),
+            ),
         )
 
         for entry in quick_dials:
@@ -283,11 +294,7 @@ class TsuryPhoneSelect(
     def _format_blocked_option(self, entry) -> str:
         """Format blocked number option label."""
         display_number = entry.display_number or entry.number
-        return (
-            f"{display_number} ({entry.name})"
-            if entry.name
-            else display_number
-        )
+        return f"{display_number} ({entry.name})" if entry.name else display_number
 
     def _get_blocked_number_options(self) -> list[str]:
         """Get blocked number options."""
@@ -413,13 +420,16 @@ class TsuryPhoneSelect(
         """Build labeled ring pattern options for the select entity."""
 
         option_map: dict[str, str] = {
-            RING_PATTERN_PRESET_LABELS[name]: name
-            for name in RING_PATTERN_PRESETS
+            RING_PATTERN_PRESET_LABELS[name]: name for name in RING_PATTERN_PRESETS
         }
 
         current_pattern = self.coordinator.data.ring_pattern
         preset_match = next(
-            (name for name, pattern in RING_PATTERN_PRESETS.items() if pattern == current_pattern),
+            (
+                name
+                for name, pattern in RING_PATTERN_PRESETS.items()
+                if pattern == current_pattern
+            ),
             None,
         )
 

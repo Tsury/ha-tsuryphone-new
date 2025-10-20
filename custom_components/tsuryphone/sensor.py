@@ -324,9 +324,8 @@ class TsuryPhoneSensor(
             if state.current_call.number:
                 attributes["is_incoming"] = state.current_call.is_incoming
                 attributes["call_start_ts"] = state.current_call.start_time
-                attributes["direction"] = (
-                    state.current_call.direction
-                    or ("incoming" if state.current_call.is_incoming else "outgoing")
+                attributes["direction"] = state.current_call.direction or (
+                    "incoming" if state.current_call.is_incoming else "outgoing"
                 )
                 if state.current_call.result:
                     attributes["result"] = state.current_call.result
@@ -335,7 +334,9 @@ class TsuryPhoneSensor(
                 if state.current_call.duration_ms is not None:
                     attributes["duration_ms"] = state.current_call.duration_ms
                 if state.current_call.normalized_number:
-                    attributes["normalized_number"] = state.current_call.normalized_number
+                    attributes["normalized_number"] = (
+                        state.current_call.normalized_number
+                    )
                 if state.current_call.is_priority:
                     attributes["is_priority"] = True
                 if state.current_call.name:
@@ -346,9 +347,8 @@ class TsuryPhoneSensor(
                 attributes["number"] = state.current_call.number
                 attributes["is_incoming"] = state.current_call.is_incoming
                 attributes["call_start_ts"] = state.current_call.start_time
-                attributes["direction"] = (
-                    state.current_call.direction
-                    or ("incoming" if state.current_call.is_incoming else "outgoing")
+                attributes["direction"] = state.current_call.direction or (
+                    "incoming" if state.current_call.is_incoming else "outgoing"
                 )
                 if state.current_call.result:
                     attributes["result"] = state.current_call.result
@@ -357,7 +357,9 @@ class TsuryPhoneSensor(
                 if state.current_call.duration_ms is not None:
                     attributes["duration_ms"] = state.current_call.duration_ms
                 if state.current_call.normalized_number:
-                    attributes["normalized_number"] = state.current_call.normalized_number
+                    attributes["normalized_number"] = (
+                        state.current_call.normalized_number
+                    )
                 if state.current_call.is_priority:
                     attributes["is_priority"] = True
 
@@ -365,15 +367,16 @@ class TsuryPhoneSensor(
             attributes.update(self._build_current_call_attributes(state))
 
         elif self.entity_description.key == "last_call_summary":
-            attributes.update(self._build_last_call_attributes(state, include_summary=True))
+            attributes.update(
+                self._build_last_call_attributes(state, include_summary=True)
+            )
 
         elif self.entity_description.key == "last_call_number":
             if state.last_call.number:
                 attributes["is_incoming"] = state.last_call.is_incoming
                 attributes["call_start_ts"] = state.last_call.start_time
-                attributes["direction"] = (
-                    state.last_call.direction
-                    or ("incoming" if state.last_call.is_incoming else "outgoing")
+                attributes["direction"] = state.last_call.direction or (
+                    "incoming" if state.last_call.is_incoming else "outgoing"
                 )
                 if state.last_call.result:
                     attributes["result"] = state.last_call.result
@@ -410,9 +413,8 @@ class TsuryPhoneSensor(
                 attributes["call_number"] = state.current_call.number
                 attributes["is_incoming"] = state.current_call.is_incoming
                 attributes["call_start_ts"] = state.current_call.start_time
-                attributes["direction"] = (
-                    state.current_call.direction
-                    or ("incoming" if state.current_call.is_incoming else "outgoing")
+                attributes["direction"] = state.current_call.direction or (
+                    "incoming" if state.current_call.is_incoming else "outgoing"
                 )
                 if state.current_call.is_priority:
                     attributes["is_priority"] = True

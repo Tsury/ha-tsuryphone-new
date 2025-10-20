@@ -1140,9 +1140,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     results["failed"].append(
                         {"code": code, "error": "Missing quick dial name"}
                     )
-                    _LOGGER.warning(
-                        "Skipping quick dial entry without name: %s", entry
-                    )
+                    _LOGGER.warning("Skipping quick dial entry without name: %s", entry)
                     continue
 
                 try:
@@ -1216,9 +1214,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     results["failed"].append(
                         {"number": raw_number or "", "error": "Missing name"}
                     )
-                    _LOGGER.warning(
-                        "Skipping blocked number without name: %s", entry
-                    )
+                    _LOGGER.warning("Skipping blocked number without name: %s", entry)
                     continue
 
                 try:

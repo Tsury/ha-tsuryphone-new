@@ -422,9 +422,7 @@ class TsuryPhoneButton(
         if not name:
             raise HomeAssistantError("Enter a name for the quick dial entry")
 
-        device_number = self._prepare_number_input(
-            number, field="Quick dial number"
-        )
+        device_number = self._prepare_number_input(number, field="Quick dial number")
 
         try:
             await self.coordinator.api_client.add_quick_dial(code, device_number, name)
@@ -464,14 +462,10 @@ class TsuryPhoneButton(
         if not name:
             raise HomeAssistantError("Enter a name for this blocked number")
 
-        device_number = self._prepare_number_input(
-            number, field="Blocked number"
-        )
+        device_number = self._prepare_number_input(number, field="Blocked number")
 
         try:
-            await self.coordinator.api_client.add_blocked_number(
-                device_number, name
-            )
+            await self.coordinator.api_client.add_blocked_number(device_number, name)
             self.coordinator.selected_blocked_number = device_number
             self.coordinator.remember_number_display_hint(number)
             self._clear_buffer("blocked")
@@ -504,9 +498,7 @@ class TsuryPhoneButton(
         if not number:
             raise HomeAssistantError("Enter a priority number to add")
 
-        device_number = self._prepare_number_input(
-            number, field="Priority number"
-        )
+        device_number = self._prepare_number_input(number, field="Priority number")
 
         try:
             await self.coordinator.api_client.add_priority_caller(device_number)

@@ -445,15 +445,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if not call_info.name:
             call_info.name = str(
-                event.data.get("currentCallName")
-                or event.data.get("callerName")
-                or ""
+                event.data.get("currentCallName") or event.data.get("callerName") or ""
             )
 
         call_start_ts = (
-            call_info.call_start_ts
-            or event.data.get("callStartTs")
-            or event.ts
+            call_info.call_start_ts or event.data.get("callStartTs") or event.ts
         )
         call_info.call_start_ts = call_start_ts
         call_info.start_time = call_start_ts
@@ -482,7 +478,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         previous_state = self.data.app_state
         if previous_state != AppState.IN_CALL:
-            if self._setattr_if_changed(self.data, "previous_app_state", previous_state):
+            if self._setattr_if_changed(
+                self.data, "previous_app_state", previous_state
+            ):
                 self._flag_call_state_dirty()
             if self._setattr_if_changed(self.data, "app_state", AppState.IN_CALL):
                 self._flag_call_state_dirty()
@@ -507,9 +505,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._start_call_timer()
 
         # Add to call history (provisional entry)
-        call_type = call_info.call_type or (
-            "incoming" if is_incoming else "outgoing"
-        )
+        call_type = call_info.call_type or ("incoming" if is_incoming else "outgoing")
         history_entry = CallHistoryEntry(
             call_type=call_type,
             number=number,
@@ -598,12 +594,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             elif call_info.is_incoming is False:
                 call_info.direction = "outgoing"
 
-        call_info.call_type = self._derive_call_type_from_context(
-            direction=call_info.direction,
-            result=call_info.result,
-            is_incoming=call_info.is_incoming,
-            duration_ms=duration_ms,
-        ) or call_info.call_type
+        call_info.call_type = (
+            self._derive_call_type_from_context(
+                direction=call_info.direction,
+                result=call_info.result,
+                is_incoming=call_info.is_incoming,
+                duration_ms=duration_ms,
+            )
+            or call_info.call_type
+        )
 
         number = call_info.number
         is_incoming = call_info.is_incoming
@@ -739,10 +738,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 result = snapshot_info.result
             if duration_ms is None and snapshot_info.duration_ms is not None:
                 duration_ms = snapshot_info.duration_ms
-            if (
-                duration_seconds is None
-                and snapshot_info.duration_seconds is not None
-            ):
+            if duration_seconds is None and snapshot_info.duration_seconds is not None:
                 duration_seconds = snapshot_info.duration_seconds
             if is_priority is None and snapshot_info.is_priority:
                 is_priority = snapshot_info.is_priority
@@ -789,17 +785,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.last_call, "is_incoming", bool(is_incoming)
         ):
             changed = True
-        if self._setattr_if_changed(
-            self.data.last_call, "start_time", call_start_ts
-        ):
+        if self._setattr_if_changed(self.data.last_call, "start_time", call_start_ts):
             changed = True
         if self._setattr_if_changed(
             self.data.last_call, "call_start_ts", call_start_ts
         ):
             changed = True
-        if self._setattr_if_changed(
-            self.data.last_call, "duration_ms", duration_ms
-        ):
+        if self._setattr_if_changed(self.data.last_call, "duration_ms", duration_ms):
             changed = True
         if self._setattr_if_changed(
             self.data.last_call, "duration_seconds", duration_seconds
@@ -821,13 +813,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 changed = True
         elif not self.data.last_call.call_type and is_incoming is not None:
             default_type = (
-                "incoming_answered"
-                if bool(is_incoming)
-                else "outgoing_answered"
+                "incoming_answered" if bool(is_incoming) else "outgoing_answered"
             )
-            if self._setattr_if_changed(
-                self.data.last_call, "call_type", default_type
-            ):
+            if self._setattr_if_changed(self.data.last_call, "call_type", default_type):
                 changed = True
 
         if not self.data.last_call.direction and self.data.last_call.call_type:
@@ -836,18 +824,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     self.data.last_call, "direction", "incoming"
                 ):
                     changed = True
-                if self._setattr_if_changed(
-                    self.data.last_call, "is_incoming", True
-                ):
+                if self._setattr_if_changed(self.data.last_call, "is_incoming", True):
                     changed = True
             elif self.data.last_call.call_type.startswith("outgoing"):
                 if self._setattr_if_changed(
                     self.data.last_call, "direction", "outgoing"
                 ):
                     changed = True
-                if self._setattr_if_changed(
-                    self.data.last_call, "is_incoming", False
-                ):
+                if self._setattr_if_changed(self.data.last_call, "is_incoming", False):
                     changed = True
         elif not self.data.last_call.direction and is_incoming is not None:
             if self._setattr_if_changed(
@@ -861,9 +845,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             name = self.data.current_call.name or self.data.last_call.name
 
         if name is not None:
-            if self._setattr_if_changed(
-                self.data.last_call, "name", name or ""
-            ):
+            if self._setattr_if_changed(self.data.last_call, "name", name or ""):
                 changed = True
 
         return changed
@@ -976,7 +958,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             "call_type",
             "name",
         ):
-            if self._setattr_if_changed(target, field_name, getattr(source, field_name)):
+            if self._setattr_if_changed(
+                target, field_name, getattr(source, field_name)
+            ):
                 changed = True
         return changed
 
@@ -1063,12 +1047,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             except (TypeError, ValueError):
                 info.call_waiting_id = -1
 
-        info.call_type = self._derive_call_type_from_context(
-            direction=info.direction,
-            result=info.result,
-            is_incoming=info.is_incoming,
-            duration_ms=info.duration_ms,
-        ) or info.call_type
+        info.call_type = (
+            self._derive_call_type_from_context(
+                direction=info.direction,
+                result=info.result,
+                is_incoming=info.is_incoming,
+                duration_ms=info.duration_ms,
+            )
+            or info.call_type
+        )
 
         return info
 
@@ -1200,9 +1187,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if self._setattr_if_changed(self.data.current_call, "is_incoming", True):
                 self._flag_call_state_dirty()
         elif new_state == AppState.DIALING:
-            if self._setattr_if_changed(
-                self.data.current_call, "is_incoming", False
-            ):
+            if self._setattr_if_changed(self.data.current_call, "is_incoming", False):
                 self._flag_call_state_dirty()
 
         # Update derived states
@@ -1325,7 +1310,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 ):
                     call_state_changed = True
 
-            if "currentCallDirection" in event.data and not self.data.current_call.direction:
+            if (
+                "currentCallDirection" in event.data
+                and not self.data.current_call.direction
+            ):
                 direction_value = str(event.data.get("currentCallDirection") or "")
                 if direction_value:
                     if self._setattr_if_changed(
@@ -1453,7 +1441,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     call_start_ts=last_info.call_start_ts,
                     duration_ms=last_info.duration_ms,
                     duration_seconds=last_info.duration_seconds,
-                    call_type=last_info.call_type or str(last_call_data.get("type", "")) or None,
+                    call_type=last_info.call_type
+                    or str(last_call_data.get("type", ""))
+                    or None,
                     name=last_info.name
                     or str(
                         last_call_data.get("name")
@@ -2281,9 +2271,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 call_state_changed = True
 
             if call_waiting_id == -1:
-                if self._setattr_if_changed(
-                    self.data, "call_waiting_on_hold", False
-                ):
+                if self._setattr_if_changed(self.data, "call_waiting_on_hold", False):
                     call_state_changed = True
 
         if "callWaitingAvailable" in event.data:
@@ -2292,18 +2280,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 "event.context.callWaitingAvailable",
                 default=self.data.call_waiting_available,
             )
-            if self._setattr_if_changed(
-                self.data, "call_waiting_available", available
-            ):
+            if self._setattr_if_changed(self.data, "call_waiting_available", available):
                 call_state_changed = True
             if not available:
                 if self._setattr_if_changed(
                     self.data.current_call, "call_waiting_id", -1
                 ):
                     call_state_changed = True
-                if self._setattr_if_changed(
-                    self.data, "call_waiting_on_hold", False
-                ):
+                if self._setattr_if_changed(self.data, "call_waiting_on_hold", False):
                     call_state_changed = True
 
         if "callWaitingOnHold" in event.data:
@@ -3325,9 +3309,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 call_state_changed = True
 
             if call_waiting_id == -1:
-                if self._setattr_if_changed(
-                    self.data, "call_waiting_on_hold", False
-                ):
+                if self._setattr_if_changed(self.data, "call_waiting_on_hold", False):
                     call_state_changed = True
 
         if "callWaitingAvailable" in device_data:
@@ -3336,18 +3318,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 "config.device.callWaitingAvailable",
                 default=self.data.call_waiting_available,
             )
-            if self._setattr_if_changed(
-                self.data, "call_waiting_available", available
-            ):
+            if self._setattr_if_changed(self.data, "call_waiting_available", available):
                 call_state_changed = True
             if not available:
                 if self._setattr_if_changed(
                     self.data.current_call, "call_waiting_id", -1
                 ):
                     call_state_changed = True
-                if self._setattr_if_changed(
-                    self.data, "call_waiting_on_hold", False
-                ):
+                if self._setattr_if_changed(self.data, "call_waiting_on_hold", False):
                     call_state_changed = True
 
         if "callWaitingOnHold" in device_data:

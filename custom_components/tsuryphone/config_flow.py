@@ -504,7 +504,9 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     "custom_pattern",
-                    default=current_pattern if default_label.startswith("Custom") else "",
+                    default=(
+                        current_pattern if default_label.startswith("Custom") else ""
+                    ),
                 ): cv.string,
             }
         )
@@ -545,7 +547,11 @@ class TsuryPhoneOptionsFlow(config_entries.OptionsFlow):
         }
 
         preset_match = next(
-            (name for name, pattern in RING_PATTERN_PRESETS.items() if pattern == current_pattern),
+            (
+                name
+                for name, pattern in RING_PATTERN_PRESETS.items()
+                if pattern == current_pattern
+            ),
             None,
         )
 
