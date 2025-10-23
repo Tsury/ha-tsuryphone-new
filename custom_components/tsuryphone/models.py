@@ -10,7 +10,7 @@ from datetime import datetime
 
 from homeassistant.util import dt as dt_util
 
-from .const import AppState, EventCategory, INTEGRATION_EVENT_SCHEMA_VERSION
+from .const import AppState, EventCategory, INTEGRATION_EVENT_SCHEMA_VERSION, VolumeMode
 from .dialing import DialingContext
 
 
@@ -302,6 +302,9 @@ class TsuryPhoneState:
     hook_off: bool = False
     call_waiting_available: bool = False
     call_waiting_on_hold: bool = False
+    volume_mode: str = VolumeMode.EARPIECE.value
+    volume_mode_code: int = 0
+    is_speaker_mode: bool = False
 
     # Device stats
     stats: DeviceStats = field(default_factory=DeviceStats)
@@ -345,6 +348,24 @@ class TsuryPhoneState:
     def is_dialing(self) -> bool:
         """True if device is dialing."""
         return self.app_state == AppState.DIALING
+
+    @property
+    def volume_mode_enum(self) -> VolumeMode:
+        """Return volume mode as VolumeMode enum."""
+        try:
+            return VolumeMode(self.volume_mode)
+        except ValueError:
+            return VolumeMode.UNKNOWN
+
+    @property
+    def volume_mode_label(self) -> str:
+        """Human-friendly label for current audio routing mode."""
+        mode = self.volume_mode_enum
+        if mode is VolumeMode.SPEAKER:
+            return "Speaker"
+        if mode is VolumeMode.EARPIECE:
+            return "Earpiece"
+        return "Unknown"
 
     @property
     def quick_dial_count(self) -> int:

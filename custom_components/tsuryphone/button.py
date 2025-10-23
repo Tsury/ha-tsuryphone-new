@@ -49,6 +49,11 @@ BUTTON_DESCRIPTIONS = (
         icon="mdi:phone-hangup",
     ),
     ButtonEntityDescription(
+        key="toggle_volume_mode",
+        name="Call - Toggle Speaker Mode",
+        icon="mdi:volume-source",
+    ),
+    ButtonEntityDescription(
         key="dial_selected",
         name="Quick Dial - Dial Selected",
         icon="mdi:speed-dial",
@@ -276,6 +281,8 @@ class TsuryPhoneButton(
                 await self._add_webhook_action()
             elif self.entity_description.key == "webhook_remove":
                 await self._remove_selected_webhook()
+            elif self.entity_description.key == "toggle_volume_mode":
+                await self._toggle_volume_mode()
             elif self.entity_description.key == "toggle_call_waiting":
                 await self._toggle_call_waiting()
         except TsuryPhoneAPIError as err:
@@ -313,6 +320,16 @@ class TsuryPhoneButton(
             raise HomeAssistantError("No active call to hang up")
 
         await self.coordinator.api_client.hangup_call()
+
+    async def _toggle_volume_mode(self) -> None:
+        """Toggle between speaker and earpiece modes during a call."""
+
+        state: TsuryPhoneState = self.coordinator.data
+
+        if not state.is_call_active:
+            raise HomeAssistantError("No active call to toggle audio output")
+
+        await self.coordinator.api_client.toggle_volume_mode()
 
     async def _ring_device(self) -> None:
         """Ring the device using the configured pattern while bypassing DND."""
@@ -649,6 +666,12 @@ class TsuryPhoneButton(
             if state.current_dialing_number:
                 attributes["current_dialing_number"] = state.current_dialing_number
 
+        elif self.entity_description.key == "toggle_volume_mode":
+            attributes["can_execute"] = state.is_call_active
+            attributes["current_volume_mode"] = state.volume_mode_label
+            attributes["volume_mode_code"] = state.volume_mode_code
+            attributes["is_speaker_mode"] = state.is_speaker_mode
+
         elif self.entity_description.key == "ring":
             attributes["current_ring_pattern"] = state.ring_pattern or "default"
 
@@ -787,6 +810,7 @@ class TsuryPhoneButton(
             "hangup",
             "ring",
             "reset",
+            "toggle_volume_mode",
             "toggle_call_waiting",
         ]:
             if not (self.coordinator.last_update_success and state.connected):
@@ -805,6 +829,8 @@ class TsuryPhoneButton(
                     or state.current_call.number
                     or state.current_dialing_number
                 )
+            if self.entity_description.key == "toggle_volume_mode":
+                return state.is_call_active
             if self.entity_description.key == "toggle_call_waiting":
                 return state.call_waiting_available
 

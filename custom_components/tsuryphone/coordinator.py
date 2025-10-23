@@ -6,6 +6,7 @@ import asyncio
 import logging
 import re
 import time
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -54,6 +55,7 @@ from .const import (
     HA_EVENT_SYSTEM,
     HA_EVENT_CONFIG_DELTA,
     HA_EVENT_DIAGNOSTIC_SNAPSHOT,
+    VolumeMode,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,6 +137,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._last_refetch_time: float = 0
         self._invalid_app_state_values: set[str] = set()
         self._invalid_bool_values: set[str] = set()
+        self._invalid_volume_mode_values: set[str] = set()
 
     def _ensure_state(self) -> TsuryPhoneState:
         """Ensure coordinator state object exists."""
@@ -2220,6 +2223,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 default=self.data.hook_off,
             )
 
+        if self._apply_volume_mode_payload(event.data, source="event.context"):
+            call_state_changed = True
+
         # Extract system metrics if present (from addSystemInfo)
         if "freeHeap" in event.data:
             self.data.stats.free_heap_bytes = event.data["freeHeap"]
@@ -2803,6 +2809,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if parsed_prev is not None:
                 self.data.previous_app_state = parsed_prev
 
+            if self._apply_volume_mode_payload(phone_data, source="device.phone"):
+                call_state_changed = True
+
             if "dndActive" in phone_data:
                 self.data.dnd_active = self._coerce_bool(
                     phone_data["dndActive"],
@@ -3339,6 +3348,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             ):
                 call_state_changed = True
 
+        if self._apply_volume_mode_payload(device_data, source="device"):
+            call_state_changed = True
+
         # Validate tracked selections after bulk update
         self._ensure_quick_dial_selection()
         self._ensure_blocked_selection()
@@ -3347,6 +3359,143 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if call_state_changed:
             self._flag_call_state_dirty()
+
+    def _apply_volume_mode_payload(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        source: str,
+    ) -> bool:
+        """Update cached volume mode fields from a payload fragment."""
+
+        state = self._ensure_state()
+        changed = False
+
+        normalized_mode: str | None = None
+        speaker_flag: bool | None = None
+
+        if "volumeMode" in payload:
+            normalized_mode = self._normalize_volume_mode(
+                payload.get("volumeMode"), f"{source}.volumeMode"
+            )
+
+        code_int: int | None = None
+        if "volumeModeCode" in payload:
+            code_int = self._parse_volume_mode_code(
+                payload.get("volumeModeCode"), f"{source}.volumeModeCode"
+            )
+            if code_int is not None:
+                if self._setattr_if_changed(state, "volume_mode_code", code_int):
+                    changed = True
+                if normalized_mode is None:
+                    if code_int == 1:
+                        normalized_mode = VolumeMode.SPEAKER.value
+                    elif code_int == 0:
+                        normalized_mode = VolumeMode.EARPIECE.value
+
+        if "isSpeakerMode" in payload:
+            speaker_flag = self._coerce_bool(
+                payload.get("isSpeakerMode"),
+                f"{source}.isSpeakerMode",
+                default=state.is_speaker_mode,
+            )
+
+        if normalized_mode is None and speaker_flag is not None:
+            normalized_mode = (
+                VolumeMode.SPEAKER.value if speaker_flag else VolumeMode.EARPIECE.value
+            )
+
+        if normalized_mode is not None:
+            if self._setattr_if_changed(state, "volume_mode", normalized_mode):
+                changed = True
+
+        if speaker_flag is None and normalized_mode is not None:
+            speaker_flag = normalized_mode == VolumeMode.SPEAKER.value
+
+        if speaker_flag is not None:
+            if self._setattr_if_changed(state, "is_speaker_mode", speaker_flag):
+                changed = True
+
+        return changed
+
+    def _normalize_volume_mode(self, value: Any, source: str) -> str | None:
+        """Normalize various volume mode encodings to canonical strings."""
+
+        if value is None:
+            return None
+
+        if isinstance(value, VolumeMode):
+            return value.value
+
+        if isinstance(value, str):
+            candidate = value.strip().lower()
+            if not candidate:
+                return None
+
+            mapping = {
+                "speaker": VolumeMode.SPEAKER.value,
+                "speakerphone": VolumeMode.SPEAKER.value,
+                "earpiece": VolumeMode.EARPIECE.value,
+                "handset": VolumeMode.EARPIECE.value,
+            }
+
+            if candidate in mapping:
+                return mapping[candidate]
+
+            if candidate.isdigit() or (
+                candidate.startswith("-") and candidate[1:].isdigit()
+            ):
+                try:
+                    return self._normalize_volume_mode(int(candidate), source)
+                except ValueError:
+                    pass
+
+        if isinstance(value, (int, float)):
+            code = int(value)
+            if code == 1:
+                return VolumeMode.SPEAKER.value
+            if code == 0:
+                return VolumeMode.EARPIECE.value
+
+        self._log_invalid_volume_mode_value(value, source)
+        return None
+
+    def _parse_volume_mode_code(self, value: Any, source: str) -> int | None:
+        """Parse volume mode code values, logging unexpected inputs once."""
+
+        if value is None:
+            return None
+
+        if isinstance(value, bool):
+            return 1 if value else 0
+
+        if isinstance(value, (int, float)):
+            return int(value)
+
+        if isinstance(value, str):
+            candidate = value.strip()
+            if not candidate:
+                return None
+            if candidate.isdigit() or (
+                candidate.startswith("-") and candidate[1:].isdigit()
+            ):
+                try:
+                    return int(candidate)
+                except ValueError:  # pragma: no cover - defensive
+                    pass
+
+        self._log_invalid_volume_mode_value(value, source)
+        return None
+
+    def _log_invalid_volume_mode_value(self, value: Any, source: str) -> None:
+        """Log unexpected volume mode representations once."""
+
+        key = f"{source}:{value!r}"
+        if key in self._invalid_volume_mode_values:
+            return
+
+        self._invalid_volume_mode_values.add(key)
+        _LOGGER.debug("Unexpected volume mode value from %s: %r", source, value)
 
     def _parse_app_state_value(self, value: Any, source: str) -> AppState | None:
         """Normalize various state encodings to AppState."""

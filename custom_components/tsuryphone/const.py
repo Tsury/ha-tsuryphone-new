@@ -66,6 +66,14 @@ class AppState(IntEnum):
     DIALING = 8
 
 
+class VolumeMode(StrEnum):
+    """Audio routing modes exposed by the firmware."""
+
+    EARPIECE = "earpiece"
+    SPEAKER = "speaker"
+    UNKNOWN = "unknown"
+
+
 # Event categories (from firmware IntegrationService)
 class EventCategory(StrEnum):
     """Event categories for device events."""
@@ -186,6 +194,7 @@ API_CALL_DIAL_DIGIT: Final = "/api/call/dial_digit"
 API_CALL_ANSWER: Final = "/api/call/answer"
 API_CALL_HANGUP: Final = "/api/call/hangup"
 API_CALL_SWITCH_CALL_WAITING: Final = "/api/call/switch_call_waiting"
+API_CALL_TOGGLE_VOLUME_MODE: Final = "/api/call/toggle_volume_mode"
 API_SYSTEM_RESET: Final = "/api/system/reset"
 API_SYSTEM_FACTORY_RESET: Final = "/api/system/factory_reset"
 API_SYSTEM_RING: Final = "/api/system/ring"
@@ -258,6 +267,7 @@ SERVICE_WEBHOOK_REMOVE: Final = "webhook_remove"
 SERVICE_WEBHOOK_CLEAR: Final = "webhook_clear"
 SERVICE_WEBHOOK_TEST: Final = "webhook_test"
 SERVICE_SWITCH_CALL_WAITING: Final = "switch_call_waiting"
+SERVICE_TOGGLE_VOLUME_MODE: Final = "toggle_volume_mode"
 SERVICE_SET_MAINTENANCE_MODE: Final = "set_maintenance_mode"
 SERVICE_GET_MISSED_CALLS: Final = "get_missed_calls"
 SERVICE_DIAL_QUICK_DIAL: Final = "dial_quick_dial"

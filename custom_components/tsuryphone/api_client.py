@@ -19,6 +19,7 @@ from .const import (
     API_CALL_ANSWER,
     API_CALL_HANGUP,
     API_CALL_SWITCH_CALL_WAITING,
+    API_CALL_TOGGLE_VOLUME_MODE,
     API_SYSTEM_RESET,
     API_SYSTEM_FACTORY_RESET,
     API_SYSTEM_RING,
@@ -201,6 +202,10 @@ class TsuryPhoneAPIClient:
     async def switch_call_waiting(self) -> dict[str, Any]:
         """Toggle call waiting."""
         return await self._request("POST", API_CALL_SWITCH_CALL_WAITING)
+
+    async def toggle_volume_mode(self) -> dict[str, Any]:
+        """Toggle between speaker and earpiece modes during a call."""
+        return await self._request("POST", API_CALL_TOGGLE_VOLUME_MODE)
 
     # System endpoints
     async def reset_device(self) -> dict[str, Any]:

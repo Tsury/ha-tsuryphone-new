@@ -59,6 +59,11 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:phone-incoming",
     ),
     SensorEntityDescription(
+        key="volume_mode",
+        name="Call Audio Output",
+        icon="mdi:volume-source",
+    ),
+    SensorEntityDescription(
         key="call_duration",
         name="Current Call Duration",
         icon="mdi:timer",
@@ -240,6 +245,8 @@ class TsuryPhoneSensor(
         elif self.entity_description.key == "current_call_direction":
             direction = state.current_call.direction or state.current_call_direction
             return direction if direction else "Idle"
+        elif self.entity_description.key == "volume_mode":
+            return state.volume_mode_label
         elif self.entity_description.key == "call_duration":
             if state.is_call_active:
                 return self.coordinator.current_call_duration_seconds
@@ -365,6 +372,12 @@ class TsuryPhoneSensor(
 
         elif self.entity_description.key == "current_call_direction":
             attributes.update(self._build_current_call_attributes(state))
+
+        elif self.entity_description.key == "volume_mode":
+            attributes["mode"] = state.volume_mode
+            attributes["mode_code"] = state.volume_mode_code
+            attributes["is_speaker_mode"] = state.is_speaker_mode
+            attributes["call_active"] = state.is_call_active
 
         elif self.entity_description.key == "last_call_summary":
             attributes.update(
@@ -686,6 +699,16 @@ class TsuryPhoneSensor(
             AppState.DIALING: "Dialing",
         }
         return state_names.get(app_state, f"Unknown ({app_state.value})")
+
+    @property
+    def icon(self) -> str | None:
+        """Return icon, adapting to dynamic volume mode state."""
+
+        if self.entity_description.key == "volume_mode":
+            state: TsuryPhoneState = self.coordinator.data
+            return "mdi:volume-high" if state.is_speaker_mode else "mdi:headset"
+
+        return super().icon
 
     @property
     def available(self) -> bool:

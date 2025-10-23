@@ -472,6 +472,13 @@ switch_call_waiting:
     device:
       integration: tsuryphone
 
+toggle_volume_mode:
+  name: Toggle call audio output
+  description: Switch between speaker and earpiece during an active call.
+  target:
+    device:
+      integration: tsuryphone
+
 set_maintenance_mode:
   name: Set maintenance mode
   description: Enable or disable maintenance mode on the device.

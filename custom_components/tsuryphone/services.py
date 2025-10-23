@@ -54,6 +54,7 @@ from .const import (
     SERVICE_WEBHOOK_CLEAR,
     SERVICE_WEBHOOK_TEST,
     SERVICE_SWITCH_CALL_WAITING,
+    SERVICE_TOGGLE_VOLUME_MODE,
     SERVICE_SET_MAINTENANCE_MODE,
     SERVICE_GET_MISSED_CALLS,
     SERVICE_SET_HA_URL,
@@ -1053,6 +1054,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to switch call waiting: {err}") from err
 
+    async def async_toggle_volume_mode(call: ServiceCall) -> None:
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+
+        if not coordinator.data.is_call_active:
+            raise ServiceValidationError("No active call to toggle volume mode")
+
+        try:
+            await coordinator.api_client.toggle_volume_mode()
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(f"Failed to toggle volume mode: {err}") from err
+
     async def async_set_maintenance_mode(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
@@ -1316,6 +1329,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         (SERVICE_WEBHOOK_CLEAR, async_webhook_clear, DEVICE_ONLY_SCHEMA),
         (SERVICE_WEBHOOK_TEST, async_webhook_test, WEBHOOK_TEST_SCHEMA),
         (SERVICE_SWITCH_CALL_WAITING, async_switch_call_waiting, DEVICE_ONLY_SCHEMA),
+        (SERVICE_TOGGLE_VOLUME_MODE, async_toggle_volume_mode, DEVICE_ONLY_SCHEMA),
         (
             SERVICE_SET_MAINTENANCE_MODE,
             async_set_maintenance_mode,
@@ -1401,6 +1415,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_WEBHOOK_CLEAR,
         SERVICE_WEBHOOK_TEST,
         SERVICE_SWITCH_CALL_WAITING,
+    SERVICE_TOGGLE_VOLUME_MODE,
         SERVICE_SET_MAINTENANCE_MODE,
         SERVICE_GET_MISSED_CALLS,
         SERVICE_DIAL_QUICK_DIAL,
