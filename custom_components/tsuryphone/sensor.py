@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from homeassistant.util import dt as dt_util
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -35,17 +37,17 @@ SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="current_call_summary",
-        name="Current Call",
+        name="Current Active Call",
         icon="mdi:phone",
     ),
     SensorEntityDescription(
         key="current_call_number",
-        name="Current Call Number",
+        name="Current Active Call Number",
         icon="mdi:phone-in-talk",
     ),
     SensorEntityDescription(
         key="current_call_name",
-        name="Current Caller Name",
+        name="Current Active Call Name",
         icon="mdi:account-voice",
     ),
     SensorEntityDescription(
@@ -55,7 +57,7 @@ SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="current_call_direction",
-        name="Current Call Direction",
+        name="Current Active Call Direction",
         icon="mdi:phone-incoming",
     ),
     SensorEntityDescription(
@@ -65,8 +67,36 @@ SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="call_duration",
-        name="Current Call Duration",
+        name="Current Active Call Duration",
         icon="mdi:timer",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SensorEntityDescription(
+        key="waiting_call_summary",
+        name="Current Waiting Call",
+        icon="mdi:phone-clock",
+    ),
+    SensorEntityDescription(
+        key="waiting_call_number",
+        name="Current Waiting Call Number",
+        icon="mdi:phone-clock",
+    ),
+    SensorEntityDescription(
+        key="waiting_call_name",
+        name="Current Waiting Call Name",
+        icon="mdi:account-clock",
+    ),
+    SensorEntityDescription(
+        key="waiting_call_direction",
+        name="Current Waiting Call Direction",
+        icon="mdi:swap-horizontal",
+    ),
+    SensorEntityDescription(
+        key="waiting_call_duration",
+        name="Current Waiting Call Duration",
+        icon="mdi:timer-sand",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -108,6 +138,18 @@ SENSOR_DESCRIPTIONS = (
         key="last_call_summary",
         name="Last Call",
         icon="mdi:phone",
+    ),
+    SensorEntityDescription(
+        key="last_call_started_at",
+        name="Last Call Started",
+        icon="mdi:clock-start",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
+        key="last_call_ended_at",
+        name="Last Call Ended",
+        icon="mdi:clock-end",
+        device_class=SensorDeviceClass.TIMESTAMP,
     ),
     SensorEntityDescription(
         key="uptime",
@@ -255,6 +297,20 @@ class TsuryPhoneSensor(
             if state.current_call.duration_ms is not None:
                 return state.current_call.duration_ms // 1000
             return 0
+        elif self.entity_description.key == "waiting_call_summary":
+            return self._build_waiting_call_summary(state)
+        elif self.entity_description.key == "waiting_call_number":
+            return state.waiting_call.number or None
+        elif self.entity_description.key == "waiting_call_name":
+            return state.waiting_call.name or None
+        elif self.entity_description.key == "waiting_call_direction":
+            return self._get_waiting_call_direction(state)
+        elif self.entity_description.key == "waiting_call_duration":
+            if state.waiting_call.duration_seconds is not None:
+                return state.waiting_call.duration_seconds
+            if state.waiting_call.duration_ms is not None:
+                return state.waiting_call.duration_ms // 1000
+            return None
         elif self.entity_description.key == "last_call_number":
             return state.last_call.number if state.last_call.number else None
         elif self.entity_description.key == "last_call_name":
@@ -281,6 +337,10 @@ class TsuryPhoneSensor(
             return "Unknown"
         elif self.entity_description.key == "last_call_summary":
             return self._build_last_call_summary(state)
+        elif self.entity_description.key == "last_call_started_at":
+            return self._get_last_call_start_datetime(state)
+        elif self.entity_description.key == "last_call_ended_at":
+            return self._get_last_call_end_datetime(state)
         elif self.entity_description.key == "uptime":
             return state.stats.uptime_seconds
         elif self.entity_description.key == "rssi":
@@ -329,46 +389,12 @@ class TsuryPhoneSensor(
 
         elif self.entity_description.key == "current_call_number":
             if state.current_call.number:
-                attributes["is_incoming"] = state.current_call.is_incoming
-                attributes["call_start_ts"] = state.current_call.start_time
-                attributes["direction"] = state.current_call.direction or (
-                    "incoming" if state.current_call.is_incoming else "outgoing"
-                )
-                if state.current_call.result:
-                    attributes["result"] = state.current_call.result
-                if state.current_call.duration_seconds is not None:
-                    attributes["duration_seconds"] = state.current_call.duration_seconds
-                if state.current_call.duration_ms is not None:
-                    attributes["duration_ms"] = state.current_call.duration_ms
-                if state.current_call.normalized_number:
-                    attributes["normalized_number"] = (
-                        state.current_call.normalized_number
-                    )
-                if state.current_call.is_priority:
-                    attributes["is_priority"] = True
-                if state.current_call.name:
-                    attributes["name"] = state.current_call.name
+                attributes.update(self._build_current_call_attributes(state))
 
         elif self.entity_description.key == "current_call_name":
             if state.current_call.name:
                 attributes["number"] = state.current_call.number
-                attributes["is_incoming"] = state.current_call.is_incoming
-                attributes["call_start_ts"] = state.current_call.start_time
-                attributes["direction"] = state.current_call.direction or (
-                    "incoming" if state.current_call.is_incoming else "outgoing"
-                )
-                if state.current_call.result:
-                    attributes["result"] = state.current_call.result
-                if state.current_call.duration_seconds is not None:
-                    attributes["duration_seconds"] = state.current_call.duration_seconds
-                if state.current_call.duration_ms is not None:
-                    attributes["duration_ms"] = state.current_call.duration_ms
-                if state.current_call.normalized_number:
-                    attributes["normalized_number"] = (
-                        state.current_call.normalized_number
-                    )
-                if state.current_call.is_priority:
-                    attributes["is_priority"] = True
+                attributes.update(self._build_current_call_attributes(state))
 
         elif self.entity_description.key == "current_call_direction":
             attributes.update(self._build_current_call_attributes(state))
@@ -383,6 +409,34 @@ class TsuryPhoneSensor(
             attributes.update(
                 self._build_last_call_attributes(state, include_summary=True)
             )
+
+        elif self.entity_description.key == "waiting_call_summary":
+            attributes.update(
+                self._build_waiting_call_attributes(state, include_summary=True)
+            )
+
+        elif self.entity_description.key == "waiting_call_number":
+            if state.waiting_call.number:
+                attributes.update(self._build_waiting_call_attributes(state))
+
+        elif self.entity_description.key == "waiting_call_name":
+            if state.waiting_call.name:
+                attributes.update(self._build_waiting_call_attributes(state))
+
+        elif self.entity_description.key == "waiting_call_direction":
+            attributes.update(self._build_waiting_call_attributes(state))
+
+        elif self.entity_description.key == "waiting_call_duration":
+            attributes.update(self._build_waiting_call_attributes(state))
+
+        elif self.entity_description.key in {"last_call_started_at", "last_call_ended_at"}:
+            attributes.update(
+                self._build_last_call_attributes(state, include_summary=True)
+            )
+            if state.last_call.start_received_ts is not None:
+                attributes["start_received_ts"] = state.last_call.start_received_ts
+            if state.last_call.end_received_ts is not None:
+                attributes["end_received_ts"] = state.last_call.end_received_ts
 
         elif self.entity_description.key == "last_call_number":
             if state.last_call.number:
@@ -507,6 +561,9 @@ class TsuryPhoneSensor(
         if call.call_start_ts:
             attributes["call_start_ts"] = call.call_start_ts
 
+        if call.call_id != -1:
+            attributes["call_id"] = call.call_id
+
         if call.duration_seconds is not None:
             attributes["duration_seconds"] = call.duration_seconds
         if call.duration_ms is not None:
@@ -517,6 +574,18 @@ class TsuryPhoneSensor(
 
         if call.is_priority:
             attributes["is_priority"] = True
+
+        if call.is_on_hold:
+            attributes["is_on_hold"] = True
+
+        if call.is_blocked:
+            attributes["is_blocked"] = True
+
+        if call.start_received_ts is not None:
+            attributes["start_received_ts"] = call.start_received_ts
+
+        if call.end_received_ts is not None:
+            attributes["end_received_ts"] = call.end_received_ts
 
         return attributes
 
@@ -552,6 +621,9 @@ class TsuryPhoneSensor(
         if call.call_start_ts:
             attributes["call_start_ts"] = call.call_start_ts
 
+        if call.call_id != -1:
+            attributes["call_id"] = call.call_id
+
         if call.duration_seconds is not None:
             attributes["duration_seconds"] = call.duration_seconds
         if call.duration_ms is not None:
@@ -563,6 +635,15 @@ class TsuryPhoneSensor(
 
         if call.is_priority:
             attributes["is_priority"] = True
+
+        if call.is_blocked:
+            attributes["is_blocked"] = True
+
+        if call.start_received_ts is not None:
+            attributes["start_received_ts"] = call.start_received_ts
+
+        if call.end_received_ts is not None:
+            attributes["end_received_ts"] = call.end_received_ts
 
         return attributes
 
@@ -599,6 +680,39 @@ class TsuryPhoneSensor(
 
         if call.result:
             parts.append(self._humanize_call_result(call))
+
+        duration = call.duration_seconds
+        if duration is None and call.duration_ms is not None:
+            duration = call.duration_ms // 1000
+        if duration:
+            parts.append(f"{duration}s")
+
+        return " ".join(parts).strip()
+
+    def _build_waiting_call_summary(self, state: TsuryPhoneState) -> str:
+        """Generate a friendly summary for the waiting call (if any)."""
+        call = state.waiting_call
+        if not call.number and not call.name:
+            return "No waiting call"
+
+        parts: list[str] = []
+
+        direction = self._get_waiting_call_direction(state)
+        if direction:
+            parts.append(direction.capitalize())
+
+        if call.is_priority:
+            parts.append("(Priority)")
+
+        if call.is_on_hold:
+            parts.append("(On Hold)")
+
+        if call.is_blocked:
+            parts.append("(Blocked)")
+
+        contact = self._format_call_contact(call)
+        if contact:
+            parts.append(contact)
 
         duration = call.duration_seconds
         if duration is None and call.duration_ms is not None:
@@ -665,6 +779,99 @@ class TsuryPhoneSensor(
         if call.number:
             return call.number
         return None
+
+    def _build_waiting_call_attributes(
+        self, state: TsuryPhoneState, *, include_summary: bool = False
+    ) -> dict[str, Any]:
+        """Collect attribute data for waiting call sensors."""
+        attributes: dict[str, Any] = {}
+        call = state.waiting_call
+
+        if include_summary:
+            attributes["summary"] = self._build_waiting_call_summary(state)
+
+        direction = self._get_waiting_call_direction(state)
+        if direction:
+            attributes["direction"] = direction
+
+        if call.number:
+            attributes["number"] = call.number
+        if call.name:
+            attributes["name"] = call.name
+        if call.normalized_number:
+            attributes["normalized_number"] = call.normalized_number
+
+        if call.call_id != -1:
+            attributes["call_id"] = call.call_id
+
+        if call.call_start_ts:
+            attributes["call_start_ts"] = call.call_start_ts
+
+        if call.duration_seconds is not None:
+            attributes["duration_seconds"] = call.duration_seconds
+        if call.duration_ms is not None:
+            attributes["duration_ms"] = call.duration_ms
+
+        if call.is_priority:
+            attributes["is_priority"] = True
+
+        if call.is_on_hold:
+            attributes["is_on_hold"] = True
+
+        if call.is_blocked:
+            attributes["is_blocked"] = True
+
+        if call.start_received_ts is not None:
+            attributes["start_received_ts"] = call.start_received_ts
+
+        if call.end_received_ts is not None:
+            attributes["end_received_ts"] = call.end_received_ts
+
+        attributes["available"] = bool(call.number)
+
+        return attributes
+
+    def _get_waiting_call_direction(self, state: TsuryPhoneState) -> str | None:
+        """Return the direction label for the waiting call, if present."""
+        call = state.waiting_call
+        direction = call.direction
+        if not direction:
+            if call.is_incoming:
+                direction = "incoming"
+            elif call.is_incoming is False:
+                direction = "outgoing"
+        return direction or None
+
+    def _timestamp_to_datetime(self, value: float | int | None):
+        """Convert a timestamp (seconds) to an aware UTC datetime."""
+        if value in (None, 0):
+            return None
+        try:
+            return dt_util.utc_from_timestamp(float(value))
+        except (TypeError, ValueError, OSError):
+            return None
+
+    def _get_last_call_start_datetime(self, state: TsuryPhoneState):
+        """Compute the best-effort start timestamp for the last call."""
+        ts = state.last_call.start_received_ts
+        if ts is None and state.last_call.end_received_ts is not None:
+            duration = state.last_call.duration_seconds
+            if duration is None and state.last_call.duration_ms is not None:
+                duration = state.last_call.duration_ms / 1000
+            if duration is not None:
+                ts = state.last_call.end_received_ts - duration
+        return self._timestamp_to_datetime(ts)
+
+    def _get_last_call_end_datetime(self, state: TsuryPhoneState):
+        """Compute the end timestamp for the last call."""
+        ts = state.last_call.end_received_ts
+        if ts is None and state.last_call.start_received_ts is not None:
+            duration = state.last_call.duration_seconds
+            if duration is None and state.last_call.duration_ms is not None:
+                duration = state.last_call.duration_ms / 1000
+            if duration is not None:
+                ts = state.last_call.start_received_ts + duration
+        return self._timestamp_to_datetime(ts)
 
     def _humanize_call_result(self, call: CallInfo) -> str:
         """Convert result/call type fields into a user-friendly label."""

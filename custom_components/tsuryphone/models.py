@@ -53,6 +53,11 @@ class CallInfo:
     call_waiting_id: int = -1
     call_type: str = ""
     name: str = ""
+    is_on_hold: bool = False
+    is_blocked: bool = False
+    leg_label: str = ""
+    start_received_ts: float | None = None
+    end_received_ts: float | None = None
 
 
 @dataclass
@@ -292,6 +297,7 @@ class TsuryPhoneState:
 
     # Call information
     current_call: CallInfo = field(default_factory=CallInfo)
+    waiting_call: CallInfo = field(default_factory=CallInfo)
     last_call: CallInfo = field(default_factory=CallInfo)
     current_dialing_number: str = ""
 

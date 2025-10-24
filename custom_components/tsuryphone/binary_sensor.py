@@ -51,7 +51,7 @@ BINARY_SENSOR_DESCRIPTIONS = (
     ),
     BinarySensorEntityDescription(
         key="current_call_priority",
-        name="Current Call Priority",
+        name="Current Active Call Priority",
         icon="mdi:star",
         entity_registry_enabled_default=True,
     ),

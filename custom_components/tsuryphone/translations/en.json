@@ -76,7 +76,7 @@
         "name": "Call Waiting Available"
       },
       "current_call_priority": {
-        "name": "Current Call Priority"
+        "name": "Current Active Call Priority"
       }
     },
     "sensor": {
@@ -84,22 +84,37 @@
         "name": "Phone State"
       },
       "current_call_summary": {
-        "name": "Current Call"
+        "name": "Current Active Call"
       },
       "current_call_number": {
-        "name": "Current Call Number"
+        "name": "Current Active Call Number"
       },
       "current_call_name": {
-        "name": "Current Caller Name"
+        "name": "Current Active Call Name"
       },
       "current_dialing_number": {
         "name": "Current Dialing Number"
       },
       "current_call_direction": {
-        "name": "Current Call Direction"
+        "name": "Current Active Call Direction"
       },
       "call_duration": {
-        "name": "Current Call Duration"
+        "name": "Current Active Call Duration"
+      },
+      "waiting_call_summary": {
+        "name": "Current Waiting Call"
+      },
+      "waiting_call_number": {
+        "name": "Current Waiting Call Number"
+      },
+      "waiting_call_name": {
+        "name": "Current Waiting Call Name"
+      },
+      "waiting_call_direction": {
+        "name": "Current Waiting Call Direction"
+      },
+      "waiting_call_duration": {
+        "name": "Current Waiting Call Duration"
       },
       "last_call_number": {
         "name": "Last Call Number"
@@ -121,6 +136,12 @@
       },
       "last_call_summary": {
         "name": "Last Call"
+      },
+      "last_call_started_at": {
+        "name": "Last Call Started"
+      },
+      "last_call_ended_at": {
+        "name": "Last Call Ended"
       },
       "uptime": {
         "name": "Uptime"
