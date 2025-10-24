@@ -93,13 +93,12 @@ DIAL_SCHEMA = _service_schema(
 )
 
 
-def _validate_digit(value: Any) -> str:
+def _validate_digit(value: Any) -> int:
     """Validate a single dial digit."""
 
-    digit = cv.string(value)
-    digit = digit.strip()
-    if len(digit) != 1 or digit < "0" or digit > "9":
-        raise vol.Invalid("Digit must be a single character between 0 and 9")
+    digit = vol.Coerce(int)(value)
+    if digit < 0 or digit > 9:
+        raise vol.Invalid("Digit must be between 0 and 9")
     return digit
 
 
@@ -1415,7 +1414,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_WEBHOOK_CLEAR,
         SERVICE_WEBHOOK_TEST,
         SERVICE_SWITCH_CALL_WAITING,
-    SERVICE_TOGGLE_VOLUME_MODE,
+        SERVICE_TOGGLE_VOLUME_MODE,
         SERVICE_SET_MAINTENANCE_MODE,
         SERVICE_GET_MISSED_CALLS,
         SERVICE_DIAL_QUICK_DIAL,

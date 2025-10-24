@@ -24,11 +24,14 @@ dial_digit:
   fields:
     digit:
       name: Digit
-      description: Single digit (0-9) to enqueue while the phone is idle.
+      description: Integer digit (0-9) to enqueue while the phone is idle.
       required: true
-      example: "5"
+      example: 5
       selector:
-        text:
+        number:
+          min: 0
+          max: 9
+          step: 1
 
 answer:
   name: Answer call
