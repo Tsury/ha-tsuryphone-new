@@ -77,6 +77,9 @@
       },
       "current_call_priority": {
         "name": "Current Active Call Priority"
+      },
+      "waiting_call_priority": {
+        "name": "Current Waiting Call Priority"
       }
     },
     "sensor": {

@@ -55,6 +55,12 @@ BINARY_SENSOR_DESCRIPTIONS = (
         icon="mdi:star",
         entity_registry_enabled_default=True,
     ),
+    BinarySensorEntityDescription(
+        key="waiting_call_priority",
+        name="Current Waiting Call Priority",
+        icon="mdi:star-clock",
+        entity_registry_enabled_default=True,
+    ),
 )
 
 
@@ -116,6 +122,8 @@ class TsuryPhoneBinarySensor(
             return state.call_waiting_available
         elif self.entity_description.key == "current_call_priority":
             return state.current_call_is_priority
+        elif self.entity_description.key == "waiting_call_priority":
+            return state.waiting_call.is_priority
 
         return None
 
@@ -167,6 +175,15 @@ class TsuryPhoneBinarySensor(
             if state.current_call_is_priority and state.current_call.number:
                 attributes["priority_number"] = state.current_call.number
                 attributes["is_incoming"] = state.current_call.is_incoming
+
+        elif self.entity_description.key == "waiting_call_priority":
+            if state.waiting_call.is_priority and state.waiting_call.number:
+                attributes["priority_number"] = state.waiting_call.number
+                attributes["is_incoming"] = state.waiting_call.is_incoming
+                if state.waiting_call.call_id != -1:
+                    attributes["call_id"] = state.waiting_call.call_id
+                if state.waiting_call.is_on_hold:
+                    attributes["is_on_hold"] = True
 
         # Add connection status for troubleshooting
         if not state.connected:

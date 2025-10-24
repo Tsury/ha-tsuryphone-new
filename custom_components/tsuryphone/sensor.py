@@ -429,7 +429,10 @@ class TsuryPhoneSensor(
         elif self.entity_description.key == "waiting_call_duration":
             attributes.update(self._build_waiting_call_attributes(state))
 
-        elif self.entity_description.key in {"last_call_started_at", "last_call_ended_at"}:
+        elif self.entity_description.key in {
+            "last_call_started_at",
+            "last_call_ended_at",
+        }:
             attributes.update(
                 self._build_last_call_attributes(state, include_summary=True)
             )
