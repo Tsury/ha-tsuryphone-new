@@ -491,10 +491,28 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         waiting_promoted = self._calls_refer_to_same_leg(call_info, previous_waiting)
 
         if waiting_promoted:
+            _LOGGER.debug(
+                "Promoting waiting leg -> active | prev_active id=%s num=%s | "
+                "waiting id=%s num=%s | incoming id=%s num=%s",
+                previous_active.call_id,
+                previous_active.number,
+                previous_waiting.call_id,
+                previous_waiting.number,
+                call_info.call_id,
+                call_info.number,
+            )
             self._promote_waiting_leg_to_active(
                 call_info, previous_waiting, previous_active, event
             )
         else:
+            if previous_waiting.call_id != -1 or previous_waiting.number:
+                _LOGGER.debug(
+                    "Waiting leg promotion skipped | prev_waiting id=%s num=%s | incoming id=%s num=%s",
+                    previous_waiting.call_id,
+                    previous_waiting.number,
+                    call_info.call_id,
+                    call_info.number,
+                )
             call_info.duration_ms = None
             call_info.duration_seconds = None
             call_info.start_received_ts = event.received_at
@@ -1124,20 +1142,49 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     ) -> None:
         """Swap the waiting leg into the active slot, preserving historical data."""
 
-        if not incoming.number and waiting_snapshot.number:
-            incoming.number = waiting_snapshot.number
+        def _should_overwrite(str_attr: str) -> bool:
+            waiting_value = getattr(waiting_snapshot, str_attr)
+            incoming_value = getattr(incoming, str_attr)
+            previous_value = getattr(previous_active, str_attr)
 
-        if not incoming.normalized_number and waiting_snapshot.normalized_number:
-            incoming.normalized_number = waiting_snapshot.normalized_number
+            if not waiting_value:
+                return False
 
-        if not incoming.name and waiting_snapshot.name:
-            incoming.name = waiting_snapshot.name
+            if not incoming_value:
+                return True
 
-        if not incoming.direction and waiting_snapshot.direction:
-            incoming.direction = waiting_snapshot.direction
+            if previous_value and incoming_value == previous_value and waiting_value != previous_value:
+                return True
 
-        if not incoming.result and waiting_snapshot.result:
-            incoming.result = waiting_snapshot.result
+            return False
+
+        for attr in ("number", "normalized_number", "name", "direction", "result"):
+            if _should_overwrite(attr):
+                setattr(incoming, attr, getattr(waiting_snapshot, attr))
+
+        if waiting_snapshot.call_id != -1:
+            overwrite_call_id = (
+                incoming.call_id == -1
+                or (
+                    previous_active.call_id != -1
+                    and incoming.call_id == previous_active.call_id
+                    and waiting_snapshot.call_id != previous_active.call_id
+                )
+            )
+            if overwrite_call_id:
+                incoming.call_id = waiting_snapshot.call_id
+
+        if waiting_snapshot.call_waiting_id != -1:
+            overwrite_waiting_id = (
+                incoming.call_waiting_id in (-1, 0)
+                or (
+                    previous_active.call_waiting_id not in (-1, 0)
+                    and incoming.call_waiting_id == previous_active.call_waiting_id
+                    and waiting_snapshot.call_waiting_id != previous_active.call_waiting_id
+                )
+            )
+            if overwrite_waiting_id:
+                incoming.call_waiting_id = waiting_snapshot.call_waiting_id
 
         if waiting_snapshot.duration_ms is not None and incoming.duration_ms is None:
             incoming.duration_ms = waiting_snapshot.duration_ms
