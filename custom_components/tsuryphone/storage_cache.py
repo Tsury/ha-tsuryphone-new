@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -66,6 +67,9 @@ class TsuryPhoneStorageCache:
         self._call_history_cache: list[CallHistoryEntry] = []
         self._device_state_cache: dict[str, Any] = {}
         self._cache_loaded = False
+        self._last_device_state_log = 0.0
+        self._last_call_history_log = 0.0
+        self._last_config_backup_log = 0.0
 
     @staticmethod
     def _parse_timestamp(value: Any) -> datetime | None:
@@ -149,9 +153,14 @@ class TsuryPhoneStorageCache:
             }
 
             await self._call_history_store.async_save(data)
-            _LOGGER.debug(
-                "Saved %d call history entries to cache", len(cleaned_entries)
-            )
+            entry_count = len(cleaned_entries)
+            if entry_count > 0:
+                now = time.monotonic()
+                if now - self._last_call_history_log >= 60:
+                    self._last_call_history_log = now
+                    _LOGGER.debug(
+                        "Saved %d call history entries to cache", entry_count
+                    )
 
         except Exception as err:
             _LOGGER.error("Failed to save call history to cache: %s", err)
@@ -211,7 +220,10 @@ class TsuryPhoneStorageCache:
 
             await self._device_state_store.async_save(data)
             self._device_state_cache = state_backup
-            _LOGGER.debug("Saved device state backup to cache")
+            now = time.monotonic()
+            if now - self._last_device_state_log >= 60:
+                self._last_device_state_log = now
+                _LOGGER.debug("Saved device state backup to cache")
 
         except Exception as err:
             _LOGGER.error("Failed to save device state to cache: %s", err)
@@ -256,7 +268,10 @@ class TsuryPhoneStorageCache:
             existing_data["backups"] = existing_data["backups"][-10:]
 
             await self._config_backup_store.async_save(existing_data)
-            _LOGGER.debug("Saved configuration backup to cache")
+            now = time.monotonic()
+            if now - self._last_config_backup_log >= 60:
+                self._last_config_backup_log = now
+                _LOGGER.debug("Saved configuration backup to cache")
 
         except Exception as err:
             _LOGGER.error("Failed to save config backup to cache: %s", err)

@@ -500,8 +500,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 default=call_info.is_blocked,
             )
 
+        self._harmonize_call_numbers(call_info)
+
         previous_active = self._clone_call_info(self.data.current_call)
         previous_waiting = self._clone_call_info(self.data.waiting_call)
+
+        self._harmonize_call_numbers(previous_active)
+        self._harmonize_call_numbers(previous_waiting)
 
         _LOGGER.debug(
             "call_info snapshot | seq=%s leg_label=%s call_id=%s waiting_id=%s number=%s normalized=%s",
@@ -1166,6 +1171,27 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if first.number and second.number:
             return first.number == second.number
+
+        context = self._ensure_state().dialing_context
+
+        def canonical(info: CallInfo) -> str:
+            for candidate in (info.number, info.normalized_number):
+                if not candidate:
+                    continue
+                if context:
+                    canonical_value = context.canonicalize(candidate)
+                    if canonical_value:
+                        return canonical_value
+                    normalized_value = context.normalize(candidate)
+                    if normalized_value:
+                        return normalized_value
+                return candidate
+            return ""
+
+        first_canonical = canonical(first)
+        second_canonical = canonical(second)
+        if first_canonical and second_canonical:
+            return first_canonical == second_canonical
 
         if (
             first.call_waiting_id not in (-1, 0)
