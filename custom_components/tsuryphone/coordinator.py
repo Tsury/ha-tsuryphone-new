@@ -146,6 +146,21 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data = TsuryPhoneState(device_info=self.device_info)
         return self.data
 
+    def async_set_updated_data(self, data: TsuryPhoneState) -> None:  # type: ignore[override]
+        """Update listeners without emitting the base coordinator's debug spam."""
+
+        if self.logger.isEnabledFor(logging.DEBUG):
+            # Avoid duplicating the base coordinator's verbose debug line when we're already
+            # emitting more structured summaries. Temporarily bump to INFO for this call.
+            original_level = self.logger.level
+            self.logger.setLevel(logging.INFO)
+            try:
+                super().async_set_updated_data(data)
+            finally:
+                self.logger.setLevel(original_level)
+        else:
+            super().async_set_updated_data(data)
+
     def _flag_call_state_dirty(self) -> None:
         """Mark that call-related state has been mutated."""
         self._call_state_dirty = True
@@ -488,6 +503,36 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         previous_active = self._clone_call_info(self.data.current_call)
         previous_waiting = self._clone_call_info(self.data.waiting_call)
 
+        _LOGGER.debug(
+            "call_info snapshot | seq=%s leg_label=%s call_id=%s waiting_id=%s number=%s normalized=%s",
+            event.seq,
+            call_info.leg_label,
+            call_info.call_id,
+            call_info.call_waiting_id,
+            call_info.number,
+            call_info.normalized_number,
+        )
+
+        _LOGGER.debug(
+            "previous_active | call_id=%s waiting_id=%s number=%s normalized=%s on_hold=%s duration_ms=%s",
+            previous_active.call_id,
+            previous_active.call_waiting_id,
+            previous_active.number,
+            previous_active.normalized_number,
+            previous_active.is_on_hold,
+            previous_active.duration_ms,
+        )
+
+        _LOGGER.debug(
+            "previous_waiting | call_id=%s waiting_id=%s number=%s normalized=%s on_hold=%s duration_ms=%s",
+            previous_waiting.call_id,
+            previous_waiting.call_waiting_id,
+            previous_waiting.number,
+            previous_waiting.normalized_number,
+            previous_waiting.is_on_hold,
+            previous_waiting.duration_ms,
+        )
+
         waiting_promoted = self._calls_refer_to_same_leg(call_info, previous_waiting)
 
         if waiting_promoted:
@@ -512,6 +557,18 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     previous_waiting.number,
                     call_info.call_id,
                     call_info.number,
+                )
+                _LOGGER.debug(
+                    "_calls_refer_to_same_leg details: call_ids (%s vs %s) | "
+                    "normalized (%s vs %s) | raw (%s vs %s) | waiting_ids (%s vs %s)",
+                    call_info.call_id,
+                    previous_waiting.call_id,
+                    call_info.normalized_number,
+                    previous_waiting.normalized_number,
+                    call_info.number,
+                    previous_waiting.number,
+                    call_info.call_waiting_id,
+                    previous_waiting.call_waiting_id,
                 )
             call_info.duration_ms = None
             call_info.duration_seconds = None
