@@ -222,7 +222,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     async def _async_update_data(self) -> TsuryPhoneState:
         """Fetch data from API (used for polling fallback)."""
-        _LOGGER.debug("Polling device for state update")
 
         try:
             state = self._ensure_state()
@@ -3231,7 +3230,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         """Update state model from device API response."""
         # This method would parse the full device response and update self.data
         # Implementation would be similar to config delta handling but for full state
-        _LOGGER.debug("Updating state from device data")
 
         call_state_changed = False
 
