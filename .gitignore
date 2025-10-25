@@ -10,3 +10,4 @@ __pycache__/
 # Test / tooling caches (harmless extras)
 .pytest_cache/
 .mypy_cache/
+ha_tsuryphone.egg-info
