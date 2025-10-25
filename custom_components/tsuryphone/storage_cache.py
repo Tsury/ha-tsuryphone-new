@@ -149,9 +149,6 @@ class TsuryPhoneStorageCache:
             }
 
             await self._call_history_store.async_save(data)
-            _LOGGER.debug(
-                "Saved %d call history entries to cache", len(cleaned_entries)
-            )
 
         except Exception as err:
             _LOGGER.error("Failed to save call history to cache: %s", err)
@@ -211,7 +208,6 @@ class TsuryPhoneStorageCache:
 
             await self._device_state_store.async_save(data)
             self._device_state_cache = state_backup
-            _LOGGER.debug("Saved device state backup to cache")
 
         except Exception as err:
             _LOGGER.error("Failed to save device state to cache: %s", err)
@@ -256,7 +252,6 @@ class TsuryPhoneStorageCache:
             existing_data["backups"] = existing_data["backups"][-10:]
 
             await self._config_backup_store.async_save(existing_data)
-            _LOGGER.debug("Saved configuration backup to cache")
 
         except Exception as err:
             _LOGGER.error("Failed to save config backup to cache: %s", err)
@@ -322,9 +317,6 @@ class TsuryPhoneStorageCache:
 
             cleaned_entries.append(entry)
 
-        _LOGGER.debug(
-            "Cleaned call history: %d -> %d entries", len(entries), len(cleaned_entries)
-        )
         return cleaned_entries
 
     async def async_cleanup_storage(self) -> dict[str, int]:
