@@ -1374,7 +1374,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         call_state_changed = False
         current_snapshot = event.data.get("currentCall")
         has_current_snapshot = isinstance(current_snapshot, dict)
-        
+
         # Log the raw event data to see what firmware is actually sending
         _LOGGER.info(
             "=== CALL_INFO EVENT (seq=%d) ===\n"
@@ -1387,7 +1387,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             "  Current state BEFORE update: active=%s (callId=%d), waiting=%s (callId=%d)",
             event.seq,
             current_snapshot if has_current_snapshot else "NONE",
-            event.data.get("waitingCall") if isinstance(event.data.get("waitingCall"), dict) else "NONE",
+            (
+                event.data.get("waitingCall")
+                if isinstance(event.data.get("waitingCall"), dict)
+                else "NONE"
+            ),
             event.data.get("currentCallNumber", "NONE"),
             event.data.get("currentCallName", "NONE"),
             event.data.get("waitingCallNumber", "NONE"),
@@ -1397,7 +1401,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.waiting_call.number,
             self.data.waiting_call.call_id,
         )
-        
+
         if has_current_snapshot:
             current_info = self._call_info_from_snapshot(
                 current_snapshot, context="event.callInfo.currentCall"
@@ -1422,7 +1426,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 )
             if current_info.end_received_ts is None:
                 current_info.end_received_ts = self.data.current_call.end_received_ts
-            
+
             # Log call leg information for debugging
             _LOGGER.debug(
                 "Processing currentCall snapshot: number=%s, name=%s, callId=%d, leg=%s, direction=%s",
@@ -1432,13 +1436,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 current_info.leg_label,
                 current_info.direction,
             )
-            
+
             # Detect if call legs have been swapped
             old_active_id = self.data.current_call.call_id
             old_waiting_id = self.data.waiting_call.call_id
-            if old_active_id != -1 and current_info.call_id != -1 and old_active_id != current_info.call_id:
+            if (
+                old_active_id != -1
+                and current_info.call_id != -1
+                and old_active_id != current_info.call_id
+            ):
                 # The active call ID has changed - this likely means a leg swap occurred
-                if old_active_id == old_waiting_id or current_info.call_id == old_waiting_id:
+                if (
+                    old_active_id == old_waiting_id
+                    or current_info.call_id == old_waiting_id
+                ):
                     _LOGGER.warning(
                         "CALL LEG SWAP DETECTED! Active call changed from callId=%d (%s) to callId=%d (%s). "
                         "Previous waiting was callId=%d",
@@ -1448,12 +1459,17 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         current_info.number,
                         old_waiting_id,
                     )
-                    
+
                     # Reset call timer to match the newly active call's actual duration
-                    if current_info.duration_ms is not None and self._call_start_monotonic > 0:
+                    if (
+                        current_info.duration_ms is not None
+                        and self._call_start_monotonic > 0
+                    ):
                         # Calculate when this call actually started based on its current duration
                         call_duration_seconds = current_info.duration_ms / 1000.0
-                        self._call_start_monotonic = time.monotonic() - call_duration_seconds
+                        self._call_start_monotonic = (
+                            time.monotonic() - call_duration_seconds
+                        )
                         _LOGGER.debug(
                             "Adjusted call timer for leg swap: duration=%.1fs, new start offset=%.1fs",
                             call_duration_seconds,
@@ -1467,7 +1483,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         self.data.current_call.number,
                         current_info.number,
                     )
-            
+
             if self._apply_call_info(self.data.current_call, current_info):
                 call_state_changed = True
                 _LOGGER.info(
@@ -1581,7 +1597,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         waiting_snapshot = event.data.get("waitingCall")
         has_waiting_snapshot = isinstance(waiting_snapshot, dict)
-        
+
         if has_waiting_snapshot:
             waiting_info = self._call_info_from_snapshot(
                 waiting_snapshot, context="event.callInfo.waitingCall"
@@ -1772,7 +1788,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if call_state_changed:
             self._flag_call_state_dirty()
-        
+
         # Log final state after update
         _LOGGER.info(
             "=== CALL_INFO FINAL STATE (seq=%d) ===\n"
