@@ -539,8 +539,31 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         )
 
         waiting_promoted = self._calls_refer_to_same_leg(call_info, previous_waiting)
+        forced_waiting_promotion = False
 
-        if waiting_promoted:
+        if not waiting_promoted and previous_waiting.call_id != -1:
+            current_canonical = self._canonical_match_value(call_info)
+            waiting_canonical = self._canonical_match_value(previous_waiting)
+            active_canonical = self._canonical_match_value(previous_active)
+
+            if (
+                waiting_canonical
+                and active_canonical
+                and current_canonical
+                and previous_active.call_waiting_id == previous_waiting.call_id
+                and waiting_canonical != active_canonical
+                and current_canonical == active_canonical
+            ):
+                forced_waiting_promotion = True
+                _LOGGER.debug(
+                    "Forcing waiting leg promotion due to stale snapshot | "
+                    "active=%s waiting=%s current=%s",
+                    active_canonical,
+                    waiting_canonical,
+                    current_canonical,
+                )
+
+        if waiting_promoted or forced_waiting_promotion:
             _LOGGER.debug(
                 "Promoting waiting leg -> active | prev_active id=%s num=%s | "
                 "waiting id=%s num=%s | incoming id=%s num=%s",
@@ -554,6 +577,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self._promote_waiting_leg_to_active(
                 call_info, previous_waiting, previous_active, event
             )
+            waiting_promoted = True
         else:
             if previous_waiting.call_id != -1 or previous_waiting.number:
                 _LOGGER.debug(
@@ -1172,24 +1196,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if first.number and second.number:
             return first.number == second.number
 
-        context = self._ensure_state().dialing_context
-
-        def canonical(info: CallInfo) -> str:
-            for candidate in (info.number, info.normalized_number):
-                if not candidate:
-                    continue
-                if context:
-                    canonical_value = context.canonicalize(candidate)
-                    if canonical_value:
-                        return canonical_value
-                    normalized_value = context.normalize(candidate)
-                    if normalized_value:
-                        return normalized_value
-                return candidate
-            return ""
-
-        first_canonical = canonical(first)
-        second_canonical = canonical(second)
+        first_canonical = self._canonical_match_value(first)
+        second_canonical = self._canonical_match_value(second)
         if first_canonical and second_canonical:
             return first_canonical == second_canonical
 
@@ -1226,6 +1234,27 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             canonical = context.canonicalize(target.normalized_number)
             if canonical:
                 target.number = canonical
+
+    def _canonical_match_value(self, info: CallInfo) -> str:
+        """Return a comparable number representation for leg matching."""
+
+        if info is None:
+            return ""
+
+        context = self._ensure_state().dialing_context
+        for candidate in (info.number, info.normalized_number):
+            if not candidate:
+                continue
+            if context:
+                canonical_value = context.canonicalize(candidate)
+                if canonical_value:
+                    return canonical_value
+                normalized_value = context.normalize(candidate)
+                if normalized_value:
+                    return normalized_value
+            return candidate
+
+        return ""
 
     def _promote_waiting_leg_to_active(
         self,
