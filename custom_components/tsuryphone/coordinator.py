@@ -1448,6 +1448,17 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         current_info.number,
                         old_waiting_id,
                     )
+                    
+                    # Reset call timer to match the newly active call's actual duration
+                    if current_info.duration_ms is not None and self._call_start_monotonic > 0:
+                        # Calculate when this call actually started based on its current duration
+                        call_duration_seconds = current_info.duration_ms / 1000.0
+                        self._call_start_monotonic = time.monotonic() - call_duration_seconds
+                        _LOGGER.debug(
+                            "Adjusted call timer for leg swap: duration=%.1fs, new start offset=%.1fs",
+                            call_duration_seconds,
+                            self._call_start_monotonic,
+                        )
                 else:
                     _LOGGER.info(
                         "Active call changed: callId %d -> %d (number: %s -> %s)",
