@@ -509,9 +509,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 duration_ms=None,
             ) or ("incoming" if call_info.is_incoming else "outgoing")
 
-        number = call_info.number
-        is_incoming = call_info.is_incoming
-
         previous_state = self.data.app_state
         if previous_state != AppState.IN_CALL:
             if self._setattr_if_changed(
@@ -534,6 +531,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data, "current_call_is_priority", bool(call_info.is_priority)
         ):
             self._flag_call_state_dirty()
+
+        self._harmonize_call_numbers(self.data.current_call)
+        if waiting_promoted:
+            self._harmonize_call_numbers(self.data.waiting_call)
+
+        number = self.data.current_call.number
+        is_incoming = self.data.current_call.is_incoming
 
         caller_name = call_info.name
 
@@ -1072,7 +1076,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         ):
             return False
 
-        if second.start_received_ts is None or second.end_received_ts is not None:
+        if second.end_received_ts is not None:
             return False
 
         if first.call_id != -1 and second.call_id != -1:
@@ -1085,6 +1089,31 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             return first.number == second.number
 
         return False
+
+    def _harmonize_call_numbers(self, target: CallInfo) -> None:
+        """Ensure call number fields include default dialing metadata."""
+
+        if target is None:
+            return
+
+        state = self._ensure_state()
+        context = state.dialing_context
+
+        candidate = target.number or target.normalized_number
+
+        if candidate:
+            canonical = context.canonicalize(candidate)
+            if canonical:
+                target.number = canonical
+
+        if target.number:
+            normalized = context.normalize(target.number)
+            if normalized:
+                target.normalized_number = normalized
+        elif target.normalized_number:
+            canonical = context.canonicalize(target.normalized_number)
+            if canonical:
+                target.number = canonical
 
     def _promote_waiting_leg_to_active(
         self,
@@ -1146,6 +1175,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
             if self._apply_call_info(self.data.waiting_call, new_waiting):
                 self._flag_call_state_dirty()
+                self._harmonize_call_numbers(self.data.waiting_call)
 
             if self._setattr_if_changed(self.data, "call_waiting_available", True):
                 self._flag_call_state_dirty()
@@ -1529,6 +1559,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 current_info.end_received_ts = self.data.current_call.end_received_ts
             if self._apply_call_info(self.data.current_call, current_info):
                 call_state_changed = True
+                self._harmonize_call_numbers(self.data.current_call)
             if self._setattr_if_changed(
                 self.data, "current_call_is_priority", current_info.is_priority
             ):
@@ -1693,6 +1724,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
             if self._apply_call_info(self.data.waiting_call, waiting_info):
                 call_state_changed = True
+                self._harmonize_call_numbers(self.data.waiting_call)
 
             if waiting_info.call_id != -1:
                 if self._setattr_if_changed(
@@ -1725,6 +1757,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     str(event.data.get("waitingCallNumberNormalized") or ""),
                 ):
                     call_state_changed = True
+
+            self._harmonize_call_numbers(self.data.waiting_call)
 
         call_waiting_id = event.data.get("waitingCallId")
         if call_waiting_id is None:
