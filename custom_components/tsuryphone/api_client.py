@@ -90,8 +90,6 @@ class TsuryPhoneAPIClient:
         """Make HTTP request to device."""
         url = f"{self._base_url}{endpoint}"
 
-        _LOGGER.debug("Making %s request to %s", method, url)
-
         try:
             async with asyncio.timeout(self._request_timeout):
                 if method.upper() == "GET":
@@ -154,7 +152,6 @@ class TsuryPhoneAPIClient:
                 schema_version,
             )
 
-        _LOGGER.debug("Successful API call to %s", endpoint)
         return response_data
 
     # Configuration endpoints
