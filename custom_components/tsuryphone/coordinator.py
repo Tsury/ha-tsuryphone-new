@@ -304,12 +304,17 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     @callback
     def _handle_websocket_event(self, event: TsuryPhoneEvent) -> None:
         """Handle incoming WebSocket event."""
-        _LOGGER.debug(
-            "[tsuryphone.event] Processing %s/%s (seq=%d)",
-            event.category,
-            event.event,
-            event.seq,
-        )
+        if (
+            _LOGGER.isEnabledFor(logging.DEBUG)
+            and self.logger.isEnabledFor(logging.DEBUG)
+            and not (event.category == "phone_state" and event.event == "call_info")
+        ):
+            self.logger.debug(
+                "[tsuryphone.event] Processing %s/%s (seq=%d)",
+                event.category,
+                event.event,
+                event.seq,
+            )
 
         # Phase P8: Process event through resilience manager
         if self._resilience:
@@ -541,26 +546,29 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         waiting_promoted = self._calls_refer_to_same_leg(call_info, previous_waiting)
         forced_waiting_promotion = False
 
-        if not waiting_promoted and previous_waiting.call_id != -1:
+        if not waiting_promoted and (previous_waiting.call_id != -1 or previous_waiting.number):
             current_canonical = self._canonical_match_value(call_info)
             waiting_canonical = self._canonical_match_value(previous_waiting)
             active_canonical = self._canonical_match_value(previous_active)
 
             if (
                 waiting_canonical
-                and active_canonical
                 and current_canonical
-                and previous_active.call_waiting_id == previous_waiting.call_id
-                and waiting_canonical != active_canonical
-                and current_canonical == active_canonical
+                and waiting_canonical != current_canonical
+                and (
+                    previous_waiting.is_on_hold
+                    or previous_waiting.call_id == previous_active.call_waiting_id
+                    or previous_waiting.call_id == call_info.call_id
+                )
             ):
                 forced_waiting_promotion = True
                 _LOGGER.debug(
                     "Forcing waiting leg promotion due to stale snapshot | "
-                    "active=%s waiting=%s current=%s",
-                    active_canonical,
+                    "active=%s waiting=%s current=%s on_hold=%s",
+                    active_canonical or "<none>",
                     waiting_canonical,
                     current_canonical,
+                    previous_waiting.is_on_hold,
                 )
 
         if waiting_promoted or forced_waiting_promotion:
