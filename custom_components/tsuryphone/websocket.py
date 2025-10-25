@@ -402,6 +402,11 @@ class TsuryPhoneWebSocketClient:
                 # Send ping frame
                 _LOGGER.debug("Sending WebSocket ping")
                 pong_waiter = await self._websocket.ping()
+                
+                # Check if ping returned a valid waiter
+                if pong_waiter is None:
+                    _LOGGER.debug("WebSocket ping returned None - connection closed")
+                    break
 
                 try:
                     await asyncio.wait_for(pong_waiter, timeout=self._ping_timeout)
