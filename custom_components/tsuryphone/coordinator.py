@@ -7,7 +7,6 @@ import logging
 import re
 import time
 from collections.abc import Mapping
-from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -145,21 +144,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if self.data is None:
             self.data = TsuryPhoneState(device_info=self.device_info)
         return self.data
-
-    def async_set_updated_data(self, data: TsuryPhoneState) -> None:  # type: ignore[override]
-        """Update listeners without emitting the base coordinator's debug spam."""
-
-        if self.logger.isEnabledFor(logging.DEBUG):
-            # Avoid duplicating the base coordinator's verbose debug line when we're already
-            # emitting more structured summaries. Temporarily bump to INFO for this call.
-            original_level = self.logger.level
-            self.logger.setLevel(logging.INFO)
-            try:
-                super().async_set_updated_data(data)
-            finally:
-                self.logger.setLevel(original_level)
-        else:
-            super().async_set_updated_data(data)
 
     def _flag_call_state_dirty(self) -> None:
         """Mark that call-related state has been mutated."""
@@ -304,17 +288,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     @callback
     def _handle_websocket_event(self, event: TsuryPhoneEvent) -> None:
         """Handle incoming WebSocket event."""
-        if (
-            _LOGGER.isEnabledFor(logging.DEBUG)
-            and self.logger.isEnabledFor(logging.DEBUG)
-            and not (event.category == "phone_state" and event.event == "call_info")
-        ):
-            self.logger.debug(
-                "[tsuryphone.event] Processing %s/%s (seq=%d)",
-                event.category,
-                event.event,
-                event.seq,
-            )
+        _LOGGER.debug(
+            "[tsuryphone.event] Processing %s/%s (seq=%d)",
+            event.category,
+            event.event,
+            event.seq,
+        )
 
         # Phase P8: Process event through resilience manager
         if self._resilience:
@@ -478,6 +457,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         call_info.call_start_ts = call_start_ts
         call_info.start_time = call_start_ts
 
+        # Reset duration when call begins
+        call_info.duration_ms = None
+        call_info.duration_seconds = None
+        call_info.start_received_ts = event.received_at
+        call_info.end_received_ts = None
+        call_info.leg_label = call_info.leg_label or "active"
+
         if "currentCallIsPriority" in event.data and not call_info.is_priority:
             call_info.is_priority = self._coerce_bool(
                 event.data.get("currentCallIsPriority"),
@@ -505,114 +491,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 default=call_info.is_blocked,
             )
 
-        self._harmonize_call_numbers(call_info)
-
-        previous_active = self._clone_call_info(self.data.current_call)
-        previous_waiting = self._clone_call_info(self.data.waiting_call)
-
-        self._harmonize_call_numbers(previous_active)
-        self._harmonize_call_numbers(previous_waiting)
-
-        _LOGGER.debug(
-            "call_info snapshot | seq=%s leg_label=%s call_id=%s waiting_id=%s number=%s normalized=%s",
-            event.seq,
-            call_info.leg_label,
-            call_info.call_id,
-            call_info.call_waiting_id,
-            call_info.number,
-            call_info.normalized_number,
-        )
-
-        _LOGGER.debug(
-            "previous_active | call_id=%s waiting_id=%s number=%s normalized=%s on_hold=%s duration_ms=%s",
-            previous_active.call_id,
-            previous_active.call_waiting_id,
-            previous_active.number,
-            previous_active.normalized_number,
-            previous_active.is_on_hold,
-            previous_active.duration_ms,
-        )
-
-        _LOGGER.debug(
-            "previous_waiting | call_id=%s waiting_id=%s number=%s normalized=%s on_hold=%s duration_ms=%s",
-            previous_waiting.call_id,
-            previous_waiting.call_waiting_id,
-            previous_waiting.number,
-            previous_waiting.normalized_number,
-            previous_waiting.is_on_hold,
-            previous_waiting.duration_ms,
-        )
-
-        waiting_promoted = self._calls_refer_to_same_leg(call_info, previous_waiting)
-        forced_waiting_promotion = False
-
-        if not waiting_promoted and (previous_waiting.call_id != -1 or previous_waiting.number):
-            current_canonical = self._canonical_match_value(call_info)
-            waiting_canonical = self._canonical_match_value(previous_waiting)
-            active_canonical = self._canonical_match_value(previous_active)
-
-            if (
-                waiting_canonical
-                and current_canonical
-                and waiting_canonical != current_canonical
-                and (
-                    previous_waiting.is_on_hold
-                    or previous_waiting.call_id == previous_active.call_waiting_id
-                    or previous_waiting.call_id == call_info.call_id
-                )
-            ):
-                forced_waiting_promotion = True
-                _LOGGER.debug(
-                    "Forcing waiting leg promotion due to stale snapshot | "
-                    "active=%s waiting=%s current=%s on_hold=%s",
-                    active_canonical or "<none>",
-                    waiting_canonical,
-                    current_canonical,
-                    previous_waiting.is_on_hold,
-                )
-
-        if waiting_promoted or forced_waiting_promotion:
-            _LOGGER.debug(
-                "Promoting waiting leg -> active | prev_active id=%s num=%s | "
-                "waiting id=%s num=%s | incoming id=%s num=%s",
-                previous_active.call_id,
-                previous_active.number,
-                previous_waiting.call_id,
-                previous_waiting.number,
-                call_info.call_id,
-                call_info.number,
-            )
-            self._promote_waiting_leg_to_active(
-                call_info, previous_waiting, previous_active, event
-            )
-            waiting_promoted = True
-        else:
-            if previous_waiting.call_id != -1 or previous_waiting.number:
-                _LOGGER.debug(
-                    "Waiting leg promotion skipped | prev_waiting id=%s num=%s | incoming id=%s num=%s",
-                    previous_waiting.call_id,
-                    previous_waiting.number,
-                    call_info.call_id,
-                    call_info.number,
-                )
-                _LOGGER.debug(
-                    "_calls_refer_to_same_leg details: call_ids (%s vs %s) | "
-                    "normalized (%s vs %s) | raw (%s vs %s) | waiting_ids (%s vs %s)",
-                    call_info.call_id,
-                    previous_waiting.call_id,
-                    call_info.normalized_number,
-                    previous_waiting.normalized_number,
-                    call_info.number,
-                    previous_waiting.number,
-                    call_info.call_waiting_id,
-                    previous_waiting.call_waiting_id,
-                )
-            call_info.duration_ms = None
-            call_info.duration_seconds = None
-            call_info.start_received_ts = event.received_at
-            call_info.end_received_ts = None
-            call_info.leg_label = call_info.leg_label or "active"
-
         if not call_info.call_type:
             call_info.call_type = self._derive_call_type_from_context(
                 direction=call_info.direction,
@@ -620,6 +498,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 is_incoming=call_info.is_incoming,
                 duration_ms=None,
             ) or ("incoming" if call_info.is_incoming else "outgoing")
+
+        number = call_info.number
+        is_incoming = call_info.is_incoming
 
         previous_state = self.data.app_state
         if previous_state != AppState.IN_CALL:
@@ -644,13 +525,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         ):
             self._flag_call_state_dirty()
 
-        self._harmonize_call_numbers(self.data.current_call)
-        if waiting_promoted:
-            self._harmonize_call_numbers(self.data.waiting_call)
-
-        number = self.data.current_call.number
-        is_incoming = self.data.current_call.is_incoming
-
         caller_name = call_info.name
 
         # Start call duration timer
@@ -658,32 +532,23 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Add to call history (provisional entry)
         call_type = call_info.call_type or ("incoming" if is_incoming else "outgoing")
-        if number is not None:
-            should_create_entry = (
-                not waiting_promoted or number not in self._pending_call_starts
-            )
+        history_entry = CallHistoryEntry(
+            call_type=call_type,
+            number=number,
+            is_incoming=is_incoming,
+            duration_s=None,  # Will be filled on call end
+            ts_device=call_start_ts,
+            received_ts=event.received_at,
+            seq=event.seq,
+            call_start_ts=call_start_ts,
+            name=caller_name,
+        )
 
-            if should_create_entry:
-                history_entry = CallHistoryEntry(
-                    call_type=call_type,
-                    number=number,
-                    is_incoming=is_incoming,
-                    duration_s=None,  # Will be filled on call end
-                    ts_device=call_start_ts,
-                    received_ts=event.received_at,
-                    seq=event.seq,
-                    call_start_ts=call_start_ts,
-                    name=caller_name,
-                )
-
-                self._pending_call_starts[number] = {
-                    "entry": history_entry,
-                    "start_monotonic": time.monotonic(),
-                }
-            else:
-                existing_entry = self._pending_call_starts[number]["entry"]
-                if call_start_ts and not existing_entry.call_start_ts:
-                    existing_entry.call_start_ts = call_start_ts
+        # Store provisional entry (will be finalized on call end)
+        self._pending_call_starts[number] = {
+            "entry": history_entry,
+            "start_monotonic": time.monotonic(),
+        }
 
     def _handle_call_end(self, event: TsuryPhoneEvent) -> None:
         """Handle call end event."""
@@ -1175,202 +1040,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 changed = True
         return changed
 
-    def _clone_call_info(self, source: CallInfo) -> CallInfo:
-        """Create a shallow copy of a CallInfo dataclass."""
-        return replace(source)
-
-    def _calls_refer_to_same_leg(self, first: CallInfo, second: CallInfo) -> bool:
-        """Check whether two CallInfo snapshots refer to the same call leg."""
-        if (
-            second.call_id == -1
-            and not second.number
-            and not second.normalized_number
-        ):
-            return False
-
-        if second.end_received_ts is not None:
-            return False
-
-        if first.call_id != -1 and second.call_id != -1:
-            if first.call_id == second.call_id:
-                return True
-            # Allow fallback to number/normalized comparison when firmware emits new IDs
-            # during a leg swap. This prevents stale-data carryover when the identity is
-            # otherwise unchanged.
-
-        if first.normalized_number and second.normalized_number:
-            return first.normalized_number == second.normalized_number
-
-        if first.number and second.number:
-            return first.number == second.number
-
-        first_canonical = self._canonical_match_value(first)
-        second_canonical = self._canonical_match_value(second)
-        if first_canonical and second_canonical:
-            return first_canonical == second_canonical
-
-        if (
-            first.call_waiting_id not in (-1, 0)
-            and first.call_waiting_id == second.call_waiting_id
-            and first.call_waiting_id != -1
-        ):
-            return True
-
-        return False
-
-    def _harmonize_call_numbers(self, target: CallInfo) -> None:
-        """Ensure call number fields include default dialing metadata."""
-
-        if target is None:
-            return
-
-        state = self._ensure_state()
-        context = state.dialing_context
-
-        candidate = target.number or target.normalized_number
-
-        if candidate:
-            canonical = context.canonicalize(candidate)
-            if canonical:
-                target.number = canonical
-
-        if target.number:
-            normalized = context.normalize(target.number)
-            if normalized:
-                target.normalized_number = normalized
-        elif target.normalized_number:
-            canonical = context.canonicalize(target.normalized_number)
-            if canonical:
-                target.number = canonical
-
-    def _canonical_match_value(self, info: CallInfo) -> str:
-        """Return a comparable number representation for leg matching."""
-
-        if info is None:
-            return ""
-
-        context = self._ensure_state().dialing_context
-        for candidate in (info.number, info.normalized_number):
-            if not candidate:
-                continue
-            if context:
-                canonical_value = context.canonicalize(candidate)
-                if canonical_value:
-                    return canonical_value
-                normalized_value = context.normalize(candidate)
-                if normalized_value:
-                    return normalized_value
-            return candidate
-
-        return ""
-
-    def _promote_waiting_leg_to_active(
-        self,
-        incoming: CallInfo,
-        waiting_snapshot: CallInfo,
-        previous_active: CallInfo,
-        event: TsuryPhoneEvent,
-    ) -> None:
-        """Swap the waiting leg into the active slot, preserving historical data."""
-
-        def _should_overwrite(str_attr: str) -> bool:
-            waiting_value = getattr(waiting_snapshot, str_attr)
-            incoming_value = getattr(incoming, str_attr)
-            previous_value = getattr(previous_active, str_attr)
-
-            if not waiting_value:
-                return False
-
-            if not incoming_value:
-                return True
-
-            if previous_value and incoming_value == previous_value and waiting_value != previous_value:
-                return True
-
-            return False
-
-        for attr in ("number", "normalized_number", "name", "direction", "result"):
-            if _should_overwrite(attr):
-                setattr(incoming, attr, getattr(waiting_snapshot, attr))
-
-        if waiting_snapshot.call_id != -1:
-            overwrite_call_id = (
-                incoming.call_id == -1
-                or (
-                    previous_active.call_id != -1
-                    and incoming.call_id == previous_active.call_id
-                    and waiting_snapshot.call_id != previous_active.call_id
-                )
-            )
-            if overwrite_call_id:
-                incoming.call_id = waiting_snapshot.call_id
-
-        if waiting_snapshot.call_waiting_id != -1:
-            overwrite_waiting_id = (
-                incoming.call_waiting_id in (-1, 0)
-                or (
-                    previous_active.call_waiting_id not in (-1, 0)
-                    and incoming.call_waiting_id == previous_active.call_waiting_id
-                    and waiting_snapshot.call_waiting_id != previous_active.call_waiting_id
-                )
-            )
-            if overwrite_waiting_id:
-                incoming.call_waiting_id = waiting_snapshot.call_waiting_id
-
-        if waiting_snapshot.duration_ms is not None and incoming.duration_ms is None:
-            incoming.duration_ms = waiting_snapshot.duration_ms
-        if waiting_snapshot.duration_seconds is not None and incoming.duration_seconds is None:
-            incoming.duration_seconds = waiting_snapshot.duration_seconds
-
-        if waiting_snapshot.call_start_ts:
-            incoming.call_start_ts = waiting_snapshot.call_start_ts
-            incoming.start_time = waiting_snapshot.call_start_ts
-
-        incoming.start_received_ts = (
-            waiting_snapshot.start_received_ts
-            if waiting_snapshot.start_received_ts is not None
-            else incoming.start_received_ts or event.received_at
-        )
-        incoming.end_received_ts = None
-        incoming.is_priority = incoming.is_priority or waiting_snapshot.is_priority
-        incoming.is_blocked = incoming.is_blocked or waiting_snapshot.is_blocked
-        incoming.is_on_hold = False
-        incoming.leg_label = "active"
-
-        if waiting_snapshot.call_waiting_id != -1 and incoming.call_waiting_id == -1:
-            incoming.call_waiting_id = waiting_snapshot.call_waiting_id
-
-        new_waiting = self._clone_call_info(previous_active)
-
-        if new_waiting.number or new_waiting.normalized_number or new_waiting.call_id != -1:
-            new_waiting.is_on_hold = True
-            new_waiting.end_received_ts = None
-            if not new_waiting.leg_label or new_waiting.leg_label == "active":
-                new_waiting.leg_label = "waiting"
-            if new_waiting.start_received_ts is None:
-                new_waiting.start_received_ts = event.received_at
-            new_waiting.call_waiting_id = -1
-
-            if self._apply_call_info(self.data.waiting_call, new_waiting):
-                self._flag_call_state_dirty()
-                self._harmonize_call_numbers(self.data.waiting_call)
-
-            if self._setattr_if_changed(self.data, "call_waiting_available", True):
-                self._flag_call_state_dirty()
-
-            if self._setattr_if_changed(self.data, "call_waiting_on_hold", True):
-                self._flag_call_state_dirty()
-
-            if new_waiting.call_id != -1 and incoming.call_waiting_id in (-1, 0):
-                incoming.call_waiting_id = new_waiting.call_id
-        else:
-            if self._reset_waiting_call_state():
-                self._flag_call_state_dirty()
-            if self._setattr_if_changed(self.data, "call_waiting_available", False):
-                self._flag_call_state_dirty()
-            if self._setattr_if_changed(self.data, "call_waiting_on_hold", False):
-                self._flag_call_state_dirty()
-
     def _call_info_from_snapshot(
         self, snapshot: dict[str, Any] | None, *, context: str
     ) -> CallInfo:
@@ -1737,7 +1406,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 current_info.end_received_ts = self.data.current_call.end_received_ts
             if self._apply_call_info(self.data.current_call, current_info):
                 call_state_changed = True
-                self._harmonize_call_numbers(self.data.current_call)
             if self._setattr_if_changed(
                 self.data, "current_call_is_priority", current_info.is_priority
             ):
@@ -1902,7 +1570,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
             if self._apply_call_info(self.data.waiting_call, waiting_info):
                 call_state_changed = True
-                self._harmonize_call_numbers(self.data.waiting_call)
 
             if waiting_info.call_id != -1:
                 if self._setattr_if_changed(
@@ -1935,8 +1602,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     str(event.data.get("waitingCallNumberNormalized") or ""),
                 ):
                     call_state_changed = True
-
-            self._harmonize_call_numbers(self.data.waiting_call)
 
         call_waiting_id = event.data.get("waitingCallId")
         if call_waiting_id is None:

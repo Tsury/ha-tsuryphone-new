@@ -358,14 +358,14 @@ class TsuryPhoneWebSocketClient:
             # Convert to structured event
             event = TsuryPhoneEvent.from_json(raw_event)
 
-            if not (event.category == "phone_state" and event.event == "call_info"):
-                _LOGGER.debug(
-                    "[tsuryphone.event] %s/%s seq=%d ts=%d",
-                    event.category,
-                    event.event,
-                    event.seq,
-                    event.ts,
-                )
+            # Log event for debugging (first 300 seconds or if verbose)
+            _LOGGER.debug(
+                "[tsuryphone.event] %s/%s seq=%d ts=%d",
+                event.category,
+                event.event,
+                event.seq,
+                event.ts,
+            )
 
             # Pass to event handler
             if self._event_handler:
