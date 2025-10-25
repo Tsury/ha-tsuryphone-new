@@ -1382,6 +1382,29 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         current_snapshot = event.data.get("currentCall")
         has_current_snapshot = isinstance(current_snapshot, dict)
         
+        # Log the raw event data to see what firmware is actually sending
+        _LOGGER.info(
+            "=== CALL_INFO EVENT (seq=%d) ===\n"
+            "  currentCall snapshot: %s\n"
+            "  waitingCall snapshot: %s\n"
+            "  currentCallNumber: %s\n"
+            "  currentCallName: %s\n"
+            "  waitingCallNumber: %s\n"
+            "  waitingCallName: %s\n"
+            "  Current state BEFORE update: active=%s (callId=%d), waiting=%s (callId=%d)",
+            event.seq,
+            current_snapshot if has_current_snapshot else "NONE",
+            event.data.get("waitingCall") if isinstance(event.data.get("waitingCall"), dict) else "NONE",
+            event.data.get("currentCallNumber", "NONE"),
+            event.data.get("currentCallName", "NONE"),
+            event.data.get("waitingCallNumber", "NONE"),
+            event.data.get("waitingCallName", "NONE"),
+            self.data.current_call.number,
+            self.data.current_call.call_id,
+            self.data.waiting_call.number,
+            self.data.waiting_call.call_id,
+        )
+        
         if has_current_snapshot:
             current_info = self._call_info_from_snapshot(
                 current_snapshot, context="event.callInfo.currentCall"
@@ -1745,6 +1768,24 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if call_state_changed:
             self._flag_call_state_dirty()
+        
+        # Log final state after update
+        _LOGGER.info(
+            "=== CALL_INFO FINAL STATE (seq=%d) ===\n"
+            "  Active call: %s (%s) [callId=%d, dir=%s]\n"
+            "  Waiting call: %s (%s) [callId=%d, onHold=%s]\n"
+            "  State changed: %s",
+            event.seq,
+            self.data.current_call.number,
+            self.data.current_call.name,
+            self.data.current_call.call_id,
+            self.data.current_call.direction,
+            self.data.waiting_call.number,
+            self.data.waiting_call.name,
+            self.data.waiting_call.call_id,
+            self.data.waiting_call.is_on_hold,
+            call_state_changed,
+        )
 
     def _handle_stats_update(self, event: TsuryPhoneEvent) -> None:
         """Handle statistics update."""
