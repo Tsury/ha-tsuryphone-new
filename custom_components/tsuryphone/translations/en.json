@@ -140,11 +140,8 @@
       "last_call_summary": {
         "name": "Last Call"
       },
-      "last_call_started_at": {
-        "name": "Last Call Started"
-      },
-      "last_call_ended_at": {
-        "name": "Last Call Ended"
+      "last_call_date": {
+        "name": "Last Call Date"
       },
       "uptime": {
         "name": "Uptime"

@@ -140,16 +140,9 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:phone",
     ),
     SensorEntityDescription(
-        key="last_call_started_at",
-        name="Last Call Started",
-        icon="mdi:clock-start",
-        device_class=SensorDeviceClass.TIMESTAMP,
-    ),
-    SensorEntityDescription(
-        key="last_call_ended_at",
-        name="Last Call Ended",
-        icon="mdi:clock-end",
-        device_class=SensorDeviceClass.TIMESTAMP,
+        key="last_call_date",
+        name="Last Call Date",
+        icon="mdi:calendar-clock",
     ),
     SensorEntityDescription(
         key="uptime",
@@ -337,10 +330,8 @@ class TsuryPhoneSensor(
             return "Unknown"
         elif self.entity_description.key == "last_call_summary":
             return self._build_last_call_summary(state)
-        elif self.entity_description.key == "last_call_started_at":
-            return self._get_last_call_start_datetime(state)
-        elif self.entity_description.key == "last_call_ended_at":
-            return self._get_last_call_end_datetime(state)
+        elif self.entity_description.key == "last_call_date":
+            return self._get_last_call_iso_timestamp(state)
         elif self.entity_description.key == "uptime":
             return state.stats.uptime_seconds
         elif self.entity_description.key == "rssi":
@@ -429,10 +420,7 @@ class TsuryPhoneSensor(
         elif self.entity_description.key == "waiting_call_duration":
             attributes.update(self._build_waiting_call_attributes(state))
 
-        elif self.entity_description.key in {
-            "last_call_started_at",
-            "last_call_ended_at",
-        }:
+        elif self.entity_description.key == "last_call_date":
             attributes.update(
                 self._build_last_call_attributes(state, include_summary=True)
             )
@@ -845,36 +833,40 @@ class TsuryPhoneSensor(
                 direction = "outgoing"
         return direction or None
 
-    def _timestamp_to_datetime(self, value: float | int | None):
-        """Convert a timestamp (seconds) to an aware UTC datetime."""
+    def _timestamp_to_iso(self, value: float | int | None) -> str | None:
+        """Convert a timestamp (seconds or milliseconds) to ISO-8601."""
         if value in (None, 0):
             return None
+
         try:
-            return dt_util.utc_from_timestamp(float(value))
-        except (TypeError, ValueError, OSError):
+            numeric = float(value)
+        except (TypeError, ValueError):
             return None
 
-    def _get_last_call_start_datetime(self, state: TsuryPhoneState):
-        """Compute the best-effort start timestamp for the last call."""
-        ts = state.last_call.start_received_ts
+        # Handle millisecond precision inputs
+        if numeric > 1_000_000_000_000:
+            numeric /= 1000.0
+
+        try:
+            return dt_util.utc_from_timestamp(numeric).isoformat()
+        except (ValueError, OSError):
+            return None
+
+    def _get_last_call_iso_timestamp(self, state: TsuryPhoneState) -> str | None:
+        """Compute the last-call start timestamp formatted as ISO-8601."""
+        ts: float | int | None = state.last_call.start_received_ts
+
+        if ts is None and state.last_call.call_start_ts:
+            ts = state.last_call.call_start_ts
+
         if ts is None and state.last_call.end_received_ts is not None:
             duration = state.last_call.duration_seconds
             if duration is None and state.last_call.duration_ms is not None:
                 duration = state.last_call.duration_ms / 1000
             if duration is not None:
                 ts = state.last_call.end_received_ts - duration
-        return self._timestamp_to_datetime(ts)
 
-    def _get_last_call_end_datetime(self, state: TsuryPhoneState):
-        """Compute the end timestamp for the last call."""
-        ts = state.last_call.end_received_ts
-        if ts is None and state.last_call.start_received_ts is not None:
-            duration = state.last_call.duration_seconds
-            if duration is None and state.last_call.duration_ms is not None:
-                duration = state.last_call.duration_ms / 1000
-            if duration is not None:
-                ts = state.last_call.start_received_ts + duration
-        return self._timestamp_to_datetime(ts)
+        return self._timestamp_to_iso(ts)
 
     def _humanize_call_result(self, call: CallInfo) -> str:
         """Convert result/call type fields into a user-friendly label."""
