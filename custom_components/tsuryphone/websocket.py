@@ -358,15 +358,6 @@ class TsuryPhoneWebSocketClient:
             # Convert to structured event
             event = TsuryPhoneEvent.from_json(raw_event)
 
-            # Log event for debugging (first 300 seconds or if verbose)
-            _LOGGER.debug(
-                "[tsuryphone.event] %s/%s seq=%d ts=%d",
-                event.category,
-                event.event,
-                event.seq,
-                event.ts,
-            )
-
             # Pass to event handler
             if self._event_handler:
                 self._event_handler(event)
