@@ -1098,13 +1098,24 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             return False
 
         if first.call_id != -1 and second.call_id != -1:
-            return first.call_id == second.call_id
+            if first.call_id == second.call_id:
+                return True
+            # Allow fallback to number/normalized comparison when firmware emits new IDs
+            # during a leg swap. This prevents stale-data carryover when the identity is
+            # otherwise unchanged.
 
         if first.normalized_number and second.normalized_number:
             return first.normalized_number == second.normalized_number
 
         if first.number and second.number:
             return first.number == second.number
+
+        if (
+            first.call_waiting_id not in (-1, 0)
+            and first.call_waiting_id == second.call_waiting_id
+            and first.call_waiting_id != -1
+        ):
+            return True
 
         return False
 
