@@ -1380,7 +1380,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         """Handle supplementary call info."""
         call_state_changed = False
         current_snapshot = event.data.get("currentCall")
-        if isinstance(current_snapshot, dict):
+        has_current_snapshot = isinstance(current_snapshot, dict)
+        
+        if has_current_snapshot:
             current_info = self._call_info_from_snapshot(
                 current_snapshot, context="event.callInfo.currentCall"
             )
@@ -1404,16 +1406,63 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 )
             if current_info.end_received_ts is None:
                 current_info.end_received_ts = self.data.current_call.end_received_ts
+            
+            # Log call leg information for debugging
+            _LOGGER.debug(
+                "Processing currentCall snapshot: number=%s, name=%s, callId=%d, leg=%s, direction=%s",
+                current_info.number,
+                current_info.name,
+                current_info.call_id,
+                current_info.leg_label,
+                current_info.direction,
+            )
+            
+            # Detect if call legs have been swapped
+            old_active_id = self.data.current_call.call_id
+            old_waiting_id = self.data.waiting_call.call_id
+            if old_active_id != -1 and current_info.call_id != -1 and old_active_id != current_info.call_id:
+                # The active call ID has changed - this likely means a leg swap occurred
+                if old_active_id == old_waiting_id or current_info.call_id == old_waiting_id:
+                    _LOGGER.warning(
+                        "CALL LEG SWAP DETECTED! Active call changed from callId=%d (%s) to callId=%d (%s). "
+                        "Previous waiting was callId=%d",
+                        old_active_id,
+                        self.data.current_call.number,
+                        current_info.call_id,
+                        current_info.number,
+                        old_waiting_id,
+                    )
+                else:
+                    _LOGGER.info(
+                        "Active call changed: callId %d -> %d (number: %s -> %s)",
+                        old_active_id,
+                        current_info.call_id,
+                        self.data.current_call.number,
+                        current_info.number,
+                    )
+            
             if self._apply_call_info(self.data.current_call, current_info):
                 call_state_changed = True
+                _LOGGER.info(
+                    "Current active call updated: %s (%s) [%s] - callId=%d",
+                    current_info.number,
+                    current_info.name,
+                    current_info.direction,
+                    current_info.call_id,
+                )
             if self._setattr_if_changed(
                 self.data, "current_call_is_priority", current_info.is_priority
             ):
                 call_state_changed = True
 
-        # Update current call with additional information
+        # Update current call with additional information from flat fields
+        # ONLY if we don't have a currentCall snapshot (to avoid overwriting correct snapshot data)
         current_number = event.data.get("currentCallNumber", "")
-        if current_number:
+        if current_number and not has_current_snapshot:
+            _LOGGER.debug(
+                "Processing flat currentCall fields (no snapshot): number=%s",
+                current_number,
+            )
             if self._setattr_if_changed(
                 self.data.current_call, "number", str(current_number)
             ):
@@ -1450,59 +1499,63 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     ):
                         call_state_changed = True
 
-            if "currentCallDurationSeconds" in event.data:
-                try:
-                    duration_seconds = int(event.data.get("currentCallDurationSeconds"))
-                    if self._setattr_if_changed(
-                        self.data.current_call,
-                        "duration_seconds",
-                        duration_seconds,
-                    ):
-                        call_state_changed = True
-                    if self._setattr_if_changed(
-                        self.data.current_call,
-                        "duration_ms",
-                        duration_seconds * 1000,
-                    ):
-                        call_state_changed = True
-                except (TypeError, ValueError):
-                    pass
-            elif "currentCallDurationMs" in event.data:
-                try:
-                    duration_ms_value = int(event.data.get("currentCallDurationMs"))
-                    if self._setattr_if_changed(
-                        self.data.current_call,
-                        "duration_ms",
-                        duration_ms_value,
-                    ):
-                        call_state_changed = True
-                    if self._setattr_if_changed(
-                        self.data.current_call,
-                        "duration_seconds",
-                        duration_ms_value // 1000,
-                    ):
-                        call_state_changed = True
-                except (TypeError, ValueError):
-                    pass
+        # Duration fields can be updated regardless of snapshot presence
+        # as they change continuously during the call
+        if "currentCallDurationSeconds" in event.data:
+            try:
+                duration_seconds = int(event.data.get("currentCallDurationSeconds"))
+                if self._setattr_if_changed(
+                    self.data.current_call,
+                    "duration_seconds",
+                    duration_seconds,
+                ):
+                    call_state_changed = True
+                if self._setattr_if_changed(
+                    self.data.current_call,
+                    "duration_ms",
+                    duration_seconds * 1000,
+                ):
+                    call_state_changed = True
+            except (TypeError, ValueError):
+                pass
+        elif "currentCallDurationMs" in event.data:
+            try:
+                duration_ms_value = int(event.data.get("currentCallDurationMs"))
+                if self._setattr_if_changed(
+                    self.data.current_call,
+                    "duration_ms",
+                    duration_ms_value,
+                ):
+                    call_state_changed = True
+                if self._setattr_if_changed(
+                    self.data.current_call,
+                    "duration_seconds",
+                    duration_ms_value // 1000,
+                ):
+                    call_state_changed = True
+            except (TypeError, ValueError):
+                pass
 
-            if "dndActive" in event.data:
-                self.data.dnd_active = self._coerce_bool(
-                    event.data["dndActive"],
-                    "event.dndActive",
-                )
-            self._handle_status_update(event)
-            if "isMaintenanceMode" in event.data:
-                self.data.maintenance_mode = self._coerce_bool(
-                    event.data["isMaintenanceMode"],
-                    "event.isMaintenanceMode",
-                )
+        if "dndActive" in event.data:
+            self.data.dnd_active = self._coerce_bool(
+                event.data["dndActive"],
+                "event.dndActive",
+            )
+        self._handle_status_update(event)
+        if "isMaintenanceMode" in event.data:
+            self.data.maintenance_mode = self._coerce_bool(
+                event.data["isMaintenanceMode"],
+                "event.isMaintenanceMode",
+            )
         elif event.event == "error":
             self._handle_system_error(event)
         elif event.event == "shutdown":
             self._handle_system_shutdown(event)
 
         waiting_snapshot = event.data.get("waitingCall")
-        if isinstance(waiting_snapshot, dict):
+        has_waiting_snapshot = isinstance(waiting_snapshot, dict)
+        
+        if has_waiting_snapshot:
             waiting_info = self._call_info_from_snapshot(
                 waiting_snapshot, context="event.callInfo.waitingCall"
             )
@@ -1568,8 +1621,25 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if waiting_info.end_received_ts is None:
                 waiting_info.end_received_ts = self.data.waiting_call.end_received_ts
 
+            # Log waiting call leg information for debugging
+            _LOGGER.debug(
+                "Processing waitingCall snapshot: number=%s, name=%s, callId=%d, leg=%s, isOnHold=%s",
+                waiting_info.number,
+                waiting_info.name,
+                waiting_info.call_id,
+                waiting_info.leg_label,
+                waiting_info.is_on_hold,
+            )
+
             if self._apply_call_info(self.data.waiting_call, waiting_info):
                 call_state_changed = True
+                _LOGGER.info(
+                    "Current waiting call updated: %s (%s) [onHold=%s] - callId=%d",
+                    waiting_info.number,
+                    waiting_info.name,
+                    waiting_info.is_on_hold,
+                    waiting_info.call_id,
+                )
 
             if waiting_info.call_id != -1:
                 if self._setattr_if_changed(
@@ -1580,8 +1650,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 if self._setattr_if_changed(self.data, "call_waiting_available", True):
                     call_state_changed = True
 
+        # Update waiting call with flat fields ONLY if we don't have a waitingCall snapshot
         waiting_number = event.data.get("waitingCallNumber")
-        if waiting_number is not None:
+        if waiting_number is not None and not has_waiting_snapshot:
+            _LOGGER.debug(
+                "Processing flat waitingCall fields (no snapshot): number=%s",
+                waiting_number,
+            )
             if self._setattr_if_changed(
                 self.data.waiting_call, "number", str(waiting_number)
             ):
