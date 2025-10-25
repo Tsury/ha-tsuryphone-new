@@ -287,12 +287,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     @callback
     def _handle_websocket_event(self, event: TsuryPhoneEvent) -> None:
         """Handle incoming WebSocket event."""
-        _LOGGER.debug(
-            "[tsuryphone.event] Processing %s/%s (seq=%d)",
-            event.category,
-            event.event,
-            event.seq,
-        )
 
         # Phase P8: Process event through resilience manager
         if self._resilience:
