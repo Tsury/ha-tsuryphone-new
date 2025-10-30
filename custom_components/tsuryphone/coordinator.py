@@ -89,6 +89,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._websocket_enabled = True
         self._websocket_connection_seen = False
 
+        # Send mode state (integration-only, not stored in firmware)
+        self._send_mode_enabled = False
+
         # Call duration timer
         self._call_timer_task: asyncio.Task | None = None
         self._call_start_monotonic: float = 0
@@ -3246,6 +3249,17 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if self.data.current_call.duration_ms is not None:
             return int(self.data.current_call.duration_ms // 1000)
         return 0
+
+    @property
+    def send_mode_enabled(self) -> bool:
+        """Get send mode state."""
+        return self._send_mode_enabled
+
+    def set_send_mode(self, enabled: bool) -> None:
+        """Set send mode state."""
+        self._send_mode_enabled = enabled
+        # Trigger update so entities can react
+        self.async_set_updated_data(self.data)
 
     async def _update_state_from_device_data(self, device_data: dict[str, Any]) -> None:
         """Update state model from device API response."""

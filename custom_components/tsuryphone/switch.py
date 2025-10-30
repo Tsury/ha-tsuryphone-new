@@ -39,6 +39,12 @@ SWITCH_DESCRIPTIONS = (
         icon="mdi:wrench",
         entity_category=EntityCategory.CONFIG,
     ),
+    SwitchEntityDescription(
+        key="send_mode",
+        name="Send Mode",
+        icon="mdi:send",
+        entity_category=EntityCategory.CONFIG,
+    ),
 )
 
 
@@ -92,6 +98,8 @@ class TsuryPhoneSwitch(
             return state.dnd_config.scheduled
         elif self.entity_description.key == "maintenance_mode":
             return state.maintenance_mode
+        elif self.entity_description.key == "send_mode":
+            return self.coordinator.send_mode_enabled
 
         return None
 
@@ -104,6 +112,8 @@ class TsuryPhoneSwitch(
                 await self._set_dnd_schedule_enabled(True)
             elif self.entity_description.key == "maintenance_mode":
                 await self._set_maintenance_mode(True)
+            elif self.entity_description.key == "send_mode":
+                self._set_send_mode(True)
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to turn on {self.name}: {err}") from err
 
@@ -116,6 +126,8 @@ class TsuryPhoneSwitch(
                 await self._set_dnd_schedule_enabled(False)
             elif self.entity_description.key == "maintenance_mode":
                 await self._set_maintenance_mode(False)
+            elif self.entity_description.key == "send_mode":
+                self._set_send_mode(False)
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to turn off {self.name}: {err}") from err
 
@@ -205,5 +217,12 @@ class TsuryPhoneSwitch(
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        # Switch should be available if we have data and device is connected for control
+        # Send mode switch is always available (local state)
+        if self.entity_description.key == "send_mode":
+            return True
+        # Other switches need device connection
         return self.coordinator.last_update_success and self.coordinator.data.connected
+
+    def _set_send_mode(self, enabled: bool) -> None:
+        """Set send mode (local integration state only)."""
+        self.coordinator.set_send_mode(enabled)

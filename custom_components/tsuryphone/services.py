@@ -614,8 +614,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coordinator = context.coordinator
         digit = call.data["digit"]
 
+        # Check if send mode is enabled - if so, defer validation
+        defer_validation = coordinator.send_mode_enabled
+
         try:
-            await coordinator.api_client.dial_digit(digit)
+            await coordinator.api_client.dial_digit(digit, defer_validation=defer_validation)
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to send digit {digit}: {err}") from err
 

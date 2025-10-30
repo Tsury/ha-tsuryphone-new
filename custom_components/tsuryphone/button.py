@@ -39,6 +39,11 @@ BUTTON_DESCRIPTIONS = (
         icon="mdi:dialpad",
     ),
     ButtonEntityDescription(
+        key="send_dialed_number",
+        name="Call - Send Dialed Number",
+        icon="mdi:send",
+    ),
+    ButtonEntityDescription(
         key="answer",
         name="Call - Answer",
         icon="mdi:phone",
@@ -265,6 +270,8 @@ class TsuryPhoneButton(
                 await self._dial_selected_quick_dial()
             elif self.entity_description.key == "dial_digit_send":
                 await self._dial_digit_from_buffer()
+            elif self.entity_description.key == "send_dialed_number":
+                await self._send_dialed_number()
             elif self.entity_description.key == "quick_dial_add":
                 await self._add_quick_dial_entry()
             elif self.entity_description.key == "quick_dial_remove":
@@ -600,6 +607,18 @@ class TsuryPhoneButton(
 
         await self.coordinator.api_client.switch_call_waiting()
 
+    async def _send_dialed_number(self) -> None:
+        """Send the currently dialed number for validation and execution."""
+        state: TsuryPhoneState = self.coordinator.data
+
+        if not self.coordinator.send_mode_enabled:
+            raise HomeAssistantError("Send mode is not enabled")
+
+        if not state.current_dialing_number:
+            raise HomeAssistantError("No digits dialed to send")
+
+        await self.coordinator.api_client.send_dialed_number()
+
     def _get_user_friendly_error(self, error: TsuryPhoneAPIError) -> str:
         """Convert API error to user-friendly message."""
         if self.coordinator.api_client.is_api_error_code(
@@ -836,6 +855,16 @@ class TsuryPhoneButton(
                 return state.call_waiting_available
 
             return True
+
+        # Send dialed number button - enabled only when send mode is on and there are digits
+        elif self.entity_description.key == "send_dialed_number":
+            if not (self.coordinator.last_update_success and state.connected):
+                return False
+            if not self.coordinator.send_mode_enabled:
+                return False
+            if not state.current_dialing_number:
+                return False
+            return state.app_state == AppState.IDLE
 
         # Data refresh buttons can work if we have coordinator data
         elif self.entity_description.key in ["refetch", "refresh_snapshot"]:

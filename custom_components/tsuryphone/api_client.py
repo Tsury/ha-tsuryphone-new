@@ -44,6 +44,7 @@ from .const import (
     ERROR_CODE_NO_ACTIVE_CALL,
     INTEGRATION_EVENT_SCHEMA_VERSION,
     API_CALL_DIAL_DIGIT,
+    API_CALL_SEND_DIALED_NUMBER,
     ERROR_CODE_MISSING_DIGIT,
     ERROR_CODE_INVALID_DIGIT,
     ERROR_CODE_MISSING_DEFAULT_CODE,
@@ -176,7 +177,7 @@ class TsuryPhoneAPIClient:
             )
         return await self._request("POST", API_CALL_DIAL, {"number": number})
 
-    async def dial_digit(self, digit: int) -> dict[str, Any]:
+    async def dial_digit(self, digit: int, *, defer_validation: bool = False) -> dict[str, Any]:
         """Send a single dial digit to the device."""
 
         if isinstance(digit, bool):
@@ -189,7 +190,15 @@ class TsuryPhoneAPIClient:
                 "Digit must be between 0 and 9", ERROR_CODE_INVALID_DIGIT
             )
 
-        return await self._request("POST", API_CALL_DIAL_DIGIT, {"digit": digit})
+        data = {"digit": digit}
+        if defer_validation:
+            data["deferValidation"] = True
+
+        return await self._request("POST", API_CALL_DIAL_DIGIT, data)
+
+    async def send_dialed_number(self) -> dict[str, Any]:
+        """Send/validate the currently dialed number."""
+        return await self._request("POST", API_CALL_SEND_DIALED_NUMBER)
 
     async def answer_call(self) -> dict[str, Any]:
         """Answer incoming call."""
