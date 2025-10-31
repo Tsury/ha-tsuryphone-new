@@ -574,7 +574,7 @@ blocked_import:
       name: Entries
       description: List of blocked number entries to import.
       required: true
-  example: '[{"number": "0547654321", "name": "Spam caller"}]'
+      example: '[{"number": "0547654321", "name": "Spam caller"}]'
       selector:
         object:
     clear_existing:
