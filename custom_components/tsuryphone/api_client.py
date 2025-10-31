@@ -194,6 +194,13 @@ class TsuryPhoneAPIClient:
         if defer_validation:
             data["deferValidation"] = True
 
+        _LOGGER.debug(
+            "API dial_digit: digit=%s, defer_validation=%s, data=%s",
+            digit,
+            defer_validation,
+            data,
+        )
+
         return await self._request("POST", API_CALL_DIAL_DIGIT, data)
 
     async def send_dialed_number(self) -> dict[str, Any]:
