@@ -610,6 +610,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to dial {number}: {err}") from err
 
     async def async_dial_digit(call: ServiceCall) -> None:
+        # Debug: Always log the send mode state FIRST
+        _LOGGER.debug("========== DIAL_DIGIT SERVICE CALLED ==========")
+        
         context = _require_single_device_context(call)
         coordinator = context.coordinator
         digit = call.data["digit"]
@@ -618,7 +621,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         defer_validation = coordinator.send_mode_enabled
         
         # Debug: Always log the send mode state
-        _LOGGER.warning(
+        _LOGGER.debug(
             "dial_digit: digit=%s | coordinator.send_mode_enabled=%s | defer_validation=%s",
             digit,
             coordinator.send_mode_enabled,
