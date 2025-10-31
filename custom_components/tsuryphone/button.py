@@ -851,6 +851,7 @@ class TsuryPhoneButton(
                     or state.is_dialing
                     or state.current_call.number
                     or state.current_dialing_number
+                    or state.app_state == AppState.INVALID_NUMBER
                 )
             if self.entity_description.key == "toggle_volume_mode":
                 return state.is_call_active
