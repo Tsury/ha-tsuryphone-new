@@ -177,7 +177,9 @@ class TsuryPhoneAPIClient:
             )
         return await self._request("POST", API_CALL_DIAL, {"number": number})
 
-    async def dial_digit(self, digit: int, *, defer_validation: bool = False) -> dict[str, Any]:
+    async def dial_digit(
+        self, digit: int, *, defer_validation: bool = False
+    ) -> dict[str, Any]:
         """Send a single dial digit to the device."""
 
         if isinstance(digit, bool):
@@ -193,13 +195,6 @@ class TsuryPhoneAPIClient:
         data = {"digit": digit}
         if defer_validation:
             data["deferValidation"] = True
-
-        _LOGGER.debug(
-            "API dial_digit: digit=%s, defer_validation=%s, data=%s",
-            digit,
-            defer_validation,
-            data,
-        )
 
         return await self._request("POST", API_CALL_DIAL_DIGIT, data)
 

@@ -420,7 +420,10 @@ class TsuryPhoneButton(
             raise HomeAssistantError("Phone must be idle to dial digits")
 
         digit_value = int(digit)
-        await self.coordinator.api_client.dial_digit(digit_value)
+        
+        # Respect send_mode setting - defer validation if enabled
+        defer_validation = self.coordinator.send_mode_enabled
+        await self.coordinator.api_client.dial_digit(digit_value, defer_validation=defer_validation)
 
         # Clear the buffer so the UI input resets after sending
         self._clear_buffer("dial_digit", ("digit",))
