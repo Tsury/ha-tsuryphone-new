@@ -613,14 +613,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_dial_digit(call: ServiceCall) -> None:
         # Debug: Always log the send mode state FIRST
         _LOGGER.debug("========== DIAL_DIGIT SERVICE CALLED ==========")
-        
+
         context = _require_single_device_context(call)
         coordinator = context.coordinator
         digit = call.data["digit"]
 
         # Check if send mode is enabled - if so, defer validation
         defer_validation = coordinator.send_mode_enabled
-        
+
         # Debug: Always log the send mode state
         _LOGGER.debug(
             "dial_digit: digit=%s | coordinator.send_mode_enabled=%s | defer_validation=%s",
@@ -630,7 +630,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
         try:
-            await coordinator.api_client.dial_digit(digit, defer_validation=defer_validation)
+            await coordinator.api_client.dial_digit(
+                digit, defer_validation=defer_validation
+            )
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to send digit {digit}: {err}") from err
 
@@ -649,15 +651,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_hangup(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
-        state = coordinator.data
 
-        # Allow hangup if there's an active call, incoming call, dialing, or invalid number state
-        if not (
-            state.is_call_active
-            or state.is_incoming_call
-            or state.is_dialing
-            or state.app_state == AppState.INVALID_NUMBER
-        ):
+        # Allow hangup when there's an active call OR when in invalid number state
+        if not coordinator.data.is_call_active and coordinator.data.app_state != AppState.INVALID_NUMBER:
             raise ServiceValidationError("No active call to hang up")
 
         try:
