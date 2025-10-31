@@ -70,6 +70,7 @@ from .const import (
     AUDIO_MIN_LEVEL,
     AUDIO_MAX_LEVEL,
     RING_PATTERN_PRESETS,
+    AppState,
 )
 from .coordinator import TsuryPhoneDataUpdateCoordinator
 from .api_client import TsuryPhoneAPIError
@@ -648,8 +649,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_hangup(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
+        state = coordinator.data
 
-        if not coordinator.data.is_call_active:
+        # Allow hangup if there's an active call, incoming call, dialing, or invalid number state
+        if not (
+            state.is_call_active
+            or state.is_incoming_call
+            or state.is_dialing
+            or state.app_state == AppState.INVALID_NUMBER
+        ):
             raise ServiceValidationError("No active call to hang up")
 
         try:
