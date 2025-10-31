@@ -66,6 +66,12 @@ SENSOR_DESCRIPTIONS = (
         icon="mdi:volume-source",
     ),
     SensorEntityDescription(
+        key="send_mode",
+        name="Send Mode",
+        icon="mdi:send",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
         key="call_duration",
         name="Current Active Call Duration",
         icon="mdi:timer",
@@ -282,6 +288,8 @@ class TsuryPhoneSensor(
             return direction if direction else "Idle"
         elif self.entity_description.key == "volume_mode":
             return state.volume_mode_label
+        elif self.entity_description.key == "send_mode":
+            return "On" if self.coordinator.send_mode_enabled else "Off"
         elif self.entity_description.key == "call_duration":
             if state.is_call_active:
                 return self.coordinator.current_call_duration_seconds
