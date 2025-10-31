@@ -57,7 +57,7 @@ ring_device:
     pattern:
       name: Ring pattern
       description: Optional ring pattern string.
-  required: true
+      required: true
       example: "300,300,300"
       selector:
         text:
