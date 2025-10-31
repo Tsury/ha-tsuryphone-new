@@ -226,3 +226,4 @@ class TsuryPhoneSwitch(
     def _set_send_mode(self, enabled: bool) -> None:
         """Set send mode (local integration state only)."""
         self.coordinator.set_send_mode(enabled)
+        self.async_write_ha_state()

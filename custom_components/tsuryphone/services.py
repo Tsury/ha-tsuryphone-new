@@ -616,6 +616,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         # Check if send mode is enabled - if so, defer validation
         defer_validation = coordinator.send_mode_enabled
+        
+        # Debug: Always log the send mode state
+        _LOGGER.warning(
+            "dial_digit: digit=%s | coordinator.send_mode_enabled=%s | defer_validation=%s",
+            digit,
+            coordinator.send_mode_enabled,
+            defer_validation,
+        )
 
         try:
             await coordinator.api_client.dial_digit(digit, defer_validation=defer_validation)
