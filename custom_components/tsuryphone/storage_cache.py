@@ -160,7 +160,7 @@ class TsuryPhoneStorageCache:
 
         return self._call_history_cache.copy()
 
-    async def async_save_device_state(self, state: TsuryPhoneState) -> None:
+    async def async_save_device_state(self, state: TsuryPhoneState, send_mode_enabled: bool = False) -> None:
         """Save device state backup to persistent storage."""
         try:
             # Create state backup (excluding sensitive data)
@@ -168,6 +168,7 @@ class TsuryPhoneStorageCache:
                 "app_state": state.app_state.value,
                 "connected": state.connected,
                 "last_seen": state.last_seen,
+                "send_mode_enabled": send_mode_enabled,
                 "dnd_config": {
                     "force": state.dnd_config.force,
                     "scheduled": state.dnd_config.scheduled,

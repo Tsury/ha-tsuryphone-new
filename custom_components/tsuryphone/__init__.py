@@ -211,6 +211,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as err:
         _LOGGER.error("Failed to load cached call history: %s", err)
 
+    # Load cached device state (including send_mode)
+    try:
+        cached_device_state = await storage_cache.async_load_device_state()
+        if cached_device_state and "send_mode_enabled" in cached_device_state:
+            coordinator._send_mode_enabled = cached_device_state["send_mode_enabled"]
+            _LOGGER.debug(
+                "Restored send_mode state: %s", coordinator._send_mode_enabled
+            )
+    except Exception as err:
+        _LOGGER.error("Failed to load cached device state: %s", err)
+
     _LOGGER.info(
         "Successfully connected to TsuryPhone device %s at %s:%s",
         device_id,

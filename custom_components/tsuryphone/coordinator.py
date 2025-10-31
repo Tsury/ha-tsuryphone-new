@@ -405,7 +405,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             # Save device state backup periodically (every 10 events or important changes)
             if event.seq % 10 == 0 or event.category in ["config", "system"]:
                 self.hass.async_create_task(
-                    self._storage_cache.async_save_device_state(self.data)
+                    self._storage_cache.async_save_device_state(self.data, self._send_mode_enabled)
                 )
 
     def _handle_call_event(self, event: TsuryPhoneEvent) -> None:
@@ -3258,6 +3258,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def set_send_mode(self, enabled: bool) -> None:
         """Set send mode state."""
         self._send_mode_enabled = enabled
+        # Save to storage immediately
+        if self._storage_cache:
+            self.hass.async_create_task(
+                self._storage_cache.async_save_device_state(self.data, self._send_mode_enabled)
+            )
         # Trigger update so entities can react
         self.async_set_updated_data(self.data)
 
@@ -4187,7 +4192,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     await self._storage_cache.async_save_call_history(
                         self.data.call_history or []
                     )
-                    await self._storage_cache.async_save_device_state(self.data)
+                    await self._storage_cache.async_save_device_state(self.data, self._send_mode_enabled)
                 await self._storage_cache.async_cleanup_storage()
                 _LOGGER.debug("Storage cache saved and cleaned up")
             except Exception as err:
