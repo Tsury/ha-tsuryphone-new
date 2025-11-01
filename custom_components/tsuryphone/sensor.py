@@ -386,9 +386,8 @@ class TsuryPhoneSensor(
                 {
                     "id": entry.id,
                     "code": entry.code,
-                    "number": entry.number,
+                    "number": entry.number,  # Already normalized E.164 format
                     "name": entry.name,
-                    "normalized_number": entry.normalized_number,
                     "display_number": entry.display_number,
                 }
                 for entry in state.quick_dials
@@ -398,9 +397,8 @@ class TsuryPhoneSensor(
             attributes["blocked_numbers"] = [
                 {
                     "id": entry.id,
-                    "number": entry.number,
+                    "number": entry.number,  # Already normalized E.164 format
                     "name": entry.name,
-                    "normalized_number": entry.normalized_number,
                     "display_number": entry.display_number,
                 }
                 for entry in state.blocked_numbers
@@ -410,8 +408,7 @@ class TsuryPhoneSensor(
             attributes["priority_callers"] = [
                 {
                     "id": entry.id,
-                    "number": entry.number,
-                    "normalized_number": entry.normalized_number,
+                    "number": entry.number,  # Already normalized E.164 format
                     "display_number": entry.display_number,
                 }
                 for entry in state.priority_callers

@@ -1248,9 +1248,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         entries = [
             {
                 "code": entry.code,
-                "number": entry.number,
+                "number": entry.number,  # Already normalized E.164 format
                 "name": entry.name,
-                "normalized_number": entry.normalized_number,
             }
             for entry in state.quick_dials
         ]
@@ -1325,9 +1324,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         entries = [
             {
-                "number": entry.number,
+                "number": entry.number,  # Already normalized E.164 format
                 "name": entry.name,
-                "normalized_number": entry.normalized_number,
             }
             for entry in state.blocked_numbers
         ]

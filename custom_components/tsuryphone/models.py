@@ -65,18 +65,15 @@ class QuickDialEntry:
     """Quick dial configuration entry."""
 
     id: str
-    number: str
+    number: str  # Normalized E.164 format
     name: str = ""
     code: str = ""  # Optional code for quick dialing
-    normalized_number: str = ""
     display_number: str = ""
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
         if not self.id or not self.number:
             raise ValueError("ID and number are required for quick dial entry")
-        if self.normalized_number is None:
-            self.normalized_number = ""
         if not self.display_number:
             self.display_number = self.number
 
@@ -86,17 +83,14 @@ class BlockedNumberEntry:
     """Blocked number configuration entry."""
 
     id: str
-    number: str
+    number: str  # Normalized E.164 format
     name: str = ""
-    normalized_number: str = ""
     display_number: str = ""
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
         if not self.id or not self.number:
             raise ValueError("ID and number are required for blocked number entry")
-        if self.normalized_number is None:
-            self.normalized_number = ""
         if not self.display_number:
             self.display_number = self.number
 
@@ -129,15 +123,14 @@ class PriorityCallerEntry:
     """Priority caller entry."""
 
     id: str
-    number: str
-    normalized_number: str = ""
+    number: str  # Normalized E.164 format
     display_number: str = ""
 
     def __post_init__(self) -> None:
         if not self.id or not self.number:
             raise ValueError("ID and number are required for priority caller entry")
-        if self.normalized_number is None:
-            self.normalized_number = ""
+        if not self.display_number:
+            self.display_number = self.number
         if not self.display_number:
             self.display_number = self.number
 
