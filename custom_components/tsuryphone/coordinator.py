@@ -3031,9 +3031,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if not matched_entry:
             return
 
-        previous = self.selected_blocked_number
-        self.selected_blocked_number = matched_entry.number
-        if previous != matched_entry.number:
+        previous = self.selected_blocked_number_id
+        self.selected_blocked_number_id = matched_entry.id
+        if previous != matched_entry.id:
             self.async_update_listeners()
 
     def _prune_recent_blocked_calls(self, now: float | None = None) -> None:

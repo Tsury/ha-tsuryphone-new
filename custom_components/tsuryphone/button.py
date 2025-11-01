@@ -371,36 +371,36 @@ class TsuryPhoneButton(
 
     async def _dial_selected_quick_dial(self) -> None:
         """Dial the selected quick dial entry."""
-        # Phase P4: Use the coordinator's selected quick dial
+        # Phase P4: Use the coordinator's selected quick dial ID
         if (
-            not hasattr(self.coordinator, "selected_quick_dial_code")
-            or not self.coordinator.selected_quick_dial_code
+            not hasattr(self.coordinator, "selected_quick_dial_id")
+            or not self.coordinator.selected_quick_dial_id
         ):
             raise HomeAssistantError("No quick dial entry selected")
 
-        selected_code = self.coordinator.selected_quick_dial_code
+        selected_id = self.coordinator.selected_quick_dial_id
         state: TsuryPhoneState = self.coordinator.data
 
-        # Find the entry with the selected code
+        # Find the entry with the selected ID
         if not state.quick_dials:
             raise HomeAssistantError("No quick dial entries available")
 
         selected_entry = None
         for entry in state.quick_dials:
-            if entry.code == selected_code:
+            if entry.id == selected_id:
                 selected_entry = entry
                 break
 
         if not selected_entry:
             raise HomeAssistantError(
-                f"Selected quick dial code '{selected_code}' not found"
+                f"Selected quick dial entry '{selected_id}' not found"
             )
 
         # Dial the number
         await self.coordinator.api_client.dial(selected_entry.number)
 
         # Clear selection so UI inputs reset after action completes
-        self.coordinator.selected_quick_dial_code = None
+        self.coordinator.selected_quick_dial_id = None
         self.coordinator.async_update_listeners()
 
     async def _dial_digit_from_buffer(self) -> None:
@@ -455,8 +455,12 @@ class TsuryPhoneButton(
         device_number = self._prepare_number_input(number, field="Quick dial number")
 
         try:
-            await self.coordinator.api_client.add_quick_dial(code, device_number, name)
-            self.coordinator.selected_quick_dial_code = code
+            response = await self.coordinator.api_client.add_quick_dial(code, device_number, name)
+            # Extract the ID from the response and set as selected
+            entry_data = response.get("data", {}).get("entry", {})
+            entry_id = entry_data.get("id")
+            if entry_id:
+                self.coordinator.selected_quick_dial_id = entry_id
             self.coordinator.remember_number_display_hint(number)
             self._clear_buffer("quick_dial")
             await self.coordinator.async_request_refresh()
@@ -495,8 +499,12 @@ class TsuryPhoneButton(
         device_number = self._prepare_number_input(number, field="Blocked number")
 
         try:
-            await self.coordinator.api_client.add_blocked_number(device_number, name)
-            self.coordinator.selected_blocked_number = device_number
+            response = await self.coordinator.api_client.add_blocked_number(device_number, name)
+            # Extract the ID from the response and set as selected
+            entry_data = response.get("data", {}).get("entry", {})
+            entry_id = entry_data.get("id")
+            if entry_id:
+                self.coordinator.selected_blocked_number_id = entry_id
             self.coordinator.remember_number_display_hint(number)
             self._clear_buffer("blocked")
             await self.coordinator.async_request_refresh()
@@ -531,8 +539,12 @@ class TsuryPhoneButton(
         device_number = self._prepare_number_input(number, field="Priority number")
 
         try:
-            await self.coordinator.api_client.add_priority_caller(device_number)
-            self.coordinator.selected_priority_number = device_number
+            response = await self.coordinator.api_client.add_priority_caller(device_number)
+            # Extract the ID from the response and set as selected
+            entry_data = response.get("data", {}).get("entry", {})
+            entry_id = entry_data.get("id")
+            if entry_id:
+                self.coordinator.selected_priority_number_id = entry_id
             self.coordinator.remember_number_display_hint(number)
             self._clear_buffer("priority")
             await self.coordinator.async_request_refresh()
@@ -707,17 +719,18 @@ class TsuryPhoneButton(
         elif self.entity_description.key == "dial_selected":
             # Phase P4: Show actual selection state
             has_selection = (
-                hasattr(self.coordinator, "selected_quick_dial_code")
-                and self.coordinator.selected_quick_dial_code is not None
+                hasattr(self.coordinator, "selected_quick_dial_id")
+                and self.coordinator.selected_quick_dial_id is not None
             )
             attributes["can_execute"] = has_selection and state.quick_dial_count > 0
 
             if has_selection:
-                attributes["selected_code"] = self.coordinator.selected_quick_dial_code
+                attributes["selected_id"] = self.coordinator.selected_quick_dial_id
                 # Find the selected entry details
                 if state.quick_dials:
                     for entry in state.quick_dials:
-                        if entry.code == self.coordinator.selected_quick_dial_code:
+                        if entry.id == self.coordinator.selected_quick_dial_id:
+                            attributes["selected_code"] = entry.code
                             attributes["selected_number"] = entry.number
                             attributes["selected_name"] = entry.name
                             break
@@ -750,9 +763,9 @@ class TsuryPhoneButton(
             }
 
         elif self.entity_description.key == "quick_dial_remove":
-            selected_code = getattr(self.coordinator, "selected_quick_dial_code", None)
-            attributes["can_execute"] = bool(selected_code and state.connected)
-            attributes["selected_code"] = selected_code
+            selected_id = getattr(self.coordinator, "selected_quick_dial_id", None)
+            attributes["can_execute"] = bool(selected_id and state.connected)
+            attributes["selected_id"] = selected_id
 
         elif self.entity_description.key == "blocked_add":
             buffer = self._get_buffer_snapshot("blocked")
@@ -768,9 +781,9 @@ class TsuryPhoneButton(
             }
 
         elif self.entity_description.key == "blocked_remove":
-            selected_number = getattr(self.coordinator, "selected_blocked_number", None)
-            attributes["can_execute"] = bool(selected_number and state.connected)
-            attributes["selected_number"] = selected_number
+            selected_id = getattr(self.coordinator, "selected_blocked_number_id", None)
+            attributes["can_execute"] = bool(selected_id and state.connected)
+            attributes["selected_id"] = selected_id
 
         elif self.entity_description.key == "priority_add":
             buffer = self._get_buffer_snapshot("priority")
@@ -781,11 +794,11 @@ class TsuryPhoneButton(
             attributes["buffer"] = {"number": buffer.get("number", "")}
 
         elif self.entity_description.key == "priority_remove":
-            selected_number = getattr(
-                self.coordinator, "selected_priority_number", None
+            selected_id = getattr(
+                self.coordinator, "selected_priority_number_id", None
             )
-            attributes["can_execute"] = bool(selected_number and state.connected)
-            attributes["selected_number"] = selected_number
+            attributes["can_execute"] = bool(selected_id and state.connected)
+            attributes["selected_id"] = selected_id
 
         elif self.entity_description.key == "webhook_add":
             buffer = self._get_buffer_snapshot("webhook")
@@ -891,8 +904,8 @@ class TsuryPhoneButton(
         elif self.entity_description.key == "dial_selected":
             # Available if we have a selection and quick dial entries exist
             has_selection = (
-                hasattr(self.coordinator, "selected_quick_dial_code")
-                and self.coordinator.selected_quick_dial_code is not None
+                hasattr(self.coordinator, "selected_quick_dial_id")
+                and self.coordinator.selected_quick_dial_id is not None
             )
             return (
                 self.coordinator.last_update_success
@@ -918,15 +931,15 @@ class TsuryPhoneButton(
             if key == "quick_dial_add":
                 return self._buffer_has_values("quick_dial", ("code", "number"))
             if key == "quick_dial_remove":
-                return bool(getattr(self.coordinator, "selected_quick_dial_code", None))
+                return bool(getattr(self.coordinator, "selected_quick_dial_id", None))
             if key == "blocked_add":
                 return self._buffer_has_values("blocked", ("number",))
             if key == "blocked_remove":
-                return bool(getattr(self.coordinator, "selected_blocked_number", None))
+                return bool(getattr(self.coordinator, "selected_blocked_number_id", None))
             if key == "priority_add":
                 return self._buffer_has_values("priority", ("number",))
             if key == "priority_remove":
-                return bool(getattr(self.coordinator, "selected_priority_number", None))
+                return bool(getattr(self.coordinator, "selected_priority_number_id", None))
             if key == "webhook_add":
                 return self._buffer_has_values("webhook", ("code", "webhook_id"))
             if key == "webhook_remove":

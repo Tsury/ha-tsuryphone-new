@@ -510,16 +510,17 @@ class TsuryPhoneSelect(
                     entry.code for entry in state.quick_dials
                 ]
 
-            # Phase P4: Show selected code for hybrid model
+            # Phase P4: Show selected ID for hybrid model
             if (
-                hasattr(self.coordinator, "selected_quick_dial_code")
-                and self.coordinator.selected_quick_dial_code
+                hasattr(self.coordinator, "selected_quick_dial_id")
+                and self.coordinator.selected_quick_dial_id
             ):
-                attributes["selected_code"] = self.coordinator.selected_quick_dial_code
-                # Show the number that would be dialed
+                attributes["selected_id"] = self.coordinator.selected_quick_dial_id
+                # Show the details of selected entry
                 if state.quick_dials:
                     for entry in state.quick_dials:
-                        if entry.code == self.coordinator.selected_quick_dial_code:
+                        if entry.id == self.coordinator.selected_quick_dial_id:
+                            attributes["selected_code"] = entry.code
                             attributes["selected_number"] = entry.number
                             attributes["selected_name"] = entry.name
                             break
