@@ -2481,27 +2481,26 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.blocked_numbers = blocked_list
             self._ensure_blocked_selection()
 
-            # Try priorityCallerDetails first (new format with IDs), fall back to priorityCallers (old format)
+            # Load priority callers from priorityCallerDetails
             priority_source = (
                 phone_section.get("priorityCallerDetails")
                 or data.get("priorityCallerDetails")
-                or phone_section.get("priorityCallers")
-                or data.get("priorityCallers")
                 or []
             )
             priority_list: list[PriorityCallerEntry] = []
             if isinstance(priority_source, list):
                 for p in priority_source:
                     try:
-                        # Handle both dict format (new) and string format (old migration)
-                        if isinstance(p, dict):
-                            number = p.get("number", "")
-                            entry_id = str(p.get("id", ""))
-                        else:
-                            # Old format: just a phone number string
-                            number = str(p)
-                            # Generate a temporary ID from the number
-                            entry_id = f"pr_{abs(hash(number)) % 10000000}"
+                        if not isinstance(p, dict):
+                            _LOGGER.debug("Skipping non-dict priority entry: %s", p)
+                            continue
+                            
+                        number = p.get("number", "")
+                        entry_id = str(p.get("id", ""))
+                        
+                        if not number or not entry_id:
+                            _LOGGER.debug("Skipping priority entry with missing number or id: %s", p)
+                            continue
                         
                         normalized = normalize_phone_number(
                             number, self.data.default_dialing_code
