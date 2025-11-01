@@ -393,6 +393,29 @@ class TsuryPhoneSensor(
                 }
                 for entry in state.quick_dials
             ]
+            
+            # Add blocked_numbers list for blocked view
+            attributes["blocked_numbers"] = [
+                {
+                    "id": entry.id,
+                    "number": entry.number,
+                    "name": entry.name,
+                    "normalized_number": entry.normalized_number,
+                    "display_number": entry.display_number,
+                }
+                for entry in state.blocked_numbers
+            ]
+            
+            # Add priority_callers list for priority indicators
+            attributes["priority_callers"] = [
+                {
+                    "id": entry.id,
+                    "number": entry.number,
+                    "normalized_number": entry.normalized_number,
+                    "display_number": entry.display_number,
+                }
+                for entry in state.priority_callers
+            ]
 
         elif self.entity_description.key == "current_call_summary":
             attributes.update(
