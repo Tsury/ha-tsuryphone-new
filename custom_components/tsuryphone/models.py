@@ -64,16 +64,17 @@ class CallInfo:
 class QuickDialEntry:
     """Quick dial configuration entry."""
 
-    code: str
+    id: str
     number: str
     name: str = ""
+    code: str = ""  # Optional code for quick dialing
     normalized_number: str = ""
     display_number: str = ""
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
-        if not self.code or not self.number:
-            raise ValueError("Code and number are required for quick dial entry")
+        if not self.id or not self.number:
+            raise ValueError("ID and number are required for quick dial entry")
         if self.normalized_number is None:
             self.normalized_number = ""
         if not self.display_number:
@@ -84,6 +85,7 @@ class QuickDialEntry:
 class BlockedNumberEntry:
     """Blocked number configuration entry."""
 
+    id: str
     number: str
     name: str = ""
     normalized_number: str = ""
@@ -91,8 +93,8 @@ class BlockedNumberEntry:
 
     def __post_init__(self) -> None:
         """Validate entry after initialization."""
-        if not self.number:
-            raise ValueError("Number is required for blocked number entry")
+        if not self.id or not self.number:
+            raise ValueError("ID and number are required for blocked number entry")
         if self.normalized_number is None:
             self.normalized_number = ""
         if not self.display_number:
@@ -124,15 +126,16 @@ class WebhookEntry:
 
 @dataclass
 class PriorityCallerEntry:
-    """Priority caller entry (currently only number)."""
+    """Priority caller entry."""
 
+    id: str
     number: str
     normalized_number: str = ""
     display_number: str = ""
 
     def __post_init__(self) -> None:
-        if not self.number:
-            raise ValueError("Number is required for priority caller entry")
+        if not self.id or not self.number:
+            raise ValueError("ID and number are required for priority caller entry")
         if self.normalized_number is None:
             self.normalized_number = ""
         if not self.display_number:

@@ -169,16 +169,26 @@ CALL_HISTORY_CLEAR_SCHEMA = _service_schema(
 
 QUICK_DIAL_ADD_SCHEMA = _service_schema(
     {
-        vol.Required("code"): cv.string,
+        vol.Optional("code"): cv.string,
         vol.Required("number"): cv.string,
         vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
     }
 )
 
-QUICK_DIAL_REMOVE_SCHEMA = _service_schema(
-    {
-        vol.Required("code"): cv.string,
-    }
+QUICK_DIAL_REMOVE_SCHEMA = vol.Schema(
+    vol.All(
+        _service_schema(
+            {
+                vol.Optional("id"): cv.string,
+                vol.Optional("code"): cv.string,
+            }
+        ),
+        vol.Any(
+            vol.Schema(lambda d: "id" in d, extra=vol.ALLOW_EXTRA),
+            vol.Schema(lambda d: "code" in d, extra=vol.ALLOW_EXTRA),
+            msg="Either 'id' or 'code' must be provided",
+        ),
+    )
 )
 
 BLOCKED_ADD_SCHEMA = _service_schema(
@@ -839,7 +849,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_quick_dial_add(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
-        code = call.data["code"]
+        code = call.data.get("code", "")  # Code is now optional
         number = _normalize_number_for_service(
             coordinator,
             call.data["number"],
@@ -859,10 +869,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_quick_dial_remove(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
-        code = call.data["code"]
+        entry_id = call.data.get("id")
+
+        if not entry_id:
+            raise ServiceValidationError("'id' is required")
 
         try:
-            await coordinator.api_client.remove_quick_dial(code)
+            await coordinator.api_client.remove_quick_dial_by_id(entry_id)
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to remove quick dial: {err}") from err
@@ -874,9 +887,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         errors: list[str] = []
         for entry in list(coordinator.data.quick_dials):
             try:
-                await coordinator.api_client.remove_quick_dial(entry.code)
+                await coordinator.api_client.remove_quick_dial_by_id(entry.id)
             except TsuryPhoneAPIError as err:
-                errors.append(f"Failed to remove {entry.code}: {err}")
+                errors.append(f"Failed to remove {entry.id}: {err}")
 
         await coordinator.async_request_refresh()
 
@@ -907,12 +920,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_blocked_remove(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
-        number = _normalize_number_for_service(
-            coordinator, call.data["number"], field_name="number"
-        )
+        entry_id = call.data.get("id")
+
+        if not entry_id:
+            raise ServiceValidationError("'id' is required")
 
         try:
-            await coordinator.api_client.remove_blocked_number(number)
+            await coordinator.api_client.remove_blocked_number_by_id(entry_id)
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to remove blocked number: {err}") from err
@@ -924,17 +938,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         errors: list[str] = []
         for entry in list(coordinator.data.blocked_numbers):
             try:
-                target = entry.normalized_number or entry.number
-                if not target:
+                if not entry.id:
                     _LOGGER.debug(
-                        "Skipping blocked entry without number during clear: %s",
+                        "Skipping blocked entry without ID during clear: %s",
                         entry,
                     )
                     continue
 
-                await coordinator.api_client.remove_blocked_number(target)
+                await coordinator.api_client.remove_blocked_number_by_id(entry.id)
             except TsuryPhoneAPIError as err:
-                errors.append(f"Failed to remove {entry.number}: {err}")
+                errors.append(f"Failed to remove {entry.id}: {err}")
 
         await coordinator.async_request_refresh()
 
@@ -989,17 +1002,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_priority_remove(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
-        number = _normalize_number_for_service(
-            coordinator, call.data["number"], field_name="number"
-        )
+        entry_id = call.data.get("id")
+
+        if not entry_id:
+            raise ServiceValidationError("'id' is required")
 
         try:
-            await coordinator.api_client.remove_priority_caller(number)
+            await coordinator.api_client.remove_priority_caller_by_id(entry_id)
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(
                 f"Failed to remove priority caller: {err}"
             ) from err
+
+    async def async_refetch_all(call: ServiceCall) -> None:
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
 
         try:
             await coordinator.api_client.refetch_all()

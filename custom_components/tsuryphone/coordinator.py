@@ -2044,15 +2044,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         normalized_hint=normalized_str or None,
                     )
                     entry = QuickDialEntry(
+                        id=value.get("id", ""),
                         code=value.get("code", ""),
                         number=value.get("number", ""),
                         name=value.get("name", ""),
                         normalized_number=normalized_str,
                         display_number=display_number,
                     )
-                    # Remove any existing entry with same code
+                    # Remove any existing entry with same id
                     self.data.quick_dials = [
-                        q for q in self.data.quick_dials if q.code != entry.code
+                        q for q in self.data.quick_dials if q.id != entry.id
                     ]
                     self.data.quick_dials.append(entry)
                     self._ensure_quick_dial_selection()
@@ -2080,14 +2081,15 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         normalized_hint=normalized_str or None,
                     )
                     entry = BlockedNumberEntry(
+                        id=value.get("id", ""),
                         number=value.get("number", ""),
                         name=str(value.get("name", "")),
                         normalized_number=normalized_str,
                         display_number=display_number,
                     )
-                    # Remove any existing entry with same number
+                    # Remove any existing entry with same id
                     self.data.blocked_numbers = [
-                        b for b in self.data.blocked_numbers if b.number != entry.number
+                        b for b in self.data.blocked_numbers if b.id != entry.id
                     ]
                     self.data.blocked_numbers.append(entry)
                     self._ensure_blocked_selection()
@@ -2148,6 +2150,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         normalized_hint=normalized_str or None,
                     )
                     entry = PriorityCallerEntry(
+                        id=value.get("id", ""),
                         number=value.get("number", ""),
                         normalized_number=normalized_str,
                         display_number=display_number,
@@ -2156,7 +2159,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     self.data.priority_callers = [
                         p
                         for p in self.data.priority_callers
-                        if p.number != entry.number
+                        if p.id != entry.id
                     ]
                     self.data.priority_callers.append(entry)
                     self._ensure_priority_selection()
@@ -2414,6 +2417,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         qd_list.append(
                             QuickDialEntry(
+                                id=str(q.get("id", "")),
                                 code=str(code),
                                 number=str(number),
                                 name=str(name),
@@ -2457,6 +2461,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         blocked_list.append(
                             BlockedNumberEntry(
+                                id=str(b.get("id", "")),
                                 number=str(number),
                                 name=str(name_value),
                                 normalized_number=normalized_str,
@@ -2487,6 +2492,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         priority_list.append(
                             PriorityCallerEntry(
+                                id=str(p.get("id", "")),
                                 number=str(number),
                                 normalized_number=normalized_str,
                                 display_number=display_number,
@@ -3438,6 +3444,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                                 )
                             pr_list.append(
                                 PriorityCallerEntry(
+                                    id=str(detail_map.get(item, {}).get("id", "") if isinstance(detail_map.get(item), dict) else ""),
                                     number=item,
                                     normalized_number=str(normalized_value or ""),
                                 )
@@ -3482,6 +3489,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         qd_list.append(
                             QuickDialEntry(
+                                id=str(q.get("id", "")),
                                 code=code_value,
                                 number=number_value,
                                 name=name_value,
@@ -3522,6 +3530,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         blocked_list.append(
                             BlockedNumberEntry(
+                                id=str(b.get("id", "")),
                                 number=number_value,
                                 name=name_value,
                                 normalized_number=normalized_str,

@@ -287,16 +287,16 @@ quick_dial_add:
 
 quick_dial_remove:
   name: Remove quick dial entry
-  description: Remove a quick dial shortcut by code.
+  description: Remove a quick dial shortcut by ID.
   target:
     device:
       integration: tsuryphone
   fields:
-    code:
-      name: Quick dial code
-      description: Quick dial code to remove from the device.
+    id:
+      name: Quick dial entry ID
+      description: ID of the quick dial entry to remove from the device.
       required: true
-      example: "012"
+      example: "qd_12345_abcdef_1"
       selector:
         text:
 
@@ -331,16 +331,16 @@ blocked_add:
 
 blocked_remove:
   name: Remove blocked number
-  description: Remove a phone number from the blocked list.
+  description: Remove a blocked number by ID.
   target:
     device:
       integration: tsuryphone
   fields:
-    number:
-      name: Phone number
-      description: Phone number to remove from the blocked list.
+    id:
+      name: Blocked number entry ID
+      description: ID of the blocked number entry to remove from the device.
       required: true
-      example: "0541234567"
+      example: "bl_12345_abcdef_1"
       selector:
         text:
 
@@ -368,16 +368,16 @@ priority_add:
 
 priority_remove:
   name: Remove priority caller
-  description: Remove a phone number from the priority list.
+  description: Remove a priority caller by ID.
   target:
     device:
       integration: tsuryphone
   fields:
-    number:
-      name: Phone number
-      description: Phone number to remove from the priority list.
+    id:
+      name: Priority caller entry ID
+      description: ID of the priority caller entry to remove from the device.
       required: true
-      example: "0541112222"
+      example: "pr_12345_abcdef_1"
       selector:
         text:
 
