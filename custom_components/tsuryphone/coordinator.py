@@ -2481,8 +2481,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data.blocked_numbers = blocked_list
             self._ensure_blocked_selection()
 
+            # Try priorityCallerDetails first (new format with IDs), fall back to priorityCallers (old format)
             priority_source = (
-                phone_section.get("priorityCallers")
+                phone_section.get("priorityCallerDetails")
+                or data.get("priorityCallerDetails")
+                or phone_section.get("priorityCallers")
                 or data.get("priorityCallers")
                 or []
             )
@@ -2490,7 +2493,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if isinstance(priority_source, list):
                 for p in priority_source:
                     try:
-                        number = p.get("number") if isinstance(p, dict) else p
+                        # Handle both dict format (new) and string format (old migration)
+                        if isinstance(p, dict):
+                            number = p.get("number", "")
+                            entry_id = str(p.get("id", ""))
+                        else:
+                            # Old format: just a phone number string
+                            number = str(p)
+                            # Generate a temporary ID from the number
+                            entry_id = f"pr_{abs(hash(number)) % 10000000}"
+                        
                         normalized = normalize_phone_number(
                             number, self.data.default_dialing_code
                         )
@@ -2500,7 +2512,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         )
                         priority_list.append(
                             PriorityCallerEntry(
-                                id=str(p.get("id", "")),
+                                id=entry_id,
                                 number=str(number),
                                 normalized_number=normalized_str,
                                 display_number=display_number,
