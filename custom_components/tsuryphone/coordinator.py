@@ -106,10 +106,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._refetch_timer: Any = None
         self._last_websocket_disconnect: float = 0
 
-        # Phase P4: Hybrid model state
-        self.selected_quick_dial_code: str | None = None
-        self.selected_blocked_number: str | None = None
-        self.selected_priority_number: str | None = None
+        # Phase P4: Hybrid model state (ID-based selection)
+        self.selected_quick_dial_id: str | None = None
+        self.selected_blocked_number_id: str | None = None
+        self.selected_priority_number_id: str | None = None
         self.selected_webhook_code: str | None = None
 
         # User input buffers for device management actions (exposed via text entities)
@@ -4088,36 +4088,36 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
     def _ensure_quick_dial_selection(self) -> None:
         """Clear quick dial selection if entry no longer exists."""
-        if not self.selected_quick_dial_code:
+        if not self.selected_quick_dial_id:
             return
 
         if not any(
-            entry.code == self.selected_quick_dial_code
+            entry.id == self.selected_quick_dial_id
             for entry in self.data.quick_dials
         ):
-            self.selected_quick_dial_code = None
+            self.selected_quick_dial_id = None
 
     def _ensure_blocked_selection(self) -> None:
         """Clear blocked number selection if entry no longer exists."""
-        if not self.selected_blocked_number:
+        if not self.selected_blocked_number_id:
             return
 
         if not any(
-            entry.number == self.selected_blocked_number
+            entry.id == self.selected_blocked_number_id
             for entry in self.data.blocked_numbers
         ):
-            self.selected_blocked_number = None
+            self.selected_blocked_number_id = None
 
     def _ensure_priority_selection(self) -> None:
         """Clear priority number selection if entry no longer exists."""
-        if not self.selected_priority_number:
+        if not self.selected_priority_number_id:
             return
 
         if not any(
-            entry.number == self.selected_priority_number
+            entry.id == self.selected_priority_number_id
             for entry in self.data.priority_callers
         ):
-            self.selected_priority_number = None
+            self.selected_priority_number_id = None
 
     def _ensure_webhook_selection(self) -> None:
         """Clear webhook selection if entry no longer exists."""

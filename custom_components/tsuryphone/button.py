@@ -505,14 +505,14 @@ class TsuryPhoneButton(
 
     async def _remove_selected_blocked_number(self) -> None:
         """Remove the selected blocked number."""
-        selected_id = getattr(self.coordinator, "selected_blocked_id", None)
+        selected_id = getattr(self.coordinator, "selected_blocked_number_id", None)
 
         if not selected_id:
             raise HomeAssistantError("Select a blocked number to remove")
 
         try:
             await self.coordinator.api_client.remove_blocked_number_by_id(selected_id)
-            self.coordinator.selected_blocked_id = None
+            self.coordinator.selected_blocked_number_id = None
             self._clear_buffer("blocked")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
@@ -543,14 +543,14 @@ class TsuryPhoneButton(
 
     async def _remove_selected_priority_number(self) -> None:
         """Remove the selected priority number."""
-        selected_id = getattr(self.coordinator, "selected_priority_id", None)
+        selected_id = getattr(self.coordinator, "selected_priority_number_id", None)
 
         if not selected_id:
             raise HomeAssistantError("Select a priority number to remove")
 
         try:
             await self.coordinator.api_client.remove_priority_caller_by_id(selected_id)
-            self.coordinator.selected_priority_id = None
+            self.coordinator.selected_priority_number_id = None
             self._clear_buffer("priority")
             await self.coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:

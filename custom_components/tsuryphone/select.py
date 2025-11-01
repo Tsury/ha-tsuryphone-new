@@ -219,7 +219,7 @@ class TsuryPhoneSelect(
     def _build_quick_dial_option_map(
         self, state: TsuryPhoneState
     ) -> dict[str, str | None]:
-        """Build and cache option->code mapping for quick dial select."""
+        """Build and cache option->ID mapping for quick dial select."""
         option_map: dict[str, str | None] = {"None": None}
 
         quick_dials = sorted(
@@ -232,7 +232,7 @@ class TsuryPhoneSelect(
 
         for entry in quick_dials:
             label = self._format_quick_dial_option(entry)
-            option_map[label] = entry.code
+            option_map[label] = entry.id
 
         self._quick_dial_option_map = option_map
         return option_map
@@ -246,13 +246,13 @@ class TsuryPhoneSelect(
         """Get current quick dial selection."""
         # Phase P4: Check if we have a selected quick dial stored in coordinator
         if (
-            hasattr(self.coordinator, "selected_quick_dial_code")
-            and self.coordinator.selected_quick_dial_code
+            hasattr(self.coordinator, "selected_quick_dial_id")
+            and self.coordinator.selected_quick_dial_id
         ):
-            selected_code = self.coordinator.selected_quick_dial_code
+            selected_id = self.coordinator.selected_quick_dial_id
             option_map = self._build_quick_dial_option_map(state)
-            for option_label, code in option_map.items():
-                if code == selected_code:
+            for option_label, entry_id in option_map.items():
+                if entry_id == selected_id:
                     return option_label
 
         # Default to "None" if nothing selected or selection not found
@@ -267,29 +267,29 @@ class TsuryPhoneSelect(
             option_map = self._build_quick_dial_option_map(state)
 
         if option == "None":
-            previous = self.coordinator.selected_quick_dial_code
-            self.coordinator.selected_quick_dial_code = None
+            previous = self.coordinator.selected_quick_dial_id
+            self.coordinator.selected_quick_dial_id = None
             if previous is not None:
                 self.coordinator.async_update_listeners()
             _LOGGER.debug("Quick dial selection cleared")
             return
 
-        code = option_map.get(option)
-        if not code:
+        entry_id = option_map.get(option)
+        if not entry_id:
             raise HomeAssistantError(f"Unknown quick dial option: {option}")
 
-        if state.quick_dials and code not in [
-            entry.code for entry in state.quick_dials
+        if state.quick_dials and entry_id not in [
+            entry.id for entry in state.quick_dials
         ]:
             raise HomeAssistantError(
-                f"Quick dial code '{code}' not found in current list"
+                f"Quick dial ID '{entry_id}' not found in current list"
             )
 
-        previous = self.coordinator.selected_quick_dial_code
-        self.coordinator.selected_quick_dial_code = code
-        if previous != code:
+        previous = self.coordinator.selected_quick_dial_id
+        self.coordinator.selected_quick_dial_id = entry_id
+        if previous != entry_id:
             self.coordinator.async_update_listeners()
-        _LOGGER.debug("Selected quick dial: %s (code: %s)", option, code)
+        _LOGGER.debug("Selected quick dial: %s (ID: %s)", option, entry_id)
 
     def _format_blocked_option(self, entry) -> str:
         """Format blocked number option label."""
@@ -315,17 +315,17 @@ class TsuryPhoneSelect(
 
     def _get_current_blocked_option(self, state: TsuryPhoneState) -> str:
         """Get currently selected blocked number."""
-        if self.coordinator.selected_blocked_number and state.blocked_numbers:
+        if self.coordinator.selected_blocked_number_id and state.blocked_numbers:
             for entry in state.blocked_numbers:
-                if entry.number == self.coordinator.selected_blocked_number:
+                if entry.id == self.coordinator.selected_blocked_number_id:
                     return self._format_blocked_option(entry)
         return "None"
 
     async def _select_blocked_number(self, option: str) -> None:
         """Select a blocked number entry."""
         if option == "None":
-            previous = self.coordinator.selected_blocked_number
-            self.coordinator.selected_blocked_number = None
+            previous = self.coordinator.selected_blocked_number_id
+            self.coordinator.selected_blocked_number_id = None
             if previous is not None:
                 self.coordinator.async_update_listeners()
             _LOGGER.debug("Blocked number selection cleared")
@@ -334,11 +334,11 @@ class TsuryPhoneSelect(
         state: TsuryPhoneState = self.coordinator.data
         for entry in state.blocked_numbers:
             if self._format_blocked_option(entry) == option:
-                previous = self.coordinator.selected_blocked_number
-                self.coordinator.selected_blocked_number = entry.number
-                if previous != entry.number:
+                previous = self.coordinator.selected_blocked_number_id
+                self.coordinator.selected_blocked_number_id = entry.id
+                if previous != entry.id:
                     self.coordinator.async_update_listeners()
-                _LOGGER.debug("Selected blocked number: %s", entry.number)
+                _LOGGER.debug("Selected blocked number: %s (ID: %s)", entry.number, entry.id)
                 return
 
         raise HomeAssistantError(f"Blocked number selection '{option}' not found")
@@ -364,17 +364,17 @@ class TsuryPhoneSelect(
 
     def _get_current_priority_option(self, state: TsuryPhoneState) -> str:
         """Get the currently selected priority number."""
-        if self.coordinator.selected_priority_number and state.priority_callers:
+        if self.coordinator.selected_priority_number_id and state.priority_callers:
             for entry in state.priority_callers:
-                if entry.number == self.coordinator.selected_priority_number:
+                if entry.id == self.coordinator.selected_priority_number_id:
                     return entry.display_number or entry.number
         return "None"
 
     async def _select_priority_number(self, option: str) -> None:
         """Select priority number."""
         if option == "None":
-            previous = self.coordinator.selected_priority_number
-            self.coordinator.selected_priority_number = None
+            previous = self.coordinator.selected_priority_number_id
+            self.coordinator.selected_priority_number_id = None
             if previous is not None:
                 self.coordinator.async_update_listeners()
             _LOGGER.debug("Priority selection cleared")
@@ -384,9 +384,9 @@ class TsuryPhoneSelect(
         for entry in state.priority_callers:
             candidate = entry.display_number or entry.number
             if candidate == option:
-                previous = self.coordinator.selected_priority_number
-                self.coordinator.selected_priority_number = entry.number
-                if previous != entry.number:
+                previous = self.coordinator.selected_priority_number_id
+                self.coordinator.selected_priority_number_id = entry.id
+                if previous != entry.id:
                     self.coordinator.async_update_listeners()
                 _LOGGER.debug("Selected priority number: %s", entry.number)
                 return
@@ -530,18 +530,26 @@ class TsuryPhoneSelect(
                     {"number": entry.number, "name": entry.name}
                     for entry in state.blocked_numbers
                 ]
-            if self.coordinator.selected_blocked_number:
-                attributes["selected_number"] = self.coordinator.selected_blocked_number
+            if self.coordinator.selected_blocked_number_id:
+                # Find the selected entry and show its number
+                for entry in state.blocked_numbers:
+                    if entry.id == self.coordinator.selected_blocked_number_id:
+                        attributes["selected_number"] = entry.number
+                        attributes["selected_id"] = entry.id
+                        break
         elif self.entity_description.key == "priority_number":
             attributes["total_priority"] = len(state.priority_callers)
             if state.priority_callers:
                 attributes["priority_numbers"] = [
                     entry.number for entry in state.priority_callers
                 ]
-            if self.coordinator.selected_priority_number:
-                attributes["selected_number"] = (
-                    self.coordinator.selected_priority_number
-                )
+            if self.coordinator.selected_priority_number_id:
+                # Find the selected entry and show its number
+                for entry in state.priority_callers:
+                    if entry.id == self.coordinator.selected_priority_number_id:
+                        attributes["selected_number"] = entry.number
+                        attributes["selected_id"] = entry.id
+                        break
         elif self.entity_description.key == "webhook_action":
             attributes["total_webhooks"] = len(state.webhooks)
             if state.webhooks:
