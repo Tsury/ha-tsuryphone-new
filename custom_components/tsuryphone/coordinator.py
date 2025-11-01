@@ -2059,12 +2059,19 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     self._ensure_quick_dial_selection()
                 except (ValueError, KeyError) as err:
                     _LOGGER.warning("Invalid quick dial entry in config delta: %s", err)
-            elif action == "remove" and isinstance(value, str):
-                # Remove quick dial by code
-                self.data.quick_dials = [
-                    q for q in self.data.quick_dials if q.code != value
-                ]
-                self._ensure_quick_dial_selection()
+            elif action == "remove":
+                # Remove quick dial by ID (firmware sends {"id": "..."} or just "id_string")
+                entry_id = None
+                if isinstance(value, dict):
+                    entry_id = value.get("id")
+                elif isinstance(value, str):
+                    entry_id = value
+                
+                if entry_id:
+                    self.data.quick_dials = [
+                        q for q in self.data.quick_dials if q.id != entry_id
+                    ]
+                    self._ensure_quick_dial_selection()
         elif key.startswith("blocked."):
             # Blocked numbers list changes
             action = key.split(".", 1)[1]
@@ -2098,9 +2105,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         "Invalid blocked number entry in config delta: %s", err
                     )
             elif action == "remove" and isinstance(value, str):
-                # Remove blocked number
+                # Remove blocked number by ID (firmware sends ID as string)
                 self.data.blocked_numbers = [
-                    b for b in self.data.blocked_numbers if b.number != value
+                    b for b in self.data.blocked_numbers if b.id != value
                 ]
                 self._ensure_blocked_selection()
         elif key.startswith("webhook."):
@@ -2168,8 +2175,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                         "Invalid priority caller entry in config delta: %s", err
                     )
             elif action == "remove" and isinstance(value, str):
+                # Remove priority caller by ID (firmware sends ID as string)
                 self.data.priority_callers = [
-                    p for p in self.data.priority_callers if p.number != value
+                    p for p in self.data.priority_callers if p.id != value
                 ]
                 self._ensure_priority_selection()
         elif key == "maintenance.enabled":
