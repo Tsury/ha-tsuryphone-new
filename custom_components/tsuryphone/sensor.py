@@ -380,6 +380,19 @@ class TsuryPhoneSensor(
                 state.previous_app_state
             )
             attributes["previous_state_code"] = state.previous_app_state.value
+            
+            # Add quick_dials list for contacts view
+            attributes["quick_dials"] = [
+                {
+                    "id": entry.id,
+                    "code": entry.code,
+                    "number": entry.number,
+                    "name": entry.name,
+                    "normalized_number": entry.normalized_number,
+                    "display_number": entry.display_number,
+                }
+                for entry in state.quick_dials
+            ]
 
         elif self.entity_description.key == "current_call_summary":
             attributes.update(
