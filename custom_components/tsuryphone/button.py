@@ -44,6 +44,11 @@ BUTTON_DESCRIPTIONS = (
         icon="mdi:send",
     ),
     ButtonEntityDescription(
+        key="delete_last_digit",
+        name="Call - Delete Last Digit",
+        icon="mdi:backspace-outline",
+    ),
+    ButtonEntityDescription(
         key="answer",
         name="Call - Answer",
         icon="mdi:phone",
@@ -272,6 +277,8 @@ class TsuryPhoneButton(
                 await self._dial_digit_from_buffer()
             elif self.entity_description.key == "send_dialed_number":
                 await self._send_dialed_number()
+            elif self.entity_description.key == "delete_last_digit":
+                await self._delete_last_digit()
             elif self.entity_description.key == "quick_dial_add":
                 await self._add_quick_dial_entry()
             elif self.entity_description.key == "quick_dial_remove":
@@ -636,6 +643,15 @@ class TsuryPhoneButton(
 
         await self.coordinator.api_client.send_dialed_number()
 
+    async def _delete_last_digit(self) -> None:
+        """Delete the last digit from the pending dial buffer."""
+        state: TsuryPhoneState = self.coordinator.data
+
+        if not state.current_dialing_number:
+            raise HomeAssistantError("No digits to delete")
+
+        await self.coordinator.api_client.delete_last_digit()
+
     def _get_user_friendly_error(self, error: TsuryPhoneAPIError) -> str:
         """Convert API error to user-friendly message."""
         if self.coordinator.api_client.is_api_error_code(
@@ -883,7 +899,17 @@ class TsuryPhoneButton(
                 return False
             if not state.current_dialing_number:
                 return False
-            return state.app_state == AppState.IDLE
+            return True
+
+        # Delete last digit button - enabled when there are digits to delete
+        elif self.entity_description.key == "delete_last_digit":
+            if not (self.coordinator.last_update_success and state.connected):
+                return False
+            if not state.current_dialing_number:
+                return False
+            if state.app_state != AppState.IDLE:
+                return False
+            return True
 
         # Data refresh buttons can work if we have coordinator data
         elif self.entity_description.key in ["refetch", "refresh_snapshot"]:
