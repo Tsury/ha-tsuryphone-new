@@ -33,6 +33,13 @@ dial_digit:
           max: 9
           step: 1
 
+delete_last_digit:
+  name: Delete last digit
+  description: Delete the last digit from the pending dial buffer on the TsuryPhone device.
+  target:
+    device:
+      integration: tsuryphone
+
 answer:
   name: Answer call
   description: Answer an incoming call on the TsuryPhone device.

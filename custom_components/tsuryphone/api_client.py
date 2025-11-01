@@ -44,6 +44,7 @@ from .const import (
     ERROR_CODE_NO_ACTIVE_CALL,
     INTEGRATION_EVENT_SCHEMA_VERSION,
     API_CALL_DIAL_DIGIT,
+    API_CALL_DELETE_LAST_DIGIT,
     API_CALL_SEND_DIALED_NUMBER,
     ERROR_CODE_MISSING_DIGIT,
     ERROR_CODE_INVALID_DIGIT,
@@ -197,6 +198,10 @@ class TsuryPhoneAPIClient:
             data["deferValidation"] = True
 
         return await self._request("POST", API_CALL_DIAL_DIGIT, data)
+
+    async def delete_last_digit(self) -> dict[str, Any]:
+        """Delete the last digit from the pending dial buffer."""
+        return await self._request("POST", API_CALL_DELETE_LAST_DIGIT)
 
     async def send_dialed_number(self) -> dict[str, Any]:
         """Send/validate the currently dialed number."""

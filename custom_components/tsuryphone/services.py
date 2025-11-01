@@ -26,6 +26,7 @@ from .const import (
     DOMAIN,
     SERVICE_DIAL,
     SERVICE_DIAL_DIGIT,
+    SERVICE_DELETE_LAST_DIGIT,
     SERVICE_ANSWER,
     SERVICE_HANGUP,
     SERVICE_RING_DEVICE,
@@ -645,6 +646,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to send digit {digit}: {err}") from err
+
+    async def async_delete_last_digit(call: ServiceCall) -> None:
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+
+        if not coordinator.data.current_dialing_number:
+            raise ServiceValidationError("No digits to delete")
+
+        try:
+            await coordinator.api_client.delete_last_digit()
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(f"Failed to delete last digit: {err}") from err
 
     async def async_answer(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
@@ -1324,6 +1337,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     services_config = [
         (SERVICE_DIAL, async_dial, DIAL_SCHEMA),
         (SERVICE_DIAL_DIGIT, async_dial_digit, DIAL_DIGIT_SCHEMA),
+        (SERVICE_DELETE_LAST_DIGIT, async_delete_last_digit, DEVICE_ONLY_SCHEMA),
         (SERVICE_ANSWER, async_answer, DEVICE_ONLY_SCHEMA),
         (SERVICE_HANGUP, async_hangup, DEVICE_ONLY_SCHEMA),
         (SERVICE_RING_DEVICE, async_ring_device, RING_DEVICE_SCHEMA),
@@ -1426,6 +1440,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
     services_to_remove = [
         SERVICE_DIAL,
         SERVICE_DIAL_DIGIT,
+        SERVICE_DELETE_LAST_DIGIT,
         SERVICE_ANSWER,
         SERVICE_HANGUP,
         SERVICE_RING_DEVICE,
