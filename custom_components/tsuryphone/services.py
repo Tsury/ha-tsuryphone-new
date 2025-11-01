@@ -653,7 +653,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coordinator = context.coordinator
 
         # Allow hangup when there's an active call OR when in invalid number state
-        if not coordinator.data.is_call_active and coordinator.data.app_state != AppState.INVALID_NUMBER:
+        if (
+            not coordinator.data.is_call_active
+            and coordinator.data.app_state != AppState.INVALID_NUMBER
+        ):
             raise ServiceValidationError("No active call to hang up")
 
         try:
