@@ -524,6 +524,20 @@ class TsuryPhoneSensor(
             attributes["capacity"] = state.call_history_capacity
 
             if state.call_history:
+                # Add the full call history as a list of dicts
+                attributes["entries"] = [
+                    {
+                        "number": entry.number,
+                        "name": entry.name,
+                        "call_type": entry.call_type,
+                        "result": entry.result,
+                        "duration_s": entry.duration_s,
+                        "received_ts": entry.received_ts,
+                        "is_priority": entry.is_priority,
+                    }
+                    for entry in state.call_history
+                ]
+                
                 # Add info about newest and oldest entries
                 newest = state.call_history[-1]  # Newest is last
                 oldest = state.call_history[0]  # Oldest is first
