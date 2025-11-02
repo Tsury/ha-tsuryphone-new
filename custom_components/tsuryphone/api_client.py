@@ -282,7 +282,7 @@ class TsuryPhoneAPIClient:
 
     # Quick dial management
     async def add_quick_dial(
-        self, code: str, number: str, name: str = ""
+        self, number: str, name: str = "", code: str = ""
     ) -> dict[str, Any]:
         """Add quick dial entry."""
         data = {"number": number}

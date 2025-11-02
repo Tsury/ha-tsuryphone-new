@@ -176,6 +176,13 @@ QUICK_DIAL_ADD_SCHEMA = _service_schema(
     }
 )
 
+def _validate_quick_dial_remove(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate quick_dial_remove requires either id or code."""
+    if not data.get("id") and not data.get("code"):
+        raise vol.Invalid("Either 'id' or 'code' must be provided")
+    return data
+
+
 QUICK_DIAL_REMOVE_SCHEMA = vol.Schema(
     vol.All(
         _service_schema(
@@ -184,11 +191,7 @@ QUICK_DIAL_REMOVE_SCHEMA = vol.Schema(
                 vol.Optional("code"): cv.string,
             }
         ),
-        vol.Any(
-            vol.Schema(lambda d: "id" in d, extra=vol.ALLOW_EXTRA),
-            vol.Schema(lambda d: "code" in d, extra=vol.ALLOW_EXTRA),
-            msg="Either 'id' or 'code' must be provided",
-        ),
+        _validate_quick_dial_remove,
     )
 )
 
@@ -201,7 +204,7 @@ BLOCKED_ADD_SCHEMA = _service_schema(
 
 BLOCKED_REMOVE_SCHEMA = _service_schema(
     {
-        vol.Required("number"): cv.string,
+        vol.Required("id"): cv.string,
     }
 )
 
@@ -874,7 +877,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError("name cannot be empty")
 
         try:
-            await coordinator.api_client.add_quick_dial(code, number, name)
+            await coordinator.api_client.add_quick_dial(number, name, code)
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to add quick dial: {err}") from err
@@ -1222,7 +1225,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     continue
 
                 try:
-                    await coordinator.api_client.add_quick_dial(code, number, name)
+                    await coordinator.api_client.add_quick_dial(number, name, code)
                     results["added"].append(code)
                     _LOGGER.debug("Added quick dial entry: %s", code)
                 except TsuryPhoneAPIError as err:

@@ -462,7 +462,7 @@ class TsuryPhoneButton(
         device_number = self._prepare_number_input(number, field="Quick dial number")
 
         try:
-            response = await self.coordinator.api_client.add_quick_dial(code, device_number, name)
+            response = await self.coordinator.api_client.add_quick_dial(device_number, name, code)
             # Extract the ID from the response and set as selected
             entry_data = response.get("data", {}).get("entry", {})
             entry_id = entry_data.get("id")
