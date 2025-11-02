@@ -285,11 +285,10 @@ class TsuryPhoneAPIClient:
         self, number: str, name: str = "", code: str = ""
     ) -> dict[str, Any]:
         """Add quick dial entry."""
-        # Firmware requires both code and number to be present, even if code is empty
-        data = {
-            "code": code,
-            "number": number,
-        }
+        data = {"number": number}
+        # Code is optional
+        if code:
+            data["code"] = code
         if name:
             data["name"] = name
         _LOGGER.debug(
