@@ -530,10 +530,11 @@ class TsuryPhoneSensor(
                         "number": entry.number,
                         "name": entry.name,
                         "call_type": entry.call_type,
-                        "result": entry.result,
+                        "is_incoming": entry.is_incoming,
                         "duration_s": entry.duration_s,
                         "received_ts": entry.received_ts,
-                        "is_priority": entry.is_priority,
+                        "reason": entry.reason,
+                        "seq": entry.seq,
                     }
                     for entry in state.call_history
                 ]
