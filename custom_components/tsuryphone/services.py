@@ -876,6 +876,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not name:
             raise ServiceValidationError("name cannot be empty")
 
+        _LOGGER.debug(
+            "quick_dial_add: code='%s' | number='%s' | name='%s'",
+            code,
+            number,
+            name,
+        )
+
         try:
             await coordinator.api_client.add_quick_dial(number, name, code)
             await coordinator.async_request_refresh()

@@ -291,6 +291,13 @@ class TsuryPhoneAPIClient:
             data["code"] = code
         if name:
             data["name"] = name
+        _LOGGER.debug(
+            "add_quick_dial API call: number='%s' | name='%s' | code='%s' | data=%s",
+            number,
+            name,
+            code,
+            data,
+        )
         return await self._request("POST", API_CONFIG_QUICK_DIAL_ADD, data)
 
     async def remove_quick_dial_by_id(self, entry_id: str) -> dict[str, Any]:
