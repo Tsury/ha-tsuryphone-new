@@ -948,7 +948,43 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
         try:
-            await coordinator.api_client.edit_contact(entry_id, name, number, code, is_priority)
+            # Find the old contact to determine if priority changed
+            old_contact = None
+            for qd in coordinator.data.quick_dials:
+                if qd.id == entry_id:
+                    old_contact = qd
+                    break
+            
+            if not old_contact:
+                raise ServiceValidationError(f"Contact with id '{entry_id}' not found")
+            
+            # Check if contact was in priority list
+            old_priority_entry = None
+            for p in coordinator.data.priority_numbers:
+                if p.number == old_contact.number:
+                    old_priority_entry = p
+                    break
+            
+            was_priority = old_priority_entry is not None
+            
+            # Remove old contact
+            await coordinator.api_client.remove_quick_dial_by_id(entry_id)
+            
+            # Add new contact
+            await coordinator.api_client.add_quick_dial(number, name, code)
+            
+            # Handle priority changes
+            if is_priority and not was_priority:
+                # Add to priority
+                await coordinator.api_client.add_priority_caller(number)
+            elif not is_priority and was_priority:
+                # Remove from priority using old entry ID
+                await coordinator.api_client.remove_priority_caller_by_id(old_priority_entry.id)
+            elif is_priority and was_priority and old_contact.number != number:
+                # Number changed but still priority - remove old, add new
+                await coordinator.api_client.remove_priority_caller_by_id(old_priority_entry.id)
+                await coordinator.api_client.add_priority_caller(number)
+            
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to edit contact: {err}") from err

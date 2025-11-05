@@ -151,6 +151,11 @@ BUTTON_DESCRIPTIONS = (
         name="Call - Toggle Waiting",
         icon="mdi:phone-plus",
     ),
+    ButtonEntityDescription(
+        key="toggle_mute",
+        name="Call - Toggle Mute",
+        icon="mdi:microphone-off",
+    ),
 )
 
 
@@ -299,6 +304,8 @@ class TsuryPhoneButton(
                 await self._toggle_volume_mode()
             elif self.entity_description.key == "toggle_call_waiting":
                 await self._toggle_call_waiting()
+            elif self.entity_description.key == "toggle_mute":
+                await self._toggle_mute()
         except TsuryPhoneAPIError as err:
             # Provide user-friendly error messages
             error_msg = self._get_user_friendly_error(err)
@@ -344,6 +351,16 @@ class TsuryPhoneButton(
             raise HomeAssistantError("No active call to toggle audio output")
 
         await self.coordinator.api_client.toggle_volume_mode()
+
+    async def _toggle_mute(self) -> None:
+        """Toggle mute status during a call."""
+
+        state: TsuryPhoneState = self.coordinator.data
+
+        if not state.is_call_active:
+            raise HomeAssistantError("No active call to toggle mute")
+
+        await self.coordinator.api_client.toggle_mute()
 
     async def _ring_device(self) -> None:
         """Ring the device using the configured pattern while bypassing DND."""
@@ -731,6 +748,10 @@ class TsuryPhoneButton(
             attributes["volume_mode_code"] = state.volume_mode_code
             attributes["is_speaker_mode"] = state.is_speaker_mode
 
+        elif self.entity_description.key == "toggle_mute":
+            attributes["can_execute"] = state.is_call_active
+            attributes["is_muted"] = state.is_muted
+
         elif self.entity_description.key == "ring":
             attributes["current_ring_pattern"] = state.ring_pattern or "default"
 
@@ -870,6 +891,7 @@ class TsuryPhoneButton(
             "reset",
             "toggle_volume_mode",
             "toggle_call_waiting",
+            "toggle_mute",
         ]:
             if not (self.coordinator.last_update_success and state.connected):
                 return False
@@ -889,6 +911,8 @@ class TsuryPhoneButton(
                     or state.app_state == AppState.INVALID_NUMBER
                 )
             if self.entity_description.key == "toggle_volume_mode":
+                return state.is_call_active
+            if self.entity_description.key == "toggle_mute":
                 return state.is_call_active
             if self.entity_description.key == "toggle_call_waiting":
                 return state.call_waiting_available

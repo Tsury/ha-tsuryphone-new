@@ -61,6 +61,11 @@ BINARY_SENSOR_DESCRIPTIONS = (
         icon="mdi:star-clock",
         entity_registry_enabled_default=True,
     ),
+    BinarySensorEntityDescription(
+        key="muted",
+        name="Muted",
+        icon="mdi:microphone-off",
+    ),
 )
 
 
@@ -124,6 +129,8 @@ class TsuryPhoneBinarySensor(
             return state.current_call_is_priority
         elif self.entity_description.key == "waiting_call_priority":
             return state.waiting_call.is_priority
+        elif self.entity_description.key == "muted":
+            return state.is_muted
 
         return None
 
