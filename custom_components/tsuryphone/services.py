@@ -176,6 +176,7 @@ QUICK_DIAL_ADD_SCHEMA = _service_schema(
     }
 )
 
+
 def _validate_quick_dial_remove(data: dict[str, Any]) -> dict[str, Any]:
     """Validate quick_dial_remove requires either id or code."""
     if not data.get("id") and not data.get("code"):

@@ -1,21 +1,15 @@
 {
   "domain": "tsuryphone",
   "name": "TsuryPhone",
-  "codeowners": [
-    "@tsurytech"
-  ],
+  "codeowners": ["@tsurytech"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/tsurytech/ha-tsuryphone",
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/tsurytech/ha-tsuryphone/issues",
-  "loggers": [
-    "custom_components.tsuryphone"
-  ],
+  "loggers": ["custom_components.tsuryphone"],
   "requirements": [],
   "version": "1.0.137",
-  "zeroconf": [
-    "_http._tcp.local."
-  ]
+  "zeroconf": ["_http._tcp.local."]
 }

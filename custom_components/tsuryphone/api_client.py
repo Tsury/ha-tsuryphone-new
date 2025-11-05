@@ -302,7 +302,9 @@ class TsuryPhoneAPIClient:
 
     async def remove_quick_dial_by_id(self, entry_id: str) -> dict[str, Any]:
         """Remove quick dial entry by ID."""
-        return await self._request("POST", API_CONFIG_QUICK_DIAL_REMOVE, {"id": entry_id})
+        return await self._request(
+            "POST", API_CONFIG_QUICK_DIAL_REMOVE, {"id": entry_id}
+        )
 
     async def dial_quick_dial(self, code: str) -> dict[str, Any]:
         """Dial quick dial code."""
@@ -324,12 +326,8 @@ class TsuryPhoneAPIClient:
     async def remove_blocked_number_by_id(self, entry_id: str) -> dict[str, Any]:
         """Remove blocked number by ID."""
         if not entry_id:
-            raise TsuryPhoneAPIError(
-                "ID cannot be empty", ERROR_CODE_INVALID_NUMBER
-            )
-        return await self._request(
-            "POST", API_CONFIG_BLOCKED_REMOVE, {"id": entry_id}
-        )
+            raise TsuryPhoneAPIError("ID cannot be empty", ERROR_CODE_INVALID_NUMBER)
+        return await self._request("POST", API_CONFIG_BLOCKED_REMOVE, {"id": entry_id})
 
     # Priority caller management
     async def add_priority_caller(self, number: str) -> dict[str, Any]:
@@ -343,12 +341,8 @@ class TsuryPhoneAPIClient:
     async def remove_priority_caller_by_id(self, entry_id: str) -> dict[str, Any]:
         """Remove a priority caller by ID."""
         if not entry_id:
-            raise TsuryPhoneAPIError(
-                "ID cannot be empty", ERROR_CODE_INVALID_NUMBER
-            )
-        return await self._request(
-            "POST", API_CONFIG_PRIORITY_REMOVE, {"id": entry_id}
-        )
+            raise TsuryPhoneAPIError("ID cannot be empty", ERROR_CODE_INVALID_NUMBER)
+        return await self._request("POST", API_CONFIG_PRIORITY_REMOVE, {"id": entry_id})
 
     # Webhook management
     async def add_webhook_action(

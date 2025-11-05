@@ -462,7 +462,9 @@ class TsuryPhoneButton(
         device_number = self._prepare_number_input(number, field="Quick dial number")
 
         try:
-            response = await self.coordinator.api_client.add_quick_dial(device_number, name, code)
+            response = await self.coordinator.api_client.add_quick_dial(
+                device_number, name, code
+            )
             # Extract the ID from the response and set as selected
             entry_data = response.get("data", {}).get("entry", {})
             entry_id = entry_data.get("id")
@@ -506,7 +508,9 @@ class TsuryPhoneButton(
         device_number = self._prepare_number_input(number, field="Blocked number")
 
         try:
-            response = await self.coordinator.api_client.add_blocked_number(device_number, name)
+            response = await self.coordinator.api_client.add_blocked_number(
+                device_number, name
+            )
             # Extract the ID from the response and set as selected
             entry_data = response.get("data", {}).get("entry", {})
             entry_id = entry_data.get("id")
@@ -546,7 +550,9 @@ class TsuryPhoneButton(
         device_number = self._prepare_number_input(number, field="Priority number")
 
         try:
-            response = await self.coordinator.api_client.add_priority_caller(device_number)
+            response = await self.coordinator.api_client.add_priority_caller(
+                device_number
+            )
             # Extract the ID from the response and set as selected
             entry_data = response.get("data", {}).get("entry", {})
             entry_id = entry_data.get("id")
@@ -810,9 +816,7 @@ class TsuryPhoneButton(
             attributes["buffer"] = {"number": buffer.get("number", "")}
 
         elif self.entity_description.key == "priority_remove":
-            selected_id = getattr(
-                self.coordinator, "selected_priority_number_id", None
-            )
+            selected_id = getattr(self.coordinator, "selected_priority_number_id", None)
             attributes["can_execute"] = bool(selected_id and state.connected)
             attributes["selected_id"] = selected_id
 
@@ -961,11 +965,15 @@ class TsuryPhoneButton(
             if key == "blocked_add":
                 return self._buffer_has_values("blocked", ("number",))
             if key == "blocked_remove":
-                return bool(getattr(self.coordinator, "selected_blocked_number_id", None))
+                return bool(
+                    getattr(self.coordinator, "selected_blocked_number_id", None)
+                )
             if key == "priority_add":
                 return self._buffer_has_values("priority", ("number",))
             if key == "priority_remove":
-                return bool(getattr(self.coordinator, "selected_priority_number_id", None))
+                return bool(
+                    getattr(self.coordinator, "selected_priority_number_id", None)
+                )
             if key == "webhook_add":
                 return self._buffer_has_values("webhook", ("code", "webhook_id"))
             if key == "webhook_remove":

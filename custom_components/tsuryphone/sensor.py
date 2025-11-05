@@ -380,7 +380,7 @@ class TsuryPhoneSensor(
                 state.previous_app_state
             )
             attributes["previous_state_code"] = state.previous_app_state.value
-            
+
             # Add quick_dials list for contacts view
             attributes["quick_dials"] = [
                 {
@@ -392,7 +392,7 @@ class TsuryPhoneSensor(
                 }
                 for entry in state.quick_dials
             ]
-            
+
             # Add blocked_numbers list for blocked view
             attributes["blocked_numbers"] = [
                 {
@@ -403,7 +403,7 @@ class TsuryPhoneSensor(
                 }
                 for entry in state.blocked_numbers
             ]
-            
+
             # Add priority_callers list for priority indicators
             attributes["priority_callers"] = [
                 {
@@ -538,7 +538,7 @@ class TsuryPhoneSensor(
                     }
                     for entry in state.call_history
                 ]
-                
+
                 # Add info about newest and oldest entries
                 newest = state.call_history[-1]  # Newest is last
                 oldest = state.call_history[0]  # Oldest is first

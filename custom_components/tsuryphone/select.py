@@ -338,7 +338,9 @@ class TsuryPhoneSelect(
                 self.coordinator.selected_blocked_number_id = entry.id
                 if previous != entry.id:
                     self.coordinator.async_update_listeners()
-                _LOGGER.debug("Selected blocked number: %s (ID: %s)", entry.number, entry.id)
+                _LOGGER.debug(
+                    "Selected blocked number: %s (ID: %s)", entry.number, entry.id
+                )
                 return
 
         raise HomeAssistantError(f"Blocked number selection '{option}' not found")
