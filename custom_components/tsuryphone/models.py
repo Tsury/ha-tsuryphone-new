@@ -307,6 +307,7 @@ class TsuryPhoneState:
     volume_mode: str = VolumeMode.EARPIECE.value
     volume_mode_code: int = 0
     is_speaker_mode: bool = False
+    is_muted: bool = False
 
     # Device stats
     stats: DeviceStats = field(default_factory=DeviceStats)

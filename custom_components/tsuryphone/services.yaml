@@ -54,6 +54,13 @@ hangup:
     device:
       integration: tsuryphone
 
+toggle_mute:
+  name: Toggle mute
+  description: Toggle microphone mute during an active call.
+  target:
+    device:
+      integration: tsuryphone
+
 ring_device:
   name: Ring device
   description: Trigger the TsuryPhone device to ring.
@@ -300,12 +307,55 @@ quick_dial_remove:
       integration: tsuryphone
   fields:
     id:
-      name: Quick dial entry ID
+      name: Entry ID
       description: ID of the quick dial entry to remove from the device.
       required: true
       example: "qd_12345_abcdef_1"
       selector:
         text:
+
+edit_contact:
+  name: Edit contact
+  description: Edit an existing contact (quick dial entry).
+  target:
+    device:
+      integration: tsuryphone
+  fields:
+    id:
+      name: Entry ID
+      description: ID of the contact to edit.
+      required: true
+      example: "qd_12345_abcdef_1"
+      selector:
+        text:
+    name:
+      name: Display name
+      description: New name for the contact.
+      required: true
+      example: "Mom"
+      selector:
+        text:
+    number:
+      name: Phone number
+      description: New phone number for the contact.
+      required: true
+      example: "0541234567"
+      selector:
+        text:
+    code:
+      name: Quick dial code
+      description: New quick dial code (optional, quote to preserve leading zeros).
+      required: false
+      example: "012"
+      selector:
+        text:
+    priority:
+      name: Priority contact
+      description: Whether this contact is a priority caller.
+      required: false
+      default: false
+      selector:
+        boolean:
 
 quick_dial_clear:
   name: Clear quick dial entries

@@ -20,6 +20,7 @@ from .const import (
     API_CALL_HANGUP,
     API_CALL_SWITCH_CALL_WAITING,
     API_CALL_TOGGLE_VOLUME_MODE,
+    API_CALL_TOGGLE_MUTE,
     API_SYSTEM_RESET,
     API_SYSTEM_FACTORY_RESET,
     API_SYSTEM_RING,
@@ -31,6 +32,7 @@ from .const import (
     API_CALL_DIAL_QUICK_DIAL,
     API_CONFIG_QUICK_DIAL_ADD,
     API_CONFIG_QUICK_DIAL_REMOVE,
+    API_CONFIG_EDIT_CONTACT,
     API_CONFIG_WEBHOOK_ADD,
     API_CONFIG_WEBHOOK_REMOVE,
     API_CONFIG_BLOCKED_ADD,
@@ -223,6 +225,10 @@ class TsuryPhoneAPIClient:
         """Toggle between speaker and earpiece modes during a call."""
         return await self._request("POST", API_CALL_TOGGLE_VOLUME_MODE)
 
+    async def toggle_mute(self) -> dict[str, Any]:
+        """Toggle mute status during a call."""
+        return await self._request("POST", API_CALL_TOGGLE_MUTE)
+
     # System endpoints
     async def reset_device(self) -> dict[str, Any]:
         """Reset the device."""
@@ -305,6 +311,27 @@ class TsuryPhoneAPIClient:
         return await self._request(
             "POST", API_CONFIG_QUICK_DIAL_REMOVE, {"id": entry_id}
         )
+
+    async def edit_contact(
+        self, entry_id: str, name: str, number: str, code: str, is_priority: bool
+    ) -> dict[str, Any]:
+        """Edit an existing contact."""
+        data = {
+            "id": entry_id,
+            "name": name,
+            "number": number,
+            "code": code,
+            "isPriority": is_priority,
+        }
+        _LOGGER.debug(
+            "edit_contact API call: id='%s' | name='%s' | number='%s' | code='%s' | priority=%s",
+            entry_id,
+            name,
+            number,
+            code,
+            is_priority,
+        )
+        return await self._request("POST", API_CONFIG_EDIT_CONTACT, data)
 
     async def dial_quick_dial(self, code: str) -> dict[str, Any]:
         """Dial quick dial code."""

@@ -42,6 +42,7 @@ from .const import (
     SERVICE_QUICK_DIAL_ADD,
     SERVICE_QUICK_DIAL_REMOVE,
     SERVICE_QUICK_DIAL_CLEAR,
+    SERVICE_EDIT_CONTACT,
     SERVICE_DIAL_QUICK_DIAL,
     SERVICE_BLOCKED_ADD,
     SERVICE_BLOCKED_REMOVE,
@@ -56,6 +57,7 @@ from .const import (
     SERVICE_WEBHOOK_TEST,
     SERVICE_SWITCH_CALL_WAITING,
     SERVICE_TOGGLE_VOLUME_MODE,
+    SERVICE_TOGGLE_MUTE,
     SERVICE_SET_MAINTENANCE_MODE,
     SERVICE_GET_MISSED_CALLS,
     SERVICE_SET_HA_URL,
@@ -194,6 +196,16 @@ QUICK_DIAL_REMOVE_SCHEMA = vol.Schema(
         ),
         _validate_quick_dial_remove,
     )
+)
+
+EDIT_CONTACT_SCHEMA = _service_schema(
+    {
+        vol.Required("id"): cv.string,
+        vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Required("number"): cv.string,
+        vol.Optional("code"): cv.string,
+        vol.Optional("priority"): cv.boolean,
+    }
 )
 
 BLOCKED_ADD_SCHEMA = _service_schema(
@@ -904,6 +916,43 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to remove quick dial: {err}") from err
 
+    async def async_edit_contact(call: ServiceCall) -> None:
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+        
+        entry_id = call.data.get("id")
+        if not entry_id:
+            raise ServiceValidationError("'id' is required")
+        
+        name = call.data["name"].strip()
+        if not name:
+            raise ServiceValidationError("name cannot be empty")
+        
+        number = _normalize_number_for_service(
+            coordinator,
+            call.data["number"],
+            field_name="number",
+            remember=True,
+        )
+        
+        code = call.data.get("code", "")  # Optional
+        is_priority = call.data.get("priority", False)
+        
+        _LOGGER.debug(
+            "edit_contact: id='%s' | name='%s' | number='%s' | code='%s' | priority=%s",
+            entry_id,
+            name,
+            number,
+            code,
+            is_priority,
+        )
+
+        try:
+            await coordinator.api_client.edit_contact(entry_id, name, number, code, is_priority)
+            await coordinator.async_request_refresh()
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(f"Failed to edit contact: {err}") from err
+
     async def async_quick_dial_clear(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
@@ -1127,6 +1176,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             await coordinator.api_client.toggle_volume_mode()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to toggle volume mode: {err}") from err
+
+    async def async_toggle_mute(call: ServiceCall) -> None:
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+
+        if not coordinator.data.is_call_active:
+            raise ServiceValidationError("No active call to toggle mute")
+
+        try:
+            await coordinator.api_client.toggle_mute()
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(f"Failed to toggle mute: {err}") from err
 
     async def async_set_maintenance_mode(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
@@ -1391,6 +1452,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         (SERVICE_WEBHOOK_TEST, async_webhook_test, WEBHOOK_TEST_SCHEMA),
         (SERVICE_SWITCH_CALL_WAITING, async_switch_call_waiting, DEVICE_ONLY_SCHEMA),
         (SERVICE_TOGGLE_VOLUME_MODE, async_toggle_volume_mode, DEVICE_ONLY_SCHEMA),
+        (SERVICE_TOGGLE_MUTE, async_toggle_mute, DEVICE_ONLY_SCHEMA),
+        (SERVICE_EDIT_CONTACT, async_edit_contact, EDIT_CONTACT_SCHEMA),
         (
             SERVICE_SET_MAINTENANCE_MODE,
             async_set_maintenance_mode,
@@ -1464,6 +1527,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_QUICK_DIAL_ADD,
         SERVICE_QUICK_DIAL_REMOVE,
         SERVICE_QUICK_DIAL_CLEAR,
+        SERVICE_EDIT_CONTACT,
         SERVICE_BLOCKED_ADD,
         SERVICE_BLOCKED_REMOVE,
         SERVICE_BLOCKED_CLEAR,
@@ -1478,6 +1542,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_WEBHOOK_TEST,
         SERVICE_SWITCH_CALL_WAITING,
         SERVICE_TOGGLE_VOLUME_MODE,
+        SERVICE_TOGGLE_MUTE,
         SERVICE_SET_MAINTENANCE_MODE,
         SERVICE_GET_MISSED_CALLS,
         SERVICE_DIAL_QUICK_DIAL,

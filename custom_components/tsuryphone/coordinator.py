@@ -2728,6 +2728,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if self._apply_volume_mode_payload(event.data, source="event.context"):
             call_state_changed = True
 
+        # Handle mute state
+        if "isMuted" in event.data:
+            is_muted = self._coerce_bool(
+                event.data.get("isMuted"),
+                "event.context.isMuted",
+                default=self.data.is_muted,
+            )
+            if self._setattr_if_changed(self.data, "is_muted", is_muted):
+                call_state_changed = True
+
         # Extract system metrics if present (from addSystemInfo)
         if "freeHeap" in event.data:
             self.data.stats.free_heap_bytes = event.data["freeHeap"]
@@ -3324,6 +3334,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             if self._apply_volume_mode_payload(phone_data, source="device.phone"):
                 call_state_changed = True
 
+            # Handle mute state
+            if "isMuted" in phone_data:
+                is_muted = self._coerce_bool(
+                    phone_data.get("isMuted"),
+                    "device.phone.isMuted",
+                    default=self.data.is_muted,
+                )
+                if self._setattr_if_changed(self.data, "is_muted", is_muted):
+                    call_state_changed = True
+
             if "dndActive" in phone_data:
                 self.data.dnd_active = self._coerce_bool(
                     phone_data["dndActive"],
@@ -3844,6 +3864,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         if self._apply_volume_mode_payload(device_data, source="device"):
             call_state_changed = True
+
+        # Handle mute state
+        if "isMuted" in device_data:
+            is_muted = self._coerce_bool(
+                device_data.get("isMuted"),
+                "device.isMuted",
+                default=self.data.is_muted,
+            )
+            if self._setattr_if_changed(self.data, "is_muted", is_muted):
+                call_state_changed = True
 
         # Validate tracked selections after bulk update
         self._ensure_quick_dial_selection()
