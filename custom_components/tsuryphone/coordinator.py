@@ -90,7 +90,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._websocket_connection_seen = False
 
         # Send mode state (integration-only, not stored in firmware)
-        self._send_mode_enabled = False
+        self._send_mode_enabled = True
 
         # Call duration timer
         self._call_timer_task: asyncio.Task | None = None
