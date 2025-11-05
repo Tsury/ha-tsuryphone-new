@@ -10,6 +10,8 @@
   "issue_tracker": "https://github.com/tsurytech/ha-tsuryphone/issues",
   "loggers": ["custom_components.tsuryphone"],
   "requirements": [],
-  "version": "1.0.137",
-  "zeroconf": ["_http._tcp.local."]
+  "version": "1.0.138",
+  "zeroconf": [
+    "_http._tcp.local."
+  ]
 }
