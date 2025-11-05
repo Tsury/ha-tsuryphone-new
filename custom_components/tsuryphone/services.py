@@ -960,7 +960,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             # Check if contact was in priority list
             old_priority_entry = None
-            for p in coordinator.data.priority_numbers:
+            for p in coordinator.data.priority_callers:
                 if p.number == old_contact.number:
                     old_priority_entry = p
                     break
