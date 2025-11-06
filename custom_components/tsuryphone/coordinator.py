@@ -229,19 +229,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # Phase P8: Initialize resilience manager
         self._resilience = TsuryPhoneResilience(self.hass, self)
 
-        # Phase P7: Initialize storage cache
-        self._storage_cache = TsuryPhoneStorageCache(self.hass, self.device_info.device_id)
-        await self._storage_cache.async_initialize()
-
-        # Load persisted call history
-        persisted_history = await self._storage_cache.async_load_call_history()
-        if persisted_history:
-            state = self._ensure_state()
-            state.call_history = persisted_history
-            _LOGGER.info(
-                "Loaded %d persisted call history entries from storage",
-                len(persisted_history)
-            )
+        # Note: Storage cache is initialized in __init__.py before coordinator setup
+        # to ensure call history is loaded before any events are processed
 
         # Start WebSocket connection
         if self._websocket_enabled:
