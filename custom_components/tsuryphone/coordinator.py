@@ -148,6 +148,23 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data = TsuryPhoneState(device_info=self.device_info)
         return self.data
 
+    def _find_contact_name_by_number(self, number: str) -> str | None:
+        """Find contact name by normalized number from quick dials."""
+        if not number or not self.data:
+            return None
+        
+        # Normalize the input number for comparison
+        from .dialing import normalize_phone_number
+        normalized = normalize_phone_number(number, self.data.dialing_context)
+        
+        # Search in quick_dials (contacts)
+        for contact in self.data.quick_dials:
+            # Compare with the contact's normalized number
+            if contact.number == normalized or contact.number == number:
+                return contact.name if contact.name else None
+        
+        return None
+
     def _flag_call_state_dirty(self) -> None:
         """Mark that call-related state has been mutated."""
         self._call_state_dirty = True
@@ -211,6 +228,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         """Set up the coordinator."""
         # Phase P8: Initialize resilience manager
         self._resilience = TsuryPhoneResilience(self.hass, self)
+
+        # Phase P7: Initialize storage cache
+        self._storage_cache = TsuryPhoneStorageCache(self.hass, self.device_id)
+        await self._storage_cache.async_initialize()
+
+        # Load persisted call history
+        cached_data = await self._storage_cache.async_load_cache()
+        if cached_data and "call_history" in cached_data:
+            state = self._ensure_state()
+            state.call_history = cached_data["call_history"]
+            _LOGGER.info(
+                "Loaded %d persisted call history entries from storage",
+                len(state.call_history)
+            )
 
         # Start WebSocket connection
         if self._websocket_enabled:
@@ -525,6 +556,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         caller_name = call_info.name
 
+        # If no name provided by firmware, try to look it up from contacts
+        if not caller_name:
+            caller_name = self._find_contact_name_by_number(number)
+
         # Start call duration timer
         self._start_call_timer()
 
@@ -680,12 +715,20 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             entry = pending_call["entry"]
             entry.duration_s = call_info.duration_seconds
             entry.duration_ms = call_info.duration_ms
-            entry.name = call_info.name or entry.name
+            caller_name = call_info.name or entry.name
+            # If still no name, try to look it up from contacts
+            if not caller_name:
+                caller_name = self._find_contact_name_by_number(number)
+            entry.name = caller_name
             entry.reason = call_info.result or entry.reason
             entry.call_type = call_info.call_type or entry.call_type
             self.data.add_call_history_entry(entry)
         else:
             _LOGGER.debug("Synthesizing call start for end-only event")
+            caller_name = call_info.name
+            # If no name, try to look it up from contacts
+            if not caller_name:
+                caller_name = self._find_contact_name_by_number(number)
             history_entry = CallHistoryEntry(
                 call_type=call_info.call_type
                 or ("incoming" if is_incoming else "outgoing"),
@@ -696,7 +739,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 received_ts=event.received_at,
                 seq=event.seq,
                 synthetic=True,
-                name=call_info.name,
+                name=caller_name,
                 duration_ms=call_info.duration_ms,
                 reason=call_info.result or None,
             )
@@ -713,6 +756,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         caller_name = str(
             event.data.get("currentCallName") or event.data.get("callerName") or ""
         )
+
+        # If no name provided, try to look it up from contacts
+        if not caller_name:
+            caller_name = self._find_contact_name_by_number(number)
 
         call_snapshot = event.data.get("lastCall")
 
@@ -2841,6 +2888,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         self._pending_call_starts.pop(number, None)
 
+        # Try to look up contact name
+        caller_name = self._find_contact_name_by_number(number)
+
         history_entry = CallHistoryEntry(
             call_type="outgoing",
             number=number,
@@ -2851,6 +2901,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             seq=event.seq,
             reason="unanswered",
             synthetic=True,
+            name=caller_name,
         )
 
         self.data.add_call_history_entry(history_entry)
@@ -2884,6 +2935,9 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         ):  # Check recent history
             return  # Don't record as missed if it was blocked
 
+        # Try to look up contact name
+        caller_name = self._find_contact_name_by_number(number)
+
         # Record missed call
         history_entry = CallHistoryEntry(
             call_type="missed",
@@ -2893,6 +2947,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             ts_device=event.ts,
             received_ts=event.received_at,
             seq=event.seq,
+            name=caller_name,
         )
 
         self.data.add_call_history_entry(history_entry)
