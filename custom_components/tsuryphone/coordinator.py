@@ -230,7 +230,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         self._resilience = TsuryPhoneResilience(self.hass, self)
 
         # Phase P7: Initialize storage cache
-        self._storage_cache = TsuryPhoneStorageCache(self.hass, self.device_id)
+        self._storage_cache = TsuryPhoneStorageCache(self.hass, self.device_info.device_id)
         await self._storage_cache.async_initialize()
 
         # Load persisted call history
