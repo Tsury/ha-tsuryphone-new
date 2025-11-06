@@ -176,18 +176,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create and initialize coordinator
     coordinator = TsuryPhoneDataUpdateCoordinator(hass, api_client, device_info)
 
-    # Perform first refresh to populate initial state
-    await coordinator.async_config_entry_first_refresh()
-
-    # Store coordinator in runtime data for platform access
-    entry.runtime_data = coordinator
-
-    # Phase P5: Set up notifications
-    coordinator._notification_manager = await async_setup_notifications(
-        hass, coordinator
-    )
-
-    # Phase P7: Set up storage cache
+    # Phase P7: Set up storage cache BEFORE first refresh
     storage_cache = TsuryPhoneStorageCache(hass, device_info.device_id)
     await storage_cache.async_initialize()
 
@@ -200,13 +189,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator._storage_cache = storage_cache
 
+    # Initialize state and load cached data BEFORE first refresh
+    coordinator._ensure_state()
+    
     # Load cached call history if available
     try:
         cached_call_history = await storage_cache.async_load_call_history()
         if cached_call_history:
             coordinator.data.call_history = cached_call_history
-            _LOGGER.debug(
-                "Loaded %d cached call history entries", len(cached_call_history)
+            _LOGGER.info(
+                "Loaded %d cached call history entries before first refresh", len(cached_call_history)
             )
     except Exception as err:
         _LOGGER.error("Failed to load cached call history: %s", err)
@@ -216,11 +208,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cached_device_state = await storage_cache.async_load_device_state()
         if cached_device_state and "send_mode_enabled" in cached_device_state:
             coordinator._send_mode_enabled = cached_device_state["send_mode_enabled"]
-            _LOGGER.debug(
+            _LOGGER.info(
                 "Restored send_mode state: %s", coordinator._send_mode_enabled
             )
     except Exception as err:
         _LOGGER.error("Failed to load cached device state: %s", err)
+
+    # Perform first refresh to populate initial state (will preserve call_history now)
+    await coordinator.async_config_entry_first_refresh()
+
+    # Store coordinator in runtime data for platform access
+    entry.runtime_data = coordinator
+
+    # Phase P5: Set up notifications
+    coordinator._notification_manager = await async_setup_notifications(
+        hass, coordinator
+    )
 
     _LOGGER.info(
         "Successfully connected to TsuryPhone device %s at %s:%s",
