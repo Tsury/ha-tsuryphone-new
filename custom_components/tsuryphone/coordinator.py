@@ -234,13 +234,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         await self._storage_cache.async_initialize()
 
         # Load persisted call history
-        cached_data = await self._storage_cache.async_load_cache()
-        if cached_data and "call_history" in cached_data:
+        persisted_history = await self._storage_cache.async_load_call_history()
+        if persisted_history:
             state = self._ensure_state()
-            state.call_history = cached_data["call_history"]
+            state.call_history = persisted_history
             _LOGGER.info(
                 "Loaded %d persisted call history entries from storage",
-                len(state.call_history)
+                len(persisted_history)
             )
 
         # Start WebSocket connection
