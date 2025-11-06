@@ -550,6 +550,13 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             caller_name = self._find_contact_name_by_number(number)
 
         # Start call duration timer
+        # If transitioning from Dialing to In Call, reset the timer so duration
+        # starts from when call was answered, not from when dialing started
+        if previous_state == AppState.DIALING:
+            _LOGGER.info(
+                "Call-start event: transitioning from Dialing to In Call - resetting call timer"
+            )
+            self._stop_call_timer()
         self._start_call_timer()
 
         # Add to call history (provisional entry)
