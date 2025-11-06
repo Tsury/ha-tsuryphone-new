@@ -208,15 +208,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cached_call_history = await storage_cache.async_load_call_history()
         _LOGGER.info("async_load_call_history returned: %s entries", len(cached_call_history) if cached_call_history else 0)
         
-        if cached_call_history:
+        if cached_call_history is not None:
             _LOGGER.info("BEFORE assignment - coordinator.data.call_history length: %d", len(coordinator.data.call_history))
             coordinator.data.call_history = cached_call_history
             _LOGGER.info("AFTER assignment - coordinator.data.call_history length: %d", len(coordinator.data.call_history))
-            _LOGGER.info(
-                "✓ Loaded %d cached call history entries before first refresh", len(cached_call_history)
-            )
+            if len(cached_call_history) > 0:
+                _LOGGER.info(
+                    "✓ Loaded %d cached call history entries before first refresh", len(cached_call_history)
+                )
+            else:
+                _LOGGER.info("✓ Cache loaded successfully - no call history entries yet (empty list)")
         else:
-            _LOGGER.warning("✗ No cached call history returned from storage")
+            _LOGGER.warning("✗ No cached call history returned from storage (returned None)")
     except Exception as err:
         _LOGGER.error("✗ Failed to load cached call history: %s", err, exc_info=True)
 
