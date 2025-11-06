@@ -549,12 +549,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if not caller_name:
             caller_name = self._find_contact_name_by_number(number)
 
-    # Do NOT start the integration-side call timer here unconditionally.
-    # The firmware may send a call-start event during the dialing phase.
-    # We prefer to start/reset the timer when the call actually becomes
-    # active (In Call) or when the firmware supplies a current duration
-    # value in a subsequent call-info update. This avoids the timer
-    # counting time spent in the dialing phase before the call connects.
+        # Start call duration timer
+        self._start_call_timer()
 
         # Add to call history (provisional entry)
         call_type = call_info.call_type or ("incoming" if is_incoming else "outgoing")
@@ -1255,14 +1251,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         else:
             new_state = self.data.app_state
 
-        # Reset call timer when transitioning from Dialing to In Call
-        # This ensures duration starts counting from when call connects, not from dialing
-        if previous_state == AppState.DIALING and new_state == AppState.IN_CALL:
-            _LOGGER.debug(
-                "Call connected (Dialing -> In Call), resetting call timer to start duration from now"
-            )
-            self._start_call_timer()
-
         # Extract additional firmware fields per schema
         if "dndActive" in event.data:
             self.data.dnd_active = self._coerce_bool(
@@ -1372,6 +1360,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if previous_state == AppState.DIALING and new_state == AppState.IDLE:
             self._detect_unanswered_outgoing(event)
             reset_call_state = True
+
+        # Reset call timer when transitioning from Dialing to In Call
+        # This ensures duration starts counting from when call is answered, not from dialing
+        if previous_state == AppState.DIALING and new_state == AppState.IN_CALL:
+            _LOGGER.info(
+                "Call transitioned from Dialing to In Call - resetting call timer"
+            )
+            self._start_call_timer()
 
         if new_state == AppState.IDLE:
             if previous_state == AppState.IN_CALL and self.data.current_call.number:
@@ -1631,33 +1627,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     call_state_changed = True
             except (TypeError, ValueError):
                 pass
-
-        # If firmware supplies a current duration and we don't already have
-        # an integration-side monotonic start time, align the integration
-        # timer to the firmware's duration so the sensor and frontend show
-        # the same elapsed time. Only do this when call is active.
-        if (
-            self.data.is_call_active
-            and self._call_start_monotonic == 0
-            and (self.data.current_call.duration_seconds is not None
-                 or self.data.current_call.duration_ms is not None)
-        ):
-            # Prefer seconds if available, fall back to ms
-            dur_secs = (
-                self.data.current_call.duration_seconds
-                if self.data.current_call.duration_seconds is not None
-                else int(self.data.current_call.duration_ms // 1000)
-            )
-            # Set monotonic start to now - duration so the loop reports matching value
-            self._call_start_monotonic = time.monotonic() - float(dur_secs)
-            _LOGGER.debug(
-                "Aligned integration timer to firmware duration: %s seconds (monotonic start=%.3f)",
-                dur_secs,
-                self._call_start_monotonic,
-            )
-            # Ensure the background task is running
-            if self._call_timer_task is None:
-                self._call_timer_task = asyncio.create_task(self._call_timer_loop())
 
         if "dndActive" in event.data:
             self.data.dnd_active = self._coerce_bool(
@@ -3287,9 +3256,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if self._call_timer_task is not None:
             return  # Timer already running
 
-        # Default behavior: start counting from now. If a known current
-        # duration is supplied by the firmware we will call this method with
-        # a pre-adjusted _call_start_monotonic instead (see below).
         self._call_start_monotonic = time.monotonic()
         self._call_timer_task = asyncio.create_task(self._call_timer_loop())
 
