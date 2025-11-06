@@ -380,6 +380,17 @@ class TsuryPhoneSensor(
                 state.previous_app_state
             )
             attributes["previous_state_code"] = state.previous_app_state.value
+            
+            # Add current_dialing_number for modal trigger
+            if state.current_dialing_number:
+                attributes["current_dialing_number"] = state.current_dialing_number
+
+            # Add dialing context for number formatting
+            if state.dialing_context:
+                attributes["dialing_context"] = {
+                    "default_code": state.dialing_context.default_code,
+                    "default_prefix": state.dialing_context.default_prefix,
+                }
 
             # Add quick_dials list for contacts view
             attributes["quick_dials"] = [
