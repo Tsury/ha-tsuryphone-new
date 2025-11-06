@@ -102,44 +102,65 @@ class TsuryPhoneStorageCache:
 
     async def _load_cache(self) -> None:
         """Load data from storage into memory cache."""
+        _LOGGER.info("[StorageCache] _load_cache() starting")
         try:
             # Load call history
+            _LOGGER.info("[StorageCache] Loading call history from store...")
             call_history_data = await self._call_history_store.async_load()
+            _LOGGER.info("[StorageCache] Store returned data: %s", "None" if call_history_data is None else f"{len(call_history_data.get('entries', []))} entries")
+            
             if call_history_data:
+                entries_raw = call_history_data.get("entries", [])
+                _LOGGER.info("[StorageCache] Converting %d raw entries to CallHistoryEntry objects", len(entries_raw))
+                
                 self._call_history_cache = [
                     CallHistoryEntry.from_dict(entry)
-                    for entry in call_history_data.get("entries", [])
+                    for entry in entries_raw
                 ]
-                _LOGGER.debug(
-                    "Loaded %d call history entries from cache",
+                _LOGGER.info(
+                    "✓ Loaded %d call history entries from cache into _call_history_cache",
                     len(self._call_history_cache),
                 )
+            else:
+                _LOGGER.warning("✗ No call history data in store, _call_history_cache remains: %d entries", len(self._call_history_cache))
 
             # Load device state backup
+            _LOGGER.info("[StorageCache] Loading device state from store...")
             device_state_data = await self._device_state_store.async_load()
             if device_state_data:
                 self._device_state_cache = device_state_data.get("state", {})
-                _LOGGER.debug("Loaded device state backup from cache")
+                _LOGGER.info("✓ Loaded device state backup from cache")
+            else:
+                _LOGGER.warning("✗ No device state data in store")
 
             self._cache_loaded = True
+            _LOGGER.info("[StorageCache] _cache_loaded flag set to True")
 
         except Exception as err:
-            _LOGGER.error("Failed to load storage cache: %s", err)
+            _LOGGER.error("✗ Failed to load storage cache: %s", err, exc_info=True)
             self._cache_loaded = True  # Continue without cache
+            _LOGGER.warning("[StorageCache] Set _cache_loaded = True despite error (continue without cache)")
 
     async def async_save_call_history(
         self, call_history: list[CallHistoryEntry]
     ) -> None:
         """Save call history to persistent storage."""
+        _LOGGER.info("[StorageCache] async_save_call_history called with %d entries", len(call_history))
+        
         if not self._cache_loaded:
+            _LOGGER.info("[StorageCache] Cache not loaded, loading first...")
             await self._load_cache()
 
         try:
             # Update in-memory cache
+            _LOGGER.info("[StorageCache] Updating in-memory cache (before: %d, after: %d)", 
+                        len(self._call_history_cache), len(call_history))
             self._call_history_cache = call_history.copy()
 
             # Clean up old entries before saving
+            _LOGGER.info("[StorageCache] Cleaning up old entries...")
             cleaned_entries = await self._cleanup_call_history(call_history)
+            _LOGGER.info("[StorageCache] After cleanup: %d entries (from %d)", len(cleaned_entries), len(call_history))
 
             # Convert to serializable format
             data = {
@@ -148,16 +169,26 @@ class TsuryPhoneStorageCache:
                 "device_id": self.device_id,
             }
 
+            _LOGGER.info("[StorageCache] Saving %d entries to store...", len(data["entries"]))
             await self._call_history_store.async_save(data)
+            _LOGGER.info("✓ Successfully saved call history to persistent storage")
 
         except Exception as err:
-            _LOGGER.error("Failed to save call history to cache: %s", err)
+            _LOGGER.error("✗ Failed to save call history to cache: %s", err, exc_info=True)
 
     async def async_load_call_history(self) -> list[CallHistoryEntry]:
         """Load call history from persistent storage."""
+        _LOGGER.info("[StorageCache] async_load_call_history called")
+        _LOGGER.info("[StorageCache] _cache_loaded flag: %s", self._cache_loaded)
+        
         if not self._cache_loaded:
+            _LOGGER.info("[StorageCache] Cache not loaded, calling _load_cache()")
             await self._load_cache()
+            _LOGGER.info("[StorageCache] _load_cache() completed, _cache_loaded now: %s", self._cache_loaded)
+        else:
+            _LOGGER.info("[StorageCache] Cache already loaded, skipping _load_cache()")
 
+        _LOGGER.info("[StorageCache] Returning call history copy, length: %d", len(self._call_history_cache))
         return self._call_history_cache.copy()
 
     async def async_save_device_state(

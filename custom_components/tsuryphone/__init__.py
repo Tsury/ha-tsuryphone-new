@@ -174,11 +174,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     # Create and initialize coordinator
+    _LOGGER.info("========== CREATING COORDINATOR ==========")
     coordinator = TsuryPhoneDataUpdateCoordinator(hass, api_client, device_info)
+    _LOGGER.info("Coordinator created, data state: %s", coordinator.data)
 
     # Phase P7: Set up storage cache BEFORE first refresh
+    _LOGGER.info("========== SETTING UP STORAGE CACHE ==========")
     storage_cache = TsuryPhoneStorageCache(hass, device_info.device_id)
+    _LOGGER.info("Storage cache instance created for device: %s", device_info.device_id)
+    
     await storage_cache.async_initialize()
+    _LOGGER.info("Storage cache initialized")
 
     # Apply retention settings from options
     options_advanced = entry.options.get("advanced", {})
@@ -186,36 +192,55 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         storage_cache.update_retention_settings(
             call_history_retention_days=options_advanced["call_history_retention_days"]
         )
+        _LOGGER.info("Applied retention settings: %d days", options_advanced["call_history_retention_days"])
 
     coordinator._storage_cache = storage_cache
+    _LOGGER.info("Storage cache attached to coordinator")
 
     # Initialize state and load cached data BEFORE first refresh
+    _LOGGER.info("========== INITIALIZING STATE ==========")
     coordinator._ensure_state()
+    _LOGGER.info("State ensured, call_history length: %d", len(coordinator.data.call_history))
     
     # Load cached call history if available
+    _LOGGER.info("========== LOADING CACHED CALL HISTORY ==========")
     try:
         cached_call_history = await storage_cache.async_load_call_history()
+        _LOGGER.info("async_load_call_history returned: %s entries", len(cached_call_history) if cached_call_history else 0)
+        
         if cached_call_history:
+            _LOGGER.info("BEFORE assignment - coordinator.data.call_history length: %d", len(coordinator.data.call_history))
             coordinator.data.call_history = cached_call_history
+            _LOGGER.info("AFTER assignment - coordinator.data.call_history length: %d", len(coordinator.data.call_history))
             _LOGGER.info(
-                "Loaded %d cached call history entries before first refresh", len(cached_call_history)
+                "✓ Loaded %d cached call history entries before first refresh", len(cached_call_history)
             )
+        else:
+            _LOGGER.warning("✗ No cached call history returned from storage")
     except Exception as err:
-        _LOGGER.error("Failed to load cached call history: %s", err)
+        _LOGGER.error("✗ Failed to load cached call history: %s", err, exc_info=True)
 
     # Load cached device state (including send_mode)
+    _LOGGER.info("========== LOADING CACHED DEVICE STATE ==========")
     try:
         cached_device_state = await storage_cache.async_load_device_state()
+        _LOGGER.info("async_load_device_state returned: %s", cached_device_state)
+        
         if cached_device_state and "send_mode_enabled" in cached_device_state:
             coordinator._send_mode_enabled = cached_device_state["send_mode_enabled"]
             _LOGGER.info(
-                "Restored send_mode state: %s", coordinator._send_mode_enabled
+                "✓ Restored send_mode state: %s", coordinator._send_mode_enabled
             )
+        else:
+            _LOGGER.warning("✗ No send_mode in cached device state")
     except Exception as err:
-        _LOGGER.error("Failed to load cached device state: %s", err)
+        _LOGGER.error("✗ Failed to load cached device state: %s", err, exc_info=True)
 
     # Perform first refresh to populate initial state (will preserve call_history now)
+    _LOGGER.info("========== PERFORMING FIRST REFRESH ==========")
+    _LOGGER.info("BEFORE first refresh - call_history length: %d", len(coordinator.data.call_history))
     await coordinator.async_config_entry_first_refresh()
+    _LOGGER.info("AFTER first refresh - call_history length: %d", len(coordinator.data.call_history))
 
     # Store coordinator in runtime data for platform access
     entry.runtime_data = coordinator
