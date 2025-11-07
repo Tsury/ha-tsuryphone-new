@@ -46,6 +46,7 @@ from .const import (
     ERROR_CODE_NO_ACTIVE_CALL,
     INTEGRATION_EVENT_SCHEMA_VERSION,
     API_CALL_DIAL_DIGIT,
+    API_CALL_SEND_DTMF,
     API_CALL_DELETE_LAST_DIGIT,
     API_CALL_SEND_DIALED_NUMBER,
     ERROR_CODE_MISSING_DIGIT,
@@ -204,6 +205,15 @@ class TsuryPhoneAPIClient:
     async def delete_last_digit(self) -> dict[str, Any]:
         """Delete the last digit from the pending dial buffer."""
         return await self._request("POST", API_CALL_DELETE_LAST_DIGIT)
+
+    async def send_dtmf(self, digit: str) -> dict[str, Any]:
+        """Send DTMF digit during active call."""
+        if not digit or len(digit) != 1 or digit not in "0123456789*#":
+            raise TsuryPhoneAPIError(
+                "DTMF digit must be one of: 0-9, *, #", ERROR_CODE_INVALID_DIGIT
+            )
+
+        return await self._request("POST", API_CALL_SEND_DTMF, {"digit": digit})
 
     async def send_dialed_number(self) -> dict[str, Any]:
         """Send/validate the currently dialed number."""

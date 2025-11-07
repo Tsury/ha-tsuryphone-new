@@ -33,6 +33,21 @@ dial_digit:
           max: 9
           step: 1
 
+send_dtmf:
+  name: Send DTMF
+  description: Send a DTMF digit (0-9, *, #) during an active call for IVR navigation.
+  target:
+    device:
+      integration: tsuryphone
+  fields:
+    digit:
+      name: Digit
+      description: DTMF digit to send (0-9, *, or #).
+      required: true
+      example: "5"
+      selector:
+        text:
+
 delete_last_digit:
   name: Delete last digit
   description: Delete the last digit from the pending dial buffer on the TsuryPhone device.

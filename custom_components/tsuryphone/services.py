@@ -26,6 +26,7 @@ from .const import (
     DOMAIN,
     SERVICE_DIAL,
     SERVICE_DIAL_DIGIT,
+    SERVICE_SEND_DTMF,
     SERVICE_DELETE_LAST_DIGIT,
     SERVICE_ANSWER,
     SERVICE_HANGUP,
@@ -107,6 +108,17 @@ def _validate_digit(value: Any) -> int:
 
 
 DIAL_DIGIT_SCHEMA = _service_schema({vol.Required("digit"): _validate_digit})
+
+
+def _validate_dtmf_digit(value: Any) -> str:
+    """Validate a DTMF digit (0-9, *, #)."""
+    digit = str(value)
+    if not digit or len(digit) != 1 or digit not in "0123456789*#":
+        raise vol.Invalid("DTMF digit must be one of: 0-9, *, #")
+    return digit
+
+
+SEND_DTMF_SCHEMA = _service_schema({vol.Required("digit"): _validate_dtmf_digit})
 
 RING_DEVICE_SCHEMA = _service_schema(
     {
@@ -674,6 +686,23 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             await coordinator.api_client.delete_last_digit()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to delete last digit: {err}") from err
+
+    async def async_send_dtmf(call: ServiceCall) -> None:
+        """Send DTMF digit during active call."""
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+        digit = call.data["digit"]
+
+        # Ensure we're in an active call
+        if not coordinator.data.is_call_active:
+            raise ServiceValidationError(
+                "Cannot send DTMF: no active call in progress"
+            )
+
+        try:
+            await coordinator.send_dtmf_digit(digit)
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(f"Failed to send DTMF digit {digit}: {err}") from err
 
     async def async_answer(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
@@ -1444,6 +1473,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     services_config = [
         (SERVICE_DIAL, async_dial, DIAL_SCHEMA),
         (SERVICE_DIAL_DIGIT, async_dial_digit, DIAL_DIGIT_SCHEMA),
+        (SERVICE_SEND_DTMF, async_send_dtmf, SEND_DTMF_SCHEMA),
         (SERVICE_DELETE_LAST_DIGIT, async_delete_last_digit, DEVICE_ONLY_SCHEMA),
         (SERVICE_ANSWER, async_answer, DEVICE_ONLY_SCHEMA),
         (SERVICE_HANGUP, async_hangup, DEVICE_ONLY_SCHEMA),
@@ -1549,6 +1579,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
     services_to_remove = [
         SERVICE_DIAL,
         SERVICE_DIAL_DIGIT,
+        SERVICE_SEND_DTMF,
         SERVICE_DELETE_LAST_DIGIT,
         SERVICE_ANSWER,
         SERVICE_HANGUP,

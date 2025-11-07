@@ -224,6 +224,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         return bool(value)
 
+    async def send_dtmf_digit(self, digit: str) -> None:
+        """Send DTMF digit during active call through the API."""
+        await self.api_client.send_dtmf(digit)
+
     async def _async_setup(self) -> None:
         """Set up the coordinator."""
         # Phase P8: Initialize resilience manager
