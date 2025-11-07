@@ -102,65 +102,41 @@ class TsuryPhoneStorageCache:
 
     async def _load_cache(self) -> None:
         """Load data from storage into memory cache."""
-        _LOGGER.warning("[StorageCache] _load_cache() starting")
         try:
             # Load call history
-            _LOGGER.warning("[StorageCache] Loading call history from store...")
             call_history_data = await self._call_history_store.async_load()
-            _LOGGER.warning("[StorageCache] Store returned: %s", "None" if call_history_data is None else f"{len(call_history_data.get('entries', []))} entries")
             
             if call_history_data:
                 entries_raw = call_history_data.get("entries", [])
-                _LOGGER.warning("[StorageCache] Converting %d raw entries to CallHistoryEntry objects", len(entries_raw))
-                
                 self._call_history_cache = [
                     CallHistoryEntry.from_dict(entry)
                     for entry in entries_raw
                 ]
-                _LOGGER.warning(
-                    "[StorageCache] SUCCESS: Loaded %d call history entries into cache",
-                    len(self._call_history_cache),
-                )
-            else:
-                _LOGGER.warning("[StorageCache] No call history data in store, cache remains: %d entries", len(self._call_history_cache))
 
             # Load device state backup
-            _LOGGER.warning("[StorageCache] Loading device state from store...")
             device_state_data = await self._device_state_store.async_load()
             if device_state_data:
                 self._device_state_cache = device_state_data.get("state", {})
-                _LOGGER.warning("[StorageCache] Loaded device state backup")
-            else:
-                _LOGGER.warning("[StorageCache] No device state data in store")
 
             self._cache_loaded = True
-            _LOGGER.warning("[StorageCache] _cache_loaded flag set to True")
 
         except Exception as err:
-            _LOGGER.error("[StorageCache] EXCEPTION: Failed to load storage cache: %s", err, exc_info=True)
+            _LOGGER.error("Failed to load storage cache: %s", err, exc_info=True)
             self._cache_loaded = True  # Continue without cache
-            _LOGGER.warning("[StorageCache] Set _cache_loaded=True despite error (continue without cache)")
 
     async def async_save_call_history(
         self, call_history: list[CallHistoryEntry]
     ) -> None:
         """Save call history to persistent storage."""
-        _LOGGER.warning("[StorageCache] async_save_call_history called with %d entries", len(call_history))
-        
         if not self._cache_loaded:
-            _LOGGER.warning("[StorageCache] Cache not loaded yet, loading first...")
             await self._load_cache()
 
         try:
             # Update in-memory cache
-            _LOGGER.warning("[StorageCache] Updating in-memory cache (before=%d, after=%d)", 
-                        len(self._call_history_cache), len(call_history))
             self._call_history_cache = call_history.copy()
 
             # Clean up old entries before saving
-            _LOGGER.warning("[StorageCache] Cleaning up old entries...")
             cleaned_entries = await self._cleanup_call_history(call_history)
-            _LOGGER.warning("[StorageCache] After cleanup: %d entries (from %d)", len(cleaned_entries), len(call_history))
 
             # Convert to serializable format
             data = {
@@ -169,26 +145,16 @@ class TsuryPhoneStorageCache:
                 "device_id": self.device_id,
             }
 
-            _LOGGER.warning("[StorageCache] Saving %d entries to store...", len(data["entries"]))
             await self._call_history_store.async_save(data)
-            _LOGGER.warning("[StorageCache] SUCCESS: Saved call history to persistent storage")
 
         except Exception as err:
-            _LOGGER.error("[StorageCache] EXCEPTION: Failed to save call history: %s", err, exc_info=True)
+            _LOGGER.error("Failed to save call history: %s", err, exc_info=True)
 
     async def async_load_call_history(self) -> list[CallHistoryEntry]:
         """Load call history from persistent storage."""
-        _LOGGER.warning("[StorageCache] async_load_call_history called")
-        _LOGGER.warning("[StorageCache] _cache_loaded flag: %s", self._cache_loaded)
-        
         if not self._cache_loaded:
-            _LOGGER.warning("[StorageCache] Cache not loaded, calling _load_cache()")
             await self._load_cache()
-            _LOGGER.warning("[StorageCache] _load_cache() completed, _cache_loaded now: %s", self._cache_loaded)
-        else:
-            _LOGGER.warning("[StorageCache] Cache already loaded, skipping _load_cache()")
 
-        _LOGGER.warning("[StorageCache] Returning call history copy, length: %d", len(self._call_history_cache))
         return self._call_history_cache.copy()
 
     async def async_save_device_state(
@@ -316,8 +282,6 @@ class TsuryPhoneStorageCache:
         if not entries:
             return entries
 
-        _LOGGER.warning("[StorageCache] _cleanup_call_history: Processing %d entries", len(entries))
-
         aware_min = datetime.min.replace(tzinfo=dt_util.UTC)
 
         def _entry_timestamp(entry: CallHistoryEntry) -> datetime:
@@ -334,14 +298,12 @@ class TsuryPhoneStorageCache:
             return aware_min
 
         sorted_entries = sorted(entries, key=_entry_timestamp, reverse=True)
-        _LOGGER.warning("[StorageCache] After sorting: %d entries", len(sorted_entries))
 
         # Apply retention policies
         cleaned_entries = []
         cutoff_date = dt_util.utcnow() - timedelta(
             days=self.call_history_retention_days
         )
-        _LOGGER.warning("[StorageCache] Cutoff date: %s (retention_days=%d)", cutoff_date, self.call_history_retention_days)
 
         for idx, entry in enumerate(sorted_entries):
             # NOTE: ts_device and call_start_ts from firmware are device uptime in milliseconds (millis()),
@@ -351,16 +313,9 @@ class TsuryPhoneStorageCache:
                 try:
                     entry_ts = dt_util.utc_from_timestamp(entry.received_ts)
                 except (ValueError, OSError):
-                    _LOGGER.warning(
-                        "[StorageCache] Entry %d (%s): Invalid received_ts, keeping entry",
-                        idx, entry.number
-                    )
+                    pass
             
             if not entry_ts:
-                _LOGGER.warning(
-                    "[StorageCache] Entry %d (%s): No valid timestamp, keeping entry",
-                    idx, entry.number
-                )
                 cleaned_entries.append(entry)
                 continue
             
@@ -371,27 +326,14 @@ class TsuryPhoneStorageCache:
                 entry_ts = entry_ts.replace(tzinfo=dt_util.UTC)
             
             if entry_ts < cutoff_date:
-                _LOGGER.warning(
-                    "[StorageCache] Entry %d (%s): Too old (%s < %s), SKIPPING",
-                    idx, entry.number, entry_ts, cutoff_date
-                )
                 continue
 
             # Skip if we've reached max entries
             if len(cleaned_entries) >= self.max_call_history_entries:
-                _LOGGER.warning(
-                    "[StorageCache] Entry %d (%s): Max entries reached (%d), SKIPPING",
-                    idx, entry.number, self.max_call_history_entries
-                )
                 break
 
-            _LOGGER.warning(
-                "[StorageCache] Entry %d (%s): KEEPING (ts=%s)",
-                idx, entry.number, entry_ts
-            )
             cleaned_entries.append(entry)
 
-        _LOGGER.warning("[StorageCache] Cleanup result: %d entries kept from %d", len(cleaned_entries), len(entries))
         return cleaned_entries
 
     async def async_cleanup_storage(self) -> dict[str, int]:

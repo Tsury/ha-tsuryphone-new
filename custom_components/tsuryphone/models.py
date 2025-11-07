@@ -416,31 +416,11 @@ class TsuryPhoneState:
 
     def add_call_history_entry(self, entry: CallHistoryEntry) -> None:
         """Add entry to call history with capacity management."""
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-        
-        _LOGGER.warning(
-            "[STORAGE] add_call_history_entry called: %s (%s) type=%s, before=%d entries",
-            entry.number,
-            entry.name,
-            entry.call_type,
-            len(self.call_history),
-        )
-        
         self.call_history.append(entry)
-        
-        _LOGGER.warning(
-            "[STORAGE] After append: %d entries",
-            len(self.call_history),
-        )
 
         # Enforce capacity limit (newest entries kept)
         if len(self.call_history) > self.call_history_capacity:
             self.call_history = self.call_history[-self.call_history_capacity :]
-            _LOGGER.warning(
-                "[STORAGE] Trimmed to capacity: %d entries",
-                len(self.call_history),
-            )
 
     def get_quick_dial_by_code(self, code: str) -> QuickDialEntry | None:
         """Find quick dial entry by code."""

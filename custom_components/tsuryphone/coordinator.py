@@ -83,10 +83,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Initialize state after base class sets default data
         self.data = TsuryPhoneState(device_info=device_info)
-        _LOGGER.warning(
-            "[STORAGE-INIT] Coordinator __init__: Created TsuryPhoneState, call_history=%d entries",
-            len(self.data.call_history),
-        )
 
         # WebSocket client
         self._websocket_client: TsuryPhoneWebSocketClient | None = None
@@ -149,14 +145,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def _ensure_state(self) -> TsuryPhoneState:
         """Ensure coordinator state object exists."""
         if self.data is None:
-            _LOGGER.warning(
-                "[STORAGE-INIT] _ensure_state: self.data was None, creating new TsuryPhoneState"
-            )
             self.data = TsuryPhoneState(device_info=self.device_info)
-            _LOGGER.warning(
-                "[STORAGE-INIT] _ensure_state: Created state with call_history=%d entries",
-                len(self.data.call_history),
-            )
         return self.data
 
     def _find_contact_name_by_number(self, number: str) -> str | None:
@@ -259,10 +248,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         try:
             state = self._ensure_state()
-            _LOGGER.warning(
-                "[STORAGE-REFRESH] Before API call - call_history=%d entries", 
-                len(state.call_history)
-            )
             
             # Get current configuration and state
             config_response = await self.api_client.get_tsuryphone_config()
@@ -274,11 +259,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
             # Update state from device response
             await self._update_state_from_device_data(device_data)
-
-            _LOGGER.warning(
-                "[STORAGE-REFRESH] After update_state_from_device_data - call_history=%d entries", 
-                len(state.call_history)
-            )
 
             # Mark as connected
             state.connected = True
@@ -763,10 +743,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if self._storage_cache:
             # Copy the list immediately to prevent race conditions
             history_to_save = list(self.data.call_history or [])
-            _LOGGER.warning(
-                "[STORAGE] Saving call history after call end: %d entries (copied)",
-                len(history_to_save),
-            )
             self.hass.async_create_task(
                 self._storage_cache.async_save_call_history(history_to_save)
             )
@@ -807,10 +783,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if self._storage_cache:
             # Copy the list immediately to prevent race conditions
             history_to_save = list(self.data.call_history or [])
-            _LOGGER.warning(
-                "[STORAGE] Saving call history after blocked call: %d entries (copied)",
-                len(history_to_save),
-            )
             self.hass.async_create_task(
                 self._storage_cache.async_save_call_history(history_to_save)
             )
