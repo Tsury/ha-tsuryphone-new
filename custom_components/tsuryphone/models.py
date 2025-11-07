@@ -195,16 +195,21 @@ class DeviceStats:
 
 @dataclass
 class CallHistoryEntry:
-    """Single call history entry."""
+    """Single call history entry.
+    
+    IMPORTANT: ts_device and call_start_ts are device uptime in milliseconds (from millis())
+    NOT Unix epoch timestamps! For age/retention logic, always use received_ts.
+    The timestamp property converts ts_device incorrectly and should not be used for cleanup.
+    """
 
     call_type: str  # "incoming", "outgoing", "blocked", "missed"
     number: str
     is_incoming: bool
     duration_s: int | None
-    ts_device: int  # Device timestamp
-    received_ts: float  # HA timestamp when received
+    ts_device: int  # Device uptime in milliseconds (NOT epoch timestamp!)
+    received_ts: float  # HA timestamp when received (Unix epoch, use this for retention!)
     seq: int
-    call_start_ts: int = 0  # Firmware callStartTs field
+    call_start_ts: int = 0  # Firmware callStartTs field (device uptime in ms)
     duration_ms: int | None = None  # Firmware durationMs field
     reason: str | None = None
     synthetic: bool = False  # True if start was synthesized from end-only

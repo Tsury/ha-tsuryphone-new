@@ -321,23 +321,17 @@ class TsuryPhoneStorageCache:
         aware_min = datetime.min.replace(tzinfo=dt_util.UTC)
 
         def _entry_timestamp(entry: CallHistoryEntry) -> datetime:
-            ts = entry.timestamp
-            if ts is None:
-                # If no device timestamp, use received_ts as fallback
-                _LOGGER.warning(
-                    "[StorageCache] Entry %s has no timestamp, using received_ts=%s",
-                    entry.number,
-                    entry.received_ts
-                )
-                if entry.received_ts:
-                    try:
-                        return dt_util.utc_from_timestamp(entry.received_ts)
-                    except (ValueError, OSError):
-                        pass
-                return aware_min
-            if ts.tzinfo:
-                return dt_util.as_utc(ts)
-            return ts.replace(tzinfo=dt_util.UTC)
+            # NOTE: ts_device and call_start_ts are device uptime (millis()), not epoch timestamps.
+            # Always use received_ts (HA timestamp) for sorting and age comparison.
+            if entry.received_ts:
+                try:
+                    ts = dt_util.utc_from_timestamp(entry.received_ts)
+                    if ts.tzinfo:
+                        return dt_util.as_utc(ts)
+                    return ts.replace(tzinfo=dt_util.UTC)
+                except (ValueError, OSError):
+                    pass
+            return aware_min
 
         sorted_entries = sorted(entries, key=_entry_timestamp, reverse=True)
         _LOGGER.warning("[StorageCache] After sorting: %d entries", len(sorted_entries))
@@ -350,35 +344,38 @@ class TsuryPhoneStorageCache:
         _LOGGER.warning("[StorageCache] Cutoff date: %s (retention_days=%d)", cutoff_date, self.call_history_retention_days)
 
         for idx, entry in enumerate(sorted_entries):
-            # Get effective timestamp (device timestamp or received timestamp)
-            entry_ts = entry.timestamp
-            if entry_ts is None and entry.received_ts:
-                # Use received_ts as fallback
+            # NOTE: ts_device and call_start_ts from firmware are device uptime in milliseconds (millis()),
+            # NOT Unix epoch timestamps! We must always use received_ts (HA timestamp) for age comparison.
+            entry_ts = None
+            if entry.received_ts:
                 try:
                     entry_ts = dt_util.utc_from_timestamp(entry.received_ts)
-                    _LOGGER.warning(
-                        "[StorageCache] Entry %d (%s): Using received_ts fallback: %s",
-                        idx, entry.number, entry_ts
-                    )
                 except (ValueError, OSError):
-                    entry_ts = None
                     _LOGGER.warning(
-                        "[StorageCache] Entry %d (%s): No valid timestamp!",
+                        "[StorageCache] Entry %d (%s): Invalid received_ts, keeping entry",
                         idx, entry.number
                     )
             
-            # Skip entries that are too old (but keep entries with no valid timestamp)
-            if entry_ts:
-                if entry_ts.tzinfo:
-                    entry_ts = dt_util.as_utc(entry_ts)
-                else:
-                    entry_ts = entry_ts.replace(tzinfo=dt_util.UTC)
-                if entry_ts < cutoff_date:
-                    _LOGGER.warning(
-                        "[StorageCache] Entry %d (%s): Too old (%s < %s), SKIPPING",
-                        idx, entry.number, entry_ts, cutoff_date
-                    )
-                    continue
+            if not entry_ts:
+                _LOGGER.warning(
+                    "[StorageCache] Entry %d (%s): No valid timestamp, keeping entry",
+                    idx, entry.number
+                )
+                cleaned_entries.append(entry)
+                continue
+            
+            # Skip entries that are too old
+            if entry_ts.tzinfo:
+                entry_ts = dt_util.as_utc(entry_ts)
+            else:
+                entry_ts = entry_ts.replace(tzinfo=dt_util.UTC)
+            
+            if entry_ts < cutoff_date:
+                _LOGGER.warning(
+                    "[StorageCache] Entry %d (%s): Too old (%s < %s), SKIPPING",
+                    idx, entry.number, entry_ts, cutoff_date
+                )
+                continue
 
             # Skip if we've reached max entries
             if len(cleaned_entries) >= self.max_call_history_entries:
