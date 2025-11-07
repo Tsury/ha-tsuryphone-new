@@ -248,6 +248,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         try:
             state = self._ensure_state()
+            _LOGGER.debug(
+                "[REFRESH] Before API call - call_history size: %d", 
+                len(state.call_history)
+            )
+            
             # Get current configuration and state
             config_response = await self.api_client.get_tsuryphone_config()
 
@@ -258,6 +263,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
             # Update state from device response
             await self._update_state_from_device_data(device_data)
+
+            _LOGGER.debug(
+                "[REFRESH] After update_state_from_device_data - call_history size: %d", 
+                len(state.call_history)
+            )
 
             # Mark as connected
             state.connected = True
