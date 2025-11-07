@@ -761,14 +761,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Persist call history immediately after adding entry
         if self._storage_cache:
+            # Copy the list immediately to prevent race conditions
+            history_to_save = list(self.data.call_history or [])
             _LOGGER.warning(
-                "[STORAGE] Saving call history after call end: %d entries",
-                len(self.data.call_history or []),
+                "[STORAGE] Saving call history after call end: %d entries (copied)",
+                len(history_to_save),
             )
             self.hass.async_create_task(
-                self._storage_cache.async_save_call_history(
-                    self.data.call_history or []
-                )
+                self._storage_cache.async_save_call_history(history_to_save)
             )
 
         # Clear remaining current call state
@@ -805,14 +805,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Persist call history immediately after adding blocked entry
         if self._storage_cache:
+            # Copy the list immediately to prevent race conditions
+            history_to_save = list(self.data.call_history or [])
             _LOGGER.warning(
-                "[STORAGE] Saving call history after blocked call: %d entries",
-                len(self.data.call_history or []),
+                "[STORAGE] Saving call history after blocked call: %d entries (copied)",
+                len(history_to_save),
             )
             self.hass.async_create_task(
-                self._storage_cache.async_save_call_history(
-                    self.data.call_history or []
-                )
+                self._storage_cache.async_save_call_history(history_to_save)
             )
 
         # Update blocked call statistics
