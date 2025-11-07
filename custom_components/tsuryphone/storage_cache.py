@@ -316,41 +316,85 @@ class TsuryPhoneStorageCache:
         if not entries:
             return entries
 
+        _LOGGER.warning("[StorageCache] _cleanup_call_history: Processing %d entries", len(entries))
+
         aware_min = datetime.min.replace(tzinfo=dt_util.UTC)
 
         def _entry_timestamp(entry: CallHistoryEntry) -> datetime:
             ts = entry.timestamp
             if ts is None:
+                # If no device timestamp, use received_ts as fallback
+                _LOGGER.warning(
+                    "[StorageCache] Entry %s has no timestamp, using received_ts=%s",
+                    entry.number,
+                    entry.received_ts
+                )
+                if entry.received_ts:
+                    try:
+                        return dt_util.utc_from_timestamp(entry.received_ts)
+                    except (ValueError, OSError):
+                        pass
                 return aware_min
             if ts.tzinfo:
                 return dt_util.as_utc(ts)
             return ts.replace(tzinfo=dt_util.UTC)
 
         sorted_entries = sorted(entries, key=_entry_timestamp, reverse=True)
+        _LOGGER.warning("[StorageCache] After sorting: %d entries", len(sorted_entries))
 
         # Apply retention policies
         cleaned_entries = []
         cutoff_date = dt_util.utcnow() - timedelta(
             days=self.call_history_retention_days
         )
+        _LOGGER.warning("[StorageCache] Cutoff date: %s (retention_days=%d)", cutoff_date, self.call_history_retention_days)
 
-        for entry in sorted_entries:
-            # Skip entries that are too old
+        for idx, entry in enumerate(sorted_entries):
+            # Get effective timestamp (device timestamp or received timestamp)
             entry_ts = entry.timestamp
+            if entry_ts is None and entry.received_ts:
+                # Use received_ts as fallback
+                try:
+                    entry_ts = dt_util.utc_from_timestamp(entry.received_ts)
+                    _LOGGER.warning(
+                        "[StorageCache] Entry %d (%s): Using received_ts fallback: %s",
+                        idx, entry.number, entry_ts
+                    )
+                except (ValueError, OSError):
+                    entry_ts = None
+                    _LOGGER.warning(
+                        "[StorageCache] Entry %d (%s): No valid timestamp!",
+                        idx, entry.number
+                    )
+            
+            # Skip entries that are too old (but keep entries with no valid timestamp)
             if entry_ts:
                 if entry_ts.tzinfo:
                     entry_ts = dt_util.as_utc(entry_ts)
                 else:
                     entry_ts = entry_ts.replace(tzinfo=dt_util.UTC)
                 if entry_ts < cutoff_date:
+                    _LOGGER.warning(
+                        "[StorageCache] Entry %d (%s): Too old (%s < %s), SKIPPING",
+                        idx, entry.number, entry_ts, cutoff_date
+                    )
                     continue
 
             # Skip if we've reached max entries
             if len(cleaned_entries) >= self.max_call_history_entries:
+                _LOGGER.warning(
+                    "[StorageCache] Entry %d (%s): Max entries reached (%d), SKIPPING",
+                    idx, entry.number, self.max_call_history_entries
+                )
                 break
 
+            _LOGGER.warning(
+                "[StorageCache] Entry %d (%s): KEEPING (ts=%s)",
+                idx, entry.number, entry_ts
+            )
             cleaned_entries.append(entry)
 
+        _LOGGER.warning("[StorageCache] Cleanup result: %d entries kept from %d", len(cleaned_entries), len(entries))
         return cleaned_entries
 
     async def async_cleanup_storage(self) -> dict[str, int]:
