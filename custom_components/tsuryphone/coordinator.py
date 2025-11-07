@@ -560,11 +560,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             caller_name = self._find_contact_name_by_number(number)
 
         # Start call duration timer
-        # If transitioning from Dialing to In Call, reset the timer so duration
-        # starts from when call was answered, not from when dialing started
-        if previous_state == AppState.DIALING:
+        # ALWAYS reset the timer when call becomes active, because firmware duration
+        # includes dialing time. We want to measure only active call duration.
+        if self._call_timer_task is not None or self._call_start_monotonic > 0:
             _LOGGER.warning(
-                "🔄 [CALL TIMER] Transitioning from Dialing to In Call - RESETTING call timer"
+                "🔄 [CALL TIMER] Call becoming active - RESETTING timer (previous_state=%s)",
+                previous_state,
             )
             _LOGGER.warning(
                 "🔄 [CALL TIMER] Previous timer start: %.3f, Current time: %.3f, Duration was: %.1fs",
@@ -573,11 +574,11 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 time.monotonic() - self._call_start_monotonic if self._call_start_monotonic > 0 else 0,
             )
             self._stop_call_timer()
-            _LOGGER.warning("🔄 [CALL TIMER] Timer stopped, starting fresh timer")
+            _LOGGER.warning("🔄 [CALL TIMER] Timer stopped, starting fresh timer from 0")
         else:
             _LOGGER.info(
-                "⏱️ [CALL TIMER] Starting timer (previous_state=%s, not Dialing)", 
-                previous_state
+                "⏱️ [CALL TIMER] Starting fresh timer (previous_state=%s)",
+                previous_state,
             )
         self._start_call_timer()
         _LOGGER.warning(
