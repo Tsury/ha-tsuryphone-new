@@ -83,6 +83,10 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Initialize state after base class sets default data
         self.data = TsuryPhoneState(device_info=device_info)
+        _LOGGER.warning(
+            "[STORAGE-INIT] Coordinator __init__: Created TsuryPhoneState, call_history=%d entries",
+            len(self.data.call_history),
+        )
 
         # WebSocket client
         self._websocket_client: TsuryPhoneWebSocketClient | None = None
@@ -145,7 +149,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def _ensure_state(self) -> TsuryPhoneState:
         """Ensure coordinator state object exists."""
         if self.data is None:
+            _LOGGER.warning(
+                "[STORAGE-INIT] _ensure_state: self.data was None, creating new TsuryPhoneState"
+            )
             self.data = TsuryPhoneState(device_info=self.device_info)
+            _LOGGER.warning(
+                "[STORAGE-INIT] _ensure_state: Created state with call_history=%d entries",
+                len(self.data.call_history),
+            )
         return self.data
 
     def _find_contact_name_by_number(self, number: str) -> str | None:
@@ -248,8 +259,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         try:
             state = self._ensure_state()
-            _LOGGER.debug(
-                "[REFRESH] Before API call - call_history size: %d", 
+            _LOGGER.warning(
+                "[STORAGE-REFRESH] Before API call - call_history=%d entries", 
                 len(state.call_history)
             )
             
@@ -264,8 +275,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             # Update state from device response
             await self._update_state_from_device_data(device_data)
 
-            _LOGGER.debug(
-                "[REFRESH] After update_state_from_device_data - call_history size: %d", 
+            _LOGGER.warning(
+                "[STORAGE-REFRESH] After update_state_from_device_data - call_history=%d entries", 
                 len(state.call_history)
             )
 
@@ -563,28 +574,8 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         # ALWAYS reset the timer when call becomes active, because firmware duration
         # includes dialing time. We want to measure only active call duration.
         if self._call_timer_task is not None or self._call_start_monotonic > 0:
-            _LOGGER.warning(
-                "🔄 [CALL TIMER] Call becoming active - RESETTING timer (previous_state=%s)",
-                previous_state,
-            )
-            _LOGGER.warning(
-                "🔄 [CALL TIMER] Previous timer start: %.3f, Current time: %.3f, Duration was: %.1fs",
-                self._call_start_monotonic,
-                time.monotonic(),
-                time.monotonic() - self._call_start_monotonic if self._call_start_monotonic > 0 else 0,
-            )
             self._stop_call_timer()
-            _LOGGER.warning("🔄 [CALL TIMER] Timer stopped, starting fresh timer from 0")
-        else:
-            _LOGGER.info(
-                "⏱️ [CALL TIMER] Starting fresh timer (previous_state=%s)",
-                previous_state,
-            )
         self._start_call_timer()
-        _LOGGER.warning(
-            "⏱️ [CALL TIMER] Timer started at monotonic time: %.3f", 
-            self._call_start_monotonic
-        )
 
         # Add to call history (provisional entry)
         call_type = call_info.call_type or ("incoming" if is_incoming else "outgoing")
@@ -598,13 +589,6 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             seq=event.seq,
             call_start_ts=call_start_ts,
             name=caller_name,
-        )
-
-        _LOGGER.warning(
-            "📝 [CALL HISTORY] Adding provisional entry to _pending_call_starts: %s (%s) type=%s",
-            number,
-            caller_name,
-            call_type,
         )
 
         # Store provisional entry (will be finalized on call end)
@@ -777,14 +761,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Persist call history immediately after adding entry
         if self._storage_cache:
+            _LOGGER.warning(
+                "[STORAGE] Saving call history after call end: %d entries",
+                len(self.data.call_history or []),
+            )
             self.hass.async_create_task(
                 self._storage_cache.async_save_call_history(
                     self.data.call_history or []
                 )
-            )
-            _LOGGER.warning(
-                "💾 [CALL HISTORY] Triggered save after call end - now %d entries",
-                len(self.data.call_history or []),
             )
 
         # Clear remaining current call state
@@ -821,14 +805,14 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
 
         # Persist call history immediately after adding blocked entry
         if self._storage_cache:
+            _LOGGER.warning(
+                "[STORAGE] Saving call history after blocked call: %d entries",
+                len(self.data.call_history or []),
+            )
             self.hass.async_create_task(
                 self._storage_cache.async_save_call_history(
                     self.data.call_history or []
                 )
-            )
-            _LOGGER.warning(
-                "💾 [CALL HISTORY] Triggered save after blocked call - now %d entries",
-                len(self.data.call_history or []),
             )
 
         # Update blocked call statistics
@@ -3319,31 +3303,16 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def _start_call_timer(self) -> None:
         """Start real-time call duration timer."""
         if self._call_timer_task is not None:
-            _LOGGER.warning(
-                "⚠️ [CALL TIMER] _start_call_timer called but timer already running! (start=%.3f)",
-                self._call_start_monotonic
-            )
             return  # Timer already running
 
         self._call_start_monotonic = time.monotonic()
         self._call_timer_task = asyncio.create_task(self._call_timer_loop())
-        _LOGGER.warning(
-            "✅ [CALL TIMER] Timer task created, monotonic start: %.3f", 
-            self._call_start_monotonic
-        )
 
     def _stop_call_timer(self) -> None:
         """Stop call duration timer."""
         if self._call_timer_task:
-            _LOGGER.warning(
-                "🛑 [CALL TIMER] Stopping timer (was at monotonic %.3f, duration was %.1fs)",
-                self._call_start_monotonic,
-                time.monotonic() - self._call_start_monotonic if self._call_start_monotonic > 0 else 0,
-            )
             self._call_timer_task.cancel()
             self._call_timer_task = None
-        else:
-            _LOGGER.warning("⚠️ [CALL TIMER] _stop_call_timer called but no task running")
         self._call_start_monotonic = 0
 
     async def _call_timer_loop(self) -> None:
@@ -3366,28 +3335,12 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         """Get current call duration in seconds."""
         if self._call_start_monotonic > 0 and self.data.is_call_active:
             duration = int(time.monotonic() - self._call_start_monotonic)
-            _LOGGER.debug(
-                "⏱️ [DURATION] Calculated from timer: %ds (start=%.3f, now=%.3f)",
-                duration,
-                self._call_start_monotonic,
-                time.monotonic(),
-            )
             return duration
         if self.data.current_call.duration_seconds is not None:
-            _LOGGER.debug(
-                "⏱️ [DURATION] Using current_call.duration_seconds: %ds",
-                self.data.current_call.duration_seconds,
-            )
             return int(self.data.current_call.duration_seconds)
         if self.data.current_call.duration_ms is not None:
             duration = int(self.data.current_call.duration_ms // 1000)
-            _LOGGER.debug(
-                "⏱️ [DURATION] Using current_call.duration_ms: %ds (from %dms)",
-                duration,
-                self.data.current_call.duration_ms,
-            )
             return duration
-        _LOGGER.debug("⏱️ [DURATION] No duration available, returning 0")
         return 0
 
     @property

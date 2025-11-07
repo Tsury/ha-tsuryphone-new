@@ -415,21 +415,17 @@ class TsuryPhoneState:
         _LOGGER = logging.getLogger(__name__)
         
         _LOGGER.warning(
-            "📝 [CALL HISTORY] add_call_history_entry called: %s (%s) type=%s duration=%s",
+            "[STORAGE] add_call_history_entry called: %s (%s) type=%s, before=%d entries",
             entry.number,
             entry.name,
             entry.call_type,
-            entry.duration_s,
-        )
-        _LOGGER.warning(
-            "📝 [CALL HISTORY] Before append: %d entries",
             len(self.call_history),
         )
         
         self.call_history.append(entry)
         
         _LOGGER.warning(
-            "✅ [CALL HISTORY] After append: %d entries",
+            "[STORAGE] After append: %d entries",
             len(self.call_history),
         )
 
@@ -437,7 +433,7 @@ class TsuryPhoneState:
         if len(self.call_history) > self.call_history_capacity:
             self.call_history = self.call_history[-self.call_history_capacity :]
             _LOGGER.warning(
-                "✂️ [CALL HISTORY] Trimmed to capacity: %d entries",
+                "[STORAGE] Trimmed to capacity: %d entries",
                 len(self.call_history),
             )
 

@@ -198,52 +198,52 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Storage cache attached to coordinator")
 
     # Initialize state and load cached data BEFORE first refresh
-    _LOGGER.info("========== INITIALIZING STATE ==========")
+    _LOGGER.warning("========== INITIALIZING STATE ==========")
     coordinator._ensure_state()
-    _LOGGER.info("State ensured, call_history length: %d", len(coordinator.data.call_history))
+    _LOGGER.warning("[STORAGE-INIT] State ensured, call_history=%d entries", len(coordinator.data.call_history))
     
     # Load cached call history if available
-    _LOGGER.info("========== LOADING CACHED CALL HISTORY ==========")
+    _LOGGER.warning("========== LOADING CACHED CALL HISTORY ==========")
     try:
         cached_call_history = await storage_cache.async_load_call_history()
-        _LOGGER.info("async_load_call_history returned: %s entries", len(cached_call_history) if cached_call_history else 0)
+        _LOGGER.warning("[STORAGE-LOAD] async_load_call_history returned: %d entries", len(cached_call_history) if cached_call_history else 0)
         
         if cached_call_history is not None:
-            _LOGGER.info("BEFORE assignment - coordinator.data.call_history length: %d", len(coordinator.data.call_history))
+            _LOGGER.warning("[STORAGE-LOAD] BEFORE assignment - coordinator.data.call_history=%d entries", len(coordinator.data.call_history))
             coordinator.data.call_history = cached_call_history
-            _LOGGER.info("AFTER assignment - coordinator.data.call_history length: %d", len(coordinator.data.call_history))
+            _LOGGER.warning("[STORAGE-LOAD] AFTER assignment - coordinator.data.call_history=%d entries", len(coordinator.data.call_history))
             if len(cached_call_history) > 0:
-                _LOGGER.info(
-                    "✓ Loaded %d cached call history entries before first refresh", len(cached_call_history)
+                _LOGGER.warning(
+                    "[STORAGE-LOAD] SUCCESS: Loaded %d cached call history entries", len(cached_call_history)
                 )
             else:
-                _LOGGER.info("✓ Cache loaded successfully - no call history entries yet (empty list)")
+                _LOGGER.warning("[STORAGE-LOAD] Cache loaded - empty call history (no entries yet)")
         else:
-            _LOGGER.warning("✗ No cached call history returned from storage (returned None)")
+            _LOGGER.error("[STORAGE-LOAD] ERROR: async_load_call_history returned None")
     except Exception as err:
-        _LOGGER.error("✗ Failed to load cached call history: %s", err, exc_info=True)
+        _LOGGER.error("[STORAGE-LOAD] EXCEPTION: Failed to load cached call history: %s", err, exc_info=True)
 
     # Load cached device state (including send_mode)
-    _LOGGER.info("========== LOADING CACHED DEVICE STATE ==========")
+    _LOGGER.warning("========== LOADING CACHED DEVICE STATE ==========")
     try:
         cached_device_state = await storage_cache.async_load_device_state()
-        _LOGGER.info("async_load_device_state returned: %s", cached_device_state)
+        _LOGGER.warning("[STORAGE-LOAD] async_load_device_state returned: %s", "data" if cached_device_state else "None")
         
         if cached_device_state and "send_mode_enabled" in cached_device_state:
             coordinator._send_mode_enabled = cached_device_state["send_mode_enabled"]
-            _LOGGER.info(
-                "✓ Restored send_mode state: %s", coordinator._send_mode_enabled
+            _LOGGER.warning(
+                "[STORAGE-LOAD] Restored send_mode: %s", coordinator._send_mode_enabled
             )
         else:
-            _LOGGER.warning("✗ No send_mode in cached device state")
+            _LOGGER.warning("[STORAGE-LOAD] No send_mode in cached device state")
     except Exception as err:
-        _LOGGER.error("✗ Failed to load cached device state: %s", err, exc_info=True)
+        _LOGGER.error("[STORAGE-LOAD] EXCEPTION: Failed to load cached device state: %s", err, exc_info=True)
 
     # Perform first refresh to populate initial state (will preserve call_history now)
-    _LOGGER.info("========== PERFORMING FIRST REFRESH ==========")
-    _LOGGER.info("BEFORE first refresh - call_history length: %d", len(coordinator.data.call_history))
+    _LOGGER.warning("========== PERFORMING FIRST REFRESH ==========")
+    _LOGGER.warning("[STORAGE-REFRESH] BEFORE first refresh - call_history=%d entries", len(coordinator.data.call_history))
     await coordinator.async_config_entry_first_refresh()
-    _LOGGER.info("AFTER first refresh - call_history length: %d", len(coordinator.data.call_history))
+    _LOGGER.warning("[STORAGE-REFRESH] AFTER first refresh - call_history=%d entries", len(coordinator.data.call_history))
 
     # Store coordinator in runtime data for platform access
     entry.runtime_data = coordinator
