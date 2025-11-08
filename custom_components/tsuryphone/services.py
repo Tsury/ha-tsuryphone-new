@@ -98,12 +98,23 @@ DIAL_SCHEMA = _service_schema(
 )
 
 
-def _validate_digit(value: Any) -> int:
-    """Validate a single dial digit."""
-
-    digit = vol.Coerce(int)(value)
+def _validate_digit(value: Any) -> str | int:
+    """Validate a single dial digit (0-9 or + for international)."""
+    
+    # Handle string values (like '+')
+    if isinstance(value, str):
+        if value == "+":
+            return value
+        # Try to parse as integer
+        try:
+            digit = int(value)
+        except ValueError:
+            raise vol.Invalid("Digit must be 0-9 or '+'")
+    else:
+        digit = vol.Coerce(int)(value)
+    
     if digit < 0 or digit > 9:
-        raise vol.Invalid("Digit must be between 0 and 9")
+        raise vol.Invalid("Digit must be between 0 and 9, or '+'")
     return digit
 
 

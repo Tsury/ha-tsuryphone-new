@@ -182,21 +182,34 @@ class TsuryPhoneAPIClient:
         return await self._request("POST", API_CALL_DIAL, {"number": number})
 
     async def dial_digit(
-        self, digit: int, *, defer_validation: bool = False
+        self, digit: str | int, *, defer_validation: bool = False
     ) -> dict[str, Any]:
-        """Send a single dial digit to the device."""
+        """Send a single dial digit to the device (0-9 or + for international)."""
 
-        if isinstance(digit, bool):
-            raise TsuryPhoneAPIError(
-                "Digit must be between 0 and 9", ERROR_CODE_INVALID_DIGIT
-            )
+        # Handle '+' for international dialing
+        if digit == "+":
+            data = {"digit": "+"}
+        else:
+            # Convert to int for validation
+            if isinstance(digit, bool):
+                raise TsuryPhoneAPIError(
+                    "Digit must be between 0 and 9, or '+'", ERROR_CODE_INVALID_DIGIT
+                )
+            
+            try:
+                digit_int = int(digit)
+            except (ValueError, TypeError):
+                raise TsuryPhoneAPIError(
+                    "Digit must be between 0 and 9, or '+'", ERROR_CODE_INVALID_DIGIT
+                )
 
-        if digit < 0 or digit > 9:
-            raise TsuryPhoneAPIError(
-                "Digit must be between 0 and 9", ERROR_CODE_INVALID_DIGIT
-            )
+            if digit_int < 0 or digit_int > 9:
+                raise TsuryPhoneAPIError(
+                    "Digit must be between 0 and 9, or '+'", ERROR_CODE_INVALID_DIGIT
+                )
+            
+            data = {"digit": digit_int}
 
-        data = {"digit": digit}
         if defer_validation:
             data["deferValidation"] = True
 
