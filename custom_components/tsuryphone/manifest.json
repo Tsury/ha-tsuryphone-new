@@ -14,7 +14,7 @@
     "custom_components.tsuryphone"
   ],
   "requirements": [],
-  "version": "1.0.170",
+  "version": "1.0.171",
   "zeroconf": [
     "_http._tcp.local."
   ]
