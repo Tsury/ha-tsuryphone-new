@@ -259,15 +259,15 @@ PRIORITY_REMOVE_SCHEMA = _service_schema(
 
 WEBHOOK_ADD_SCHEMA = _service_schema(
     {
-        vol.Required("url"): cv.string,
-        vol.Required("events"): [cv.string],
+        vol.Required("webhook_id"): cv.string,
+        vol.Required("code"): cv.string,
         vol.Optional("name"): cv.string,
     }
 )
 
 WEBHOOK_REMOVE_SCHEMA = _service_schema(
     {
-        vol.Required("url"): cv.string,
+        vol.Required("code"): cv.string,
     }
 )
 
@@ -1197,12 +1197,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_webhook_add(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
-        url = call.data["url"]
-        events = call.data["events"]
-        name = call.data.get("name")
+        webhook_id = call.data["webhook_id"]
+        code = call.data["code"]
+        name = call.data.get("name", "")
 
         try:
-            await coordinator.api_client.add_webhook(url, events, name)
+            await coordinator.api_client.add_webhook_action(
+                code=code,
+                webhook_id=webhook_id,
+                action_name=name
+            )
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to add webhook: {err}") from err
@@ -1210,10 +1214,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def async_webhook_remove(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
-        url = call.data["url"]
+        code = call.data["code"]
 
         try:
-            await coordinator.api_client.remove_webhook(url)
+            await coordinator.api_client.remove_webhook_action(code)
             await coordinator.async_request_refresh()
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to remove webhook: {err}") from err
