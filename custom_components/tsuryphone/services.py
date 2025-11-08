@@ -737,7 +737,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         # 3. Currently dialing
         # 4. In invalid number state
         # 5. In idle state with dialed digits (to clear them)
-        has_dialed_digits = bool(coordinator.data.dialing_number)
+        has_dialed_digits = bool(coordinator.data.current_dialing_number)
         
         if (
             not coordinator.data.is_call_active
