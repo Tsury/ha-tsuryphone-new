@@ -425,6 +425,17 @@ class TsuryPhoneSensor(
                 for entry in state.priority_callers
             ]
 
+            # Add webhooks list for webhook management
+            attributes["webhooks"] = [
+                {
+                    "code": entry.code,
+                    "webhook_id": entry.webhook_id,
+                    "action_name": entry.action_name,
+                    "active": entry.active,
+                }
+                for entry in state.webhooks
+            ]
+
         elif self.entity_description.key == "current_call_summary":
             attributes.update(
                 self._build_current_call_attributes(state, include_summary=True)
