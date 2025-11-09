@@ -91,12 +91,21 @@ def _service_schema(schema: Any) -> vol.Schema:
     return vol.Schema(schema, extra=vol.ALLOW_EXTRA)
 
 
+def _validate_numeric_code(value: str) -> str:
+    """Validate that a code contains only digits (0-9).
+    
+    Codes are dialed on a rotary phone, so only numeric digits are valid.
+    """
+    if not value or not value.isdigit():
+        raise vol.Invalid("Code must contain only digits (0-9)")
+    return value
+
+
 DIAL_SCHEMA = _service_schema(
     {
         vol.Required("number"): cv.string,
     }
 )
-
 
 def _validate_digit(value: Any) -> str | int:
     """Validate a single dial digit (0-9 or + for international)."""
@@ -195,7 +204,7 @@ CALL_HISTORY_CLEAR_SCHEMA = _service_schema(
 
 QUICK_DIAL_ADD_SCHEMA = _service_schema(
     {
-        vol.Optional("code"): cv.string,
+        vol.Optional("code"): vol.All(cv.string, _validate_numeric_code),
         vol.Required("number"): cv.string,
         vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
     }
@@ -260,14 +269,14 @@ PRIORITY_REMOVE_SCHEMA = _service_schema(
 WEBHOOK_ADD_SCHEMA = _service_schema(
     {
         vol.Required("webhook_id"): cv.string,
-        vol.Required("code"): cv.string,
+        vol.Required("code"): vol.All(cv.string, _validate_numeric_code),
         vol.Optional("name"): cv.string,
     }
 )
 
 WEBHOOK_REMOVE_SCHEMA = _service_schema(
     {
-        vol.Required("code"): cv.string,
+        vol.Required("code"): vol.All(cv.string, _validate_numeric_code),
     }
 )
 
@@ -287,7 +296,7 @@ DEVICE_ONLY_SCHEMA = _service_schema({})
 
 DIAL_QUICK_DIAL_SCHEMA = _service_schema(
     {
-        vol.Required("code"): cv.string,
+        vol.Required("code"): vol.All(cv.string, _validate_numeric_code),
     }
 )
 

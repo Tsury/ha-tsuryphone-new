@@ -314,6 +314,10 @@ class TsuryPhoneAPIClient:
         self, number: str, name: str = "", code: str = ""
     ) -> dict[str, Any]:
         """Add quick dial entry."""
+        # Validate code is numeric only if provided (rotary phone dial codes)
+        if code and not code.isdigit():
+            raise TsuryPhoneAPIError("Quick dial code must contain only digits (0-9)")
+        
         data = {"number": number}
         # Code is optional
         if code:
@@ -399,6 +403,10 @@ class TsuryPhoneAPIClient:
         self, code: str, webhook_id: str, action_name: str = ""
     ) -> dict[str, Any]:
         """Add webhook action."""
+        # Validate code is numeric only (rotary phone dial codes)
+        if not code or not code.isdigit():
+            raise TsuryPhoneAPIError("Webhook code must contain only digits (0-9)")
+        
         data = {"code": code, "id": webhook_id}
         if action_name:
             data["actionName"] = action_name
@@ -406,6 +414,10 @@ class TsuryPhoneAPIClient:
 
     async def remove_webhook_action(self, code: str) -> dict[str, Any]:
         """Remove webhook action."""
+        # Validate code is numeric only
+        if not code or not code.isdigit():
+            raise TsuryPhoneAPIError("Webhook code must contain only digits (0-9)")
+        
         return await self._request("POST", API_CONFIG_WEBHOOK_REMOVE, {"code": code})
 
     async def set_ha_url(self, url: str) -> dict[str, Any]:
