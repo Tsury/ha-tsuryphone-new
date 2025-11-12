@@ -219,6 +219,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Perform first refresh to populate initial state (will preserve call_history now)
     await coordinator.async_config_entry_first_refresh()
 
+    # Refetch device statistics from firmware to ensure they're up-to-date
+    # This is important when HA restarts but device stays powered on
+    try:
+        _LOGGER.info("Refetching device statistics from firmware after reconnect")
+        await api_client.refetch_all()
+        await coordinator.async_refresh()
+        _LOGGER.info("Successfully refetched device statistics")
+    except Exception as err:
+        _LOGGER.warning("Failed to refetch stats on reconnect: %s", err)
+        # Non-fatal - continue setup even if refetch fails
+
     # Store coordinator in runtime data for platform access
     entry.runtime_data = coordinator
 
