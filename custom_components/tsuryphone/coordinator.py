@@ -148,6 +148,68 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
             self.data = TsuryPhoneState(device_info=self.device_info)
         return self.data
 
+    def apply_cached_device_state(self, cached_state: dict[str, Any] | None) -> None:
+        """Hydrate coordinator state from cached persistent data."""
+        if not cached_state:
+            return
+
+        state = self._ensure_state()
+
+        # Flag that we are showing restored data until live telemetry arrives.
+        setattr(state, "restored", True)
+
+        def _as_int(value: Any, default: int) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        def _as_float(value: Any, default: float) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        if "connected" in cached_state:
+            state.connected = bool(cached_state.get("connected"))
+
+        if "last_seen" in cached_state:
+            state.last_seen = _as_float(cached_state.get("last_seen"), state.last_seen)
+
+        if "last_seq" in cached_state:
+            state.last_seq = _as_int(cached_state.get("last_seq"), state.last_seq)
+
+        stats_cache = cached_state.get("stats")
+        if isinstance(stats_cache, dict):
+            state.stats.calls_total = _as_int(
+                stats_cache.get("calls_total"), state.stats.calls_total
+            )
+            state.stats.calls_incoming = _as_int(
+                stats_cache.get("calls_incoming"), state.stats.calls_incoming
+            )
+            state.stats.calls_outgoing = _as_int(
+                stats_cache.get("calls_outgoing"), state.stats.calls_outgoing
+            )
+            state.stats.calls_blocked = _as_int(
+                stats_cache.get("calls_blocked"), state.stats.calls_blocked
+            )
+            state.stats.talk_time_seconds = _as_int(
+                stats_cache.get("talk_time_seconds"),
+                state.stats.talk_time_seconds,
+            )
+            state.stats.uptime_seconds = _as_int(
+                stats_cache.get("uptime_seconds"), state.stats.uptime_seconds
+            )
+            state.stats.free_heap_bytes = _as_int(
+                stats_cache.get("free_heap_bytes"), state.stats.free_heap_bytes
+            )
+            state.stats.rssi_dbm = _as_int(
+                stats_cache.get("rssi_dbm"), state.stats.rssi_dbm
+            )
+
+        if "send_mode_enabled" in cached_state:
+            self._send_mode_enabled = bool(cached_state.get("send_mode_enabled"))
+
     def _find_contact_name_by_number(self, number: str) -> str | None:
         """Find contact name by normalized number from quick dials."""
         if not number or not self.data:

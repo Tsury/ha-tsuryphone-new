@@ -182,7 +182,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("========== SETTING UP STORAGE CACHE ==========")
     storage_cache = TsuryPhoneStorageCache(hass, device_info.device_id)
     _LOGGER.info("Storage cache instance created for device: %s", device_info.device_id)
-    
+
     await storage_cache.async_initialize()
     _LOGGER.info("Storage cache initialized")
 
@@ -192,14 +192,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         storage_cache.update_retention_settings(
             call_history_retention_days=options_advanced["call_history_retention_days"]
         )
-        _LOGGER.info("Applied retention settings: %d days", options_advanced["call_history_retention_days"])
+        _LOGGER.info(
+            "Applied retention settings: %d days",
+            options_advanced["call_history_retention_days"],
+        )
 
     coordinator._storage_cache = storage_cache
     _LOGGER.info("Storage cache attached to coordinator")
 
     # Initialize state and load cached data BEFORE first refresh
     coordinator._ensure_state()
-    
+
     # Load cached call history if available
     try:
         cached_call_history = await storage_cache.async_load_call_history()
@@ -211,24 +214,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Load cached device state (including send_mode)
     try:
         cached_device_state = await storage_cache.async_load_device_state()
-        if cached_device_state and "send_mode_enabled" in cached_device_state:
-            coordinator._send_mode_enabled = cached_device_state["send_mode_enabled"]
+        if cached_device_state:
+            coordinator.apply_cached_device_state(cached_device_state)
     except Exception as err:
         _LOGGER.error("Failed to load cached device state: %s", err, exc_info=True)
 
     # Perform first refresh to populate initial state (will preserve call_history now)
     await coordinator.async_config_entry_first_refresh()
-
-    # Refetch device statistics from firmware to ensure they're up-to-date
-    # This is important when HA restarts but device stays powered on
-    try:
-        _LOGGER.info("Refetching device statistics from firmware after reconnect")
-        await api_client.refetch_all()
-        await coordinator.async_refresh()
-        _LOGGER.info("Successfully refetched device statistics")
-    except Exception as err:
-        _LOGGER.warning("Failed to refetch stats on reconnect: %s", err)
-        # Non-fatal - continue setup even if refetch fails
 
     # Store coordinator in runtime data for platform access
     entry.runtime_data = coordinator
