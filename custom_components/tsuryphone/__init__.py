@@ -222,6 +222,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Perform first refresh to populate initial state (will preserve call_history now)
     await coordinator.async_config_entry_first_refresh()
 
+    # Fetch diagnostics snapshot to hydrate statistics before entities are created
+    await coordinator.async_refresh_diagnostics()
+
     # Store coordinator in runtime data for platform access
     entry.runtime_data = coordinator
 

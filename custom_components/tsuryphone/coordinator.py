@@ -210,6 +210,146 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
         if "send_mode_enabled" in cached_state:
             self._send_mode_enabled = bool(cached_state.get("send_mode_enabled"))
 
+    def _apply_diagnostics_metrics(
+        self, diagnostics: Mapping[str, Any] | None
+    ) -> bool:
+        """Apply diagnostics payload metrics to the coordinator state.
+
+        Returns True if any statistic changed.
+        """
+
+        if not isinstance(diagnostics, Mapping):
+            return False
+
+        state = self._ensure_state()
+        metrics_section = diagnostics.get("metrics")
+        metrics: Mapping[str, Any] | None
+
+        if isinstance(metrics_section, Mapping):
+            metrics = metrics_section
+        else:
+            metrics = None
+
+        changed = False
+
+        def _coerce_int(value: Any) -> int | None:
+            if value is None:
+                return None
+            if isinstance(value, bool):
+                return int(value)
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str):
+                stripped = value.strip()
+                if not stripped:
+                    return None
+                try:
+                    if "." in stripped:
+                        return int(float(stripped))
+                    return int(stripped)
+                except ValueError:
+                    return None
+            return None
+
+        def _extract_value(*keys: str) -> Any:
+            for key in keys:
+                if metrics and key in metrics:
+                    return metrics[key]
+
+                if metrics and "." in key:
+                    prefix, _, suffix = key.partition(".")
+                    nested = metrics.get(prefix)
+                    if isinstance(nested, Mapping) and suffix in nested:
+                        return nested[suffix]
+
+                if key in diagnostics:
+                    return diagnostics[key]
+
+            return None
+
+        def _update_stat(attr: str, raw_value: Any) -> None:
+            nonlocal changed
+            coerced = _coerce_int(raw_value)
+            if coerced is None:
+                return
+            current = getattr(state.stats, attr, None)
+            if current != coerced:
+                setattr(state.stats, attr, coerced)
+                changed = True
+
+        _update_stat(
+            "calls_total",
+            _extract_value("calls.total", "calls_total", "callsTotal", "total"),
+        )
+        _update_stat(
+            "calls_incoming",
+            _extract_value("calls.in", "calls.incoming", "callsIn", "incoming"),
+        )
+        _update_stat(
+            "calls_outgoing",
+            _extract_value("calls.out", "calls.outgoing", "callsOut", "outgoing"),
+        )
+        _update_stat(
+            "calls_blocked",
+            _extract_value("calls.blocked", "callsBlocked", "blocked"),
+        )
+        _update_stat(
+            "talk_time_seconds",
+            _extract_value(
+                "calls.talkTimeSeconds",
+                "talkTimeSeconds",
+                "callsTalkTimeSeconds",
+            ),
+        )
+
+        uptime_seconds: int | None = None
+        uptime_raw = _extract_value(
+            "uptimeSeconds",
+            "uptime",
+            "system.uptimeSeconds",
+        )
+        if uptime_raw is not None:
+            uptime_seconds = _coerce_int(uptime_raw)
+        else:
+            uptime_ms = _extract_value("uptimeMs", "system.uptimeMs")
+            uptime_val = _coerce_int(uptime_ms)
+            if uptime_val is not None:
+                uptime_seconds = uptime_val // 1000
+        if uptime_seconds is not None:
+            _update_stat("uptime_seconds", uptime_seconds)
+
+        _update_stat(
+            "free_heap_bytes",
+            _extract_value(
+                "system.heapFree",
+                "heapFree",
+                "freeHeap",
+                "memory.free",
+            ),
+        )
+        _update_stat(
+            "rssi_dbm",
+            _extract_value("system.rssi", "wifi.rssi", "rssi"),
+        )
+
+        if changed and hasattr(state, "restored"):
+            setattr(state, "restored", False)
+
+        if changed:
+            _LOGGER.debug(
+                "Diagnostics metrics applied: total=%s in=%s out=%s blocked=%s talk=%s uptime=%s heap=%s rssi=%s",
+                state.stats.calls_total,
+                state.stats.calls_incoming,
+                state.stats.calls_outgoing,
+                state.stats.calls_blocked,
+                state.stats.talk_time_seconds,
+                state.stats.uptime_seconds,
+                state.stats.free_heap_bytes,
+                state.stats.rssi_dbm,
+            )
+
+        return changed
+
     def _find_contact_name_by_number(self, number: str) -> str | None:
         """Find contact name by normalized number from quick dials."""
         if not number or not self.data:
@@ -344,6 +484,40 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                 )
                 await self._resilience.handle_api_error(error_type, err)
             raise UpdateFailed(f"Error communicating with device: {err}") from err
+
+    async def async_refresh_diagnostics(self) -> None:
+        """Fetch diagnostics snapshot and apply metrics."""
+
+        try:
+            response = await self.api_client.get_diagnostics()
+        except TsuryPhoneAPIError as err:
+            _LOGGER.warning("Failed to fetch diagnostics snapshot: %s", err)
+            return
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Unexpected error fetching diagnostics snapshot: %s", err)
+            return
+
+        diagnostics_payload: Mapping[str, Any] | None = None
+
+        if isinstance(response, Mapping) and "diagnostics" in response:
+            candidate = response.get("diagnostics")
+            if isinstance(candidate, Mapping):
+                diagnostics_payload = candidate
+        elif isinstance(response, Mapping):
+            diagnostics_payload = response
+
+        if diagnostics_payload is None:
+            _LOGGER.debug("Diagnostics response missing payload: %s", response)
+            return
+
+        if self._apply_diagnostics_metrics(diagnostics_payload):
+            self.async_set_updated_data(self.data)
+            if self._storage_cache:
+                self.hass.async_create_task(
+                    self._storage_cache.async_save_device_state(
+                        self.data, self._send_mode_enabled
+                    )
+                )
 
     async def _start_websocket(self) -> None:
         """Start WebSocket connection."""
@@ -2300,9 +2474,19 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
     def _handle_diagnostic_snapshot(self, event: TsuryPhoneEvent) -> None:
         """Handle diagnostic snapshot event."""
         _LOGGER.debug("Processing diagnostic snapshot for full state hydrate")
-        data = event.data
+        raw_data = event.data
         try:
             call_state_changed = False
+            data = (
+                raw_data.get("diagnostics")
+                if isinstance(raw_data, Mapping) and "diagnostics" in raw_data
+                else raw_data
+            )
+            if not isinstance(data, Mapping):
+                data = {}
+
+            self._apply_diagnostics_metrics(data)
+
             # Basic device info
             self.data.device_name = data.get("deviceName", self.data.device_name)
             self.data.firmware_version = data.get(
@@ -2472,14 +2656,7 @@ class TsuryPhoneDataUpdateCoordinator(DataUpdateCoordinator[TsuryPhoneState]):
                     ):
                         call_state_changed = True
 
-            # Stats/system info
-            self.data.stats.uptime_seconds = data.get(
-                "uptime", self.data.stats.uptime_seconds
-            )
-            self.data.stats.free_heap_bytes = data.get(
-                "freeHeap", self.data.stats.free_heap_bytes
-            )
-            self.data.stats.rssi_dbm = data.get("rssi", self.data.stats.rssi_dbm)
+            # Metrics for uptime/free memory/RSSI are handled by _apply_diagnostics_metrics
 
             # Lists (quick dials, blocked, priority, webhooks)
             phone_section = data.get("phone") or {}
