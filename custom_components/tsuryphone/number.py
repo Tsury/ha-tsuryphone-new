@@ -58,6 +58,16 @@ NUMBER_DESCRIPTIONS = (
         native_step=1,
         entity_category=EntityCategory.CONFIG,
     ),
+    NumberEntityDescription(
+        key="ringer_cycle_duration",
+        name="Ringer Cycle Duration",
+        icon="mdi:sine-wave",
+        native_min_value=10,
+        native_max_value=1000,
+        native_step=1,
+        native_unit_of_measurement="ms",
+        entity_category=EntityCategory.CONFIG,
+    ),
 )
 
 
@@ -113,6 +123,8 @@ class TsuryPhoneNumber(
             return float(state.audio_config.speaker_volume)
         elif self.entity_description.key == "speaker_gain":
             return float(state.audio_config.speaker_gain)
+        elif self.entity_description.key == "ringer_cycle_duration":
+            return float(state.audio_config.ringer_cycle_duration)
 
         return None
 
@@ -121,10 +133,13 @@ class TsuryPhoneNumber(
         int_value = int(value)
 
         # Validate range (extra safety)
-        if not (AUDIO_MIN_LEVEL <= int_value <= AUDIO_MAX_LEVEL):
-            raise HomeAssistantError(
-                f"Value {int_value} is out of range {AUDIO_MIN_LEVEL}-{AUDIO_MAX_LEVEL}"
-            )
+        if self.entity_description.key != "ringer_cycle_duration":
+            if not (AUDIO_MIN_LEVEL <= int_value <= AUDIO_MAX_LEVEL):
+                raise HomeAssistantError(
+                    f"Value {int_value} is out of range {AUDIO_MIN_LEVEL}-{AUDIO_MAX_LEVEL}"
+                )
+        elif int_value < 1:
+             raise HomeAssistantError(f"Value {int_value} must be positive")
 
         try:
             # Use partial update - only send the changed field
@@ -149,6 +164,7 @@ class TsuryPhoneNumber(
             "earpiece_gain": "earpieceGain",
             "speaker_volume": "speakerVolume",
             "speaker_gain": "speakerGain",
+            "ringer_cycle_duration": "ringerCycleDuration",
         }
         return field_mapping.get(
             self.entity_description.key, self.entity_description.key
@@ -164,6 +180,8 @@ class TsuryPhoneNumber(
             self.coordinator.data.audio_config.speaker_volume = value
         elif self.entity_description.key == "speaker_gain":
             self.coordinator.data.audio_config.speaker_gain = value
+        elif self.entity_description.key == "ringer_cycle_duration":
+            self.coordinator.data.audio_config.ringer_cycle_duration = value
 
     @property
     def extra_state_attributes(self) -> dict[str, any] | None:

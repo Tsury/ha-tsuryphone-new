@@ -143,6 +143,7 @@ class AudioConfig:
     earpiece_gain: int = 4
     speaker_volume: int = 4
     speaker_gain: int = 4
+    ringer_cycle_duration: int = 30
 
     def __post_init__(self) -> None:
         """Validate audio levels are in valid range (1-7)."""
@@ -154,6 +155,9 @@ class AudioConfig:
         ]:
             if not 1 <= value <= 7:
                 raise ValueError(f"{field_name} must be between 1 and 7, got {value}")
+        
+        if self.ringer_cycle_duration < 1:
+             raise ValueError(f"ringer_cycle_duration must be positive, got {self.ringer_cycle_duration}")
 
 
 @dataclass
