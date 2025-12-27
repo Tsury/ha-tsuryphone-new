@@ -98,6 +98,13 @@ ring_device:
       selector:
         boolean:
 
+stop_ringing:
+  name: Stop ringing
+  description: Stop the TsuryPhone device from ringing.
+  target:
+    device:
+      integration: tsuryphone
+
 set_ring_pattern:
   name: Set ring pattern
   description: Update the ring pattern on the TsuryPhone device.

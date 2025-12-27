@@ -31,6 +31,7 @@ from .const import (
     SERVICE_ANSWER,
     SERVICE_HANGUP,
     SERVICE_RING_DEVICE,
+    SERVICE_STOP_RINGING,
     SERVICE_SET_RING_PATTERN,
     SERVICE_RESET_DEVICE,
     SERVICE_FACTORY_RESET_DEVICE,
@@ -776,6 +777,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         except TsuryPhoneAPIError as err:
             raise HomeAssistantError(f"Failed to ring device: {err}") from err
 
+    async def async_stop_ringing(call: ServiceCall) -> None:
+        context = _require_single_device_context(call)
+        coordinator = context.coordinator
+
+        try:
+            await coordinator.api_client.stop_ringing()
+        except TsuryPhoneAPIError as err:
+            raise HomeAssistantError(f"Failed to stop ringing: {err}") from err
+
     async def async_set_ring_pattern(call: ServiceCall) -> None:
         context = _require_single_device_context(call)
         coordinator = context.coordinator
@@ -1511,6 +1521,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         (SERVICE_ANSWER, async_answer, DEVICE_ONLY_SCHEMA),
         (SERVICE_HANGUP, async_hangup, DEVICE_ONLY_SCHEMA),
         (SERVICE_RING_DEVICE, async_ring_device, RING_DEVICE_SCHEMA),
+        (SERVICE_STOP_RINGING, async_stop_ringing, DEVICE_ONLY_SCHEMA),
         (SERVICE_SET_RING_PATTERN, async_set_ring_pattern, SET_RING_PATTERN_SCHEMA),
         (SERVICE_RESET_DEVICE, async_reset_device, DEVICE_ONLY_SCHEMA),
         (
@@ -1617,6 +1628,7 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_ANSWER,
         SERVICE_HANGUP,
         SERVICE_RING_DEVICE,
+        SERVICE_STOP_RINGING,
         SERVICE_SET_RING_PATTERN,
         SERVICE_RESET_DEVICE,
         SERVICE_FACTORY_RESET_DEVICE,

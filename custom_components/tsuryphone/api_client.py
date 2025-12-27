@@ -24,6 +24,7 @@ from .const import (
     API_SYSTEM_RESET,
     API_SYSTEM_FACTORY_RESET,
     API_SYSTEM_RING,
+    API_SYSTEM_STOP_RING,
     API_CONFIG_DND,
     API_CONFIG_MAINTENANCE,
     API_CONFIG_AUDIO,
@@ -272,6 +273,10 @@ class TsuryPhoneAPIClient:
         if force is not None:
             data["force"] = force
         return await self._request("POST", API_SYSTEM_RING, data)
+
+    async def stop_ringing(self) -> dict[str, Any]:
+        """Stop the device from ringing."""
+        return await self._request("POST", API_SYSTEM_STOP_RING)
 
     # Configuration endpoints
     async def set_dnd(self, config: dict[str, Any]) -> dict[str, Any]:
