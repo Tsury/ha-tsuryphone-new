@@ -29,10 +29,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/ha-tsuryphone-new-cc"
-"Bug Tracker" = "https://github.com/your-org/ha-tsuryphone-new-cc/issues"
-Documentation = "https://github.com/your-org/ha-tsuryphone-new-cc/blob/main/README.md"
-Repository = "https://github.com/your-org/ha-tsuryphone-new-cc"
+Homepage = "https://github.com/your-org/ha-tsuryphone-cc"
+"Bug Tracker" = "https://github.com/your-org/ha-tsuryphone-cc/issues"
+Documentation = "https://github.com/your-org/ha-tsuryphone-cc/blob/main/README.md"
+Repository = "https://github.com/your-org/ha-tsuryphone-cc"
 
 # Ruff configuration
 [tool.ruff]
